@@ -83,3 +83,139 @@ export function swapCandidates(
       };
     });
 }
+
+// ====== イベント一覧・詳細 用ダミーデータ ======
+export type EventTag = "初心者歓迎" | "ランクフリー" | "賞金あり" | "5v5" | "長期リーグ";
+
+export type EventCard = {
+  id: string;
+  series?: string; // シリーズ名（単発はなし）
+  title: string;
+  organizer: string;
+  startsAt: string; // 表示用文字列
+  status: "募集中" | "募集終了" | "開催中" | "終了";
+  capacity: number; // チーム数
+  applied: number; // 応募済みチーム数
+  tags: EventTag[];
+  game: string;
+};
+
+export const EVENTS: EventCard[] = [
+  {
+    id: "osl-s3",
+    series: "OSL（社会人OW部リーグ）",
+    title: "OSL Season3",
+    organizer: "Raiden#1234",
+    startsAt: "2026/07/05 21:00",
+    status: "募集中",
+    capacity: 12,
+    applied: 8,
+    tags: ["長期リーグ", "5v5"],
+    game: "Overwatch 2",
+  },
+  {
+    id: "beginner-cup",
+    title: "わいわい初心者カップ #4",
+    organizer: "Lumen#2020",
+    startsAt: "2026/06/28 20:00",
+    status: "募集中",
+    capacity: 8,
+    applied: 3,
+    tags: ["初心者歓迎", "ランクフリー", "5v5"],
+    game: "Overwatch 2",
+  },
+  {
+    id: "summer-clash",
+    title: "Summer Clash 2026",
+    organizer: "Frost#0001",
+    startsAt: "2026/08/10 19:00",
+    status: "募集中",
+    capacity: 16,
+    applied: 16,
+    tags: ["賞金あり", "5v5"],
+    game: "Overwatch 2",
+  },
+  {
+    id: "osl-s2",
+    series: "OSL（社会人OW部リーグ）",
+    title: "OSL Season2",
+    organizer: "Raiden#1234",
+    startsAt: "2026/03/01 21:00",
+    status: "終了",
+    capacity: 12,
+    applied: 12,
+    tags: ["長期リーグ", "5v5"],
+    game: "Overwatch 2",
+  },
+];
+
+// ====== 試合スケジュール・順位表 用ダミーデータ ======
+export type Standing = {
+  rank: number;
+  team: string;
+  wins: number;
+  losses: number;
+  points: number;
+};
+
+export const GROUP_A_STANDINGS: Standing[] = [
+  { rank: 1, team: "誇り高きOTP", wins: 3, losses: 0, points: 9 },
+  { rank: 2, team: "TOXIC HONEY GARDEN", wins: 2, losses: 1, points: 6 },
+  { rank: 3, team: "ビジネスごめんなさい", wins: 1, losses: 2, points: 3 },
+  { rank: 4, team: "特攻野郎チームA", wins: 0, losses: 3, points: 0 },
+];
+
+export type ScheduledMatch = {
+  id: string;
+  date: string; // 表示用
+  time: string;
+  phase: "予選グループA" | "予選グループB" | "決勝トーナメント";
+  teamA: string;
+  teamB: string;
+  status: "予定" | "配信あり" | "終了";
+  scoreA?: number;
+  scoreB?: number;
+  streamer?: string;
+};
+
+export const MATCHES: ScheduledMatch[] = [
+  {
+    id: "m1",
+    date: "7/12 (土)",
+    time: "21:00",
+    phase: "予選グループA",
+    teamA: "誇り高きOTP",
+    teamB: "特攻野郎チームA",
+    status: "配信あり",
+    streamer: "raiden_tv",
+  },
+  {
+    id: "m2",
+    date: "7/12 (土)",
+    time: "22:00",
+    phase: "予選グループA",
+    teamA: "TOXIC HONEY GARDEN",
+    teamB: "ビジネスごめんなさい",
+    status: "予定",
+  },
+  {
+    id: "m3",
+    date: "7/5 (土)",
+    time: "21:00",
+    phase: "予選グループA",
+    teamA: "誇り高きOTP",
+    teamB: "ビジネスごめんなさい",
+    status: "終了",
+    scoreA: 3,
+    scoreB: 1,
+  },
+  {
+    id: "m4",
+    date: "7/19 (土)",
+    time: "21:00",
+    phase: "決勝トーナメント",
+    teamA: "誇り高きOTP",
+    teamB: "TOXIC HONEY GARDEN",
+    status: "予定",
+  },
+];
