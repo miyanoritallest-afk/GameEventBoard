@@ -7,6 +7,24 @@
 
 ---
 
+## 2026-06-18 — リモートリポジトリ作成とGit運用ルール
+
+### やったこと
+- GitHub に private リポジトリ作成・push: https://github.com/miyanoritallest-afk/GameEventBoard
+- CLAUDE.md に Git運用ルールを追加（RaiseChat から流用・調整）。
+- settings.json から「gh pr create → 自動 Issue 作成」hook を削除。
+
+### 決めたこと（と、その理由）
+- **Git運用ルール（CLAUDE.md）**: main直接push禁止＋PR必須 / `feature/xxx` 命名 / 1機能・1フェーズ=1PR / コミット・PR・devlog は日本語統一。RaiseChat の運用を踏襲。
+- **PR→Issue自動生成hookは不採用**: GitHubはIssueとPRで番号を共有するため、PRごとにIssueを作ると1作業で2番号消費し番号が浪費される（ユーザーが実際に困っていた）。本来は Issue(やること)→PR(やったこと) の順で、逆向きのため削除。
+- **main保護は自主規制のみ（CLAUDE.md）で運用**: private リポの GitHub ブランチ保護は無料プラン非対応（Pro or public が必要）。public化やローカルpre-pushフックも検討したが、1人開発の現段階では CLAUDE.md のルール遵守で十分と判断。必要になれば後で強制手段を導入。
+- **初回pushのみmain直接を例外**: リポジトリ作成のため。以降は feature ブランチ＋PR で進める。
+
+### 次にやること（候補）
+- [ ] 以降の作業は feature ブランチを切って進める
+- [ ] Supabaseクラウドのプロジェクト作成 → 0001マイグレーション実行 → Discord OAuth設定（ユーザー作業）
+- [ ] RLSポリシー本体 / 認証フロー実装 / 画面設計
+
 ## 2026-06-18 — 環境構築（Next.js + Supabase + shadcn/ui）
 
 設計が固まったので開発の土台を構築。
