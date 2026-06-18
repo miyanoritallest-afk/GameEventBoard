@@ -43,9 +43,11 @@ DBMS: PostgreSQL（Supabase）
 | 進行 | `match_lineups` | （Phase2任意）試合ごとの出場メンバー記録。交代履歴 |
 | 進行 | `match_results` | 試合結果（スコア・勝敗） |
 | 進行 | `standings` | 順位表（グループ内/全体） |
+| 練習 | `scrims` | スクリム（練習試合）。チーム単位でカレンダー管理 |
 | SNS | `follows` | フォロー関係（series/event/user） |
 | SNS | `notification_events` | 通知の発生源（出来事）。1出来事1行 |
 | SNS | `notifications` | 各ユーザーへの実配信（出来事から重複排除して生成） |
+| SNS | `notification_deliveries` | 各 notification の外部配信状況（Discord DM/Webhook）記録 |
 
 ---
 
@@ -64,6 +66,8 @@ team_status     : pending | approved | rejected     # チーム応募の状態
 field_type      : text | textarea | select | url | number   # フォームビルダー入力型
 series_role     : owner | admin                     # シリーズ運営の権限
 member_state    : invited | active                  # シリーズ運営の承認状態
+delivery_channel: discord_dm | discord_webhook       # 外部通知の配信チャネル
+delivery_status : pending | sent | failed | skipped  # 外部配信の状態（skipped=DM拒否等で送れない）
 ```
 
 ---
@@ -81,6 +85,7 @@ Supabase Auth の `auth.users` と1対1で対応（`id` = auth uid）。
 | discord_avatar_url | text | | アイコン |
 | battle_tag | text | NOT NULL | ゲーム内ID（必須・初回登録） |
 | is_admin | boolean | DEFAULT false | サイト管理者か |
+| discord_dm_opt_in | boolean | NOT NULL DEFAULT true | Discord DM通知を受け取るか（3.5.2） |
 | created_at | timestamptz | DEFAULT now() | |
 | updated_at | timestamptz | DEFAULT now() | |
 
@@ -151,6 +156,7 @@ Supabase Auth の `auth.users` と1対1で対応（`id` = auth uid）。
 | name | text | NOT NULL | 例: "OSL（社会人OW部リーグ）" |
 | description | text | | |
 | logo_url | text | | シリーズロゴ |
+| discord_webhook_url | text | | 全体告知の投稿先（Discordチャンネル。3.5.2） |
 | created_by | uuid | FK→users, NOT NULL | 作成者（初期owner） |
 | created_at | timestamptz | DEFAULT now() | |
 
@@ -216,6 +222,9 @@ owner/admin の2段階権限。検索招待 → 本人承認のフローを stat
 | **— チーム構成・上限設定 —** | | | (3.1.2) |
 | reserve_slots | int | NOT NULL DEFAULT 0 | リザーブ上限（OSL=2、なし=0）。チーム最大人数 = games.team_size + reserve_slots |
 | team_score_cap | numeric | | チームスコア上限。**出場メンバーの final_score 平均**で判定（旧 team_avg_cap） |
+| **— Discord連携（全体告知 3.5.2） —** | | | |
+| discord_webhook_url | text | | 告知チャンネル。未設定なら series 側を使う |
+| auto_announce | boolean | NOT NULL DEFAULT true | 公開/更新時に告知チャンネルへ自動投稿するか |
 | **— 排他制御 —** | | | |
 | version | int | NOT NULL DEFAULT 0 | 楽観的ロック |
 | created_at | timestamptz | DEFAULT now() | |
@@ -375,6 +384,21 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 
 制約: UNIQUE(event_id, group_id, team_id)
 
+### 3.16.1 scrims（スクリム＝練習試合・Phase3 #7）
+本戦(matches)とは別概念。チーム単位の練習試合をカレンダー管理し、対象チームへ個人通知（要件 3.4.3）。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| team_id | uuid | FK→teams, NOT NULL | スクリムを行う自チーム |
+| created_by | uuid | FK→users, NOT NULL | 登録者 |
+| scheduled_at | timestamptz | NOT NULL | 練習試合の日時 |
+| opponent_name | text | | 相手チーム名（外部チームは自由入力） |
+| opponent_team_id | uuid | FK→teams | 相手が本アプリ内チームの場合 |
+| memo | text | | メモ |
+| stream_url | text | | 配信URL（任意） |
+| created_at | timestamptz | DEFAULT now() | |
+> 勝敗は順位に影響しない（standings とは無関係）。スクリム登録/変更時に対象チームのメンバーへ個人向け通知（アプリ内＋Discord DM）。
+
 ### 3.17 follows（フォロー）
 | 列 | 型 | 制約 | 説明 |
 |----|----|------|------|
@@ -413,6 +437,20 @@ notification_events 1件から、フォロワーを集約・ユニーク化し�
 | created_at | timestamptz | DEFAULT now() | |
 
 制約: **UNIQUE(user_id, source_event_id)** ← 同一出来事から同一ユーザーへの二重通知をDBで物理的に防ぐ（重複排除の最終防衛）。
+
+### 3.20 notification_deliveries（外部配信の状況・3.5.2）
+アプリ内通知(notifications)を Discord DM / Webhook に配信した結果を記録。二段構えの「外部配信」レイヤー。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| notification_id | uuid | FK→notifications | 個人向け配信の場合（DM）。全体告知(Webhook)は null 可 |
+| channel | delivery_channel | NOT NULL | discord_dm / discord_webhook |
+| status | delivery_status | NOT NULL DEFAULT 'pending' | pending/sent/failed/skipped(DM拒否等) |
+| target_ref | text | | DM=Discord ID / Webhook=URL等 |
+| error | text | | 失敗理由 |
+| sent_at | timestamptz | | |
+| created_at | timestamptz | DEFAULT now() | |
+> アプリ内通知は必ず残る（notifications）。DMが skipped/failed でも記録に残り、取りこぼしを把握できる。実装はアプリ内通知の直後（要件 3.5.2）。
 
 ---
 
