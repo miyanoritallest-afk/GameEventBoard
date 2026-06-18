@@ -25,6 +25,8 @@ create type team_status      as enum ('pending', 'approved', 'rejected');
 create type field_type      as enum ('text', 'textarea', 'select', 'url', 'number');
 create type series_role     as enum ('owner', 'admin');
 create type member_state    as enum ('invited', 'active');
+create type delivery_channel as enum ('discord_dm', 'discord_webhook');
+create type delivery_status  as enum ('pending', 'sent', 'failed', 'skipped');
 
 -- =========================================================
 -- 2. ユーザー & ランク
@@ -38,6 +40,7 @@ create table users (
   discord_avatar_url text,
   battle_tag         text not null,
   is_admin           boolean not null default false,
+  discord_dm_opt_in  boolean not null default true,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
@@ -103,6 +106,7 @@ create table event_series (
   name        text not null,
   description text,
   logo_url    text,
+  discord_webhook_url text,
   created_by  uuid not null references users(id),
   created_at  timestamptz not null default now()
 );
@@ -168,6 +172,9 @@ create table events (
   -- チーム構成・上限設定
   reserve_slots         int not null default 0,    -- リザーブ上限
   team_score_cap        numeric,                   -- 出場メンバーの final_score 平均の上限
+  -- Discord 連携（全体告知）
+  discord_webhook_url   text,                      -- 未設定なら series 側を使う
+  auto_announce         boolean not null default true,
   -- 排他制御
   version               int not null default 0,
   created_at            timestamptz not null default now(),
@@ -329,6 +336,20 @@ create table standings (
   unique (event_id, group_id, team_id)
 );
 
+-- 3.16.1 scrims（スクリム＝練習試合）
+create table scrims (
+  id               uuid primary key default gen_random_uuid(),
+  team_id          uuid not null references teams(id) on delete cascade,
+  created_by       uuid not null references users(id),
+  scheduled_at     timestamptz not null,
+  opponent_name    text,
+  opponent_team_id uuid references teams(id) on delete set null,
+  memo             text,
+  stream_url       text,
+  created_at       timestamptz not null default now()
+);
+create index idx_scrims_team on scrims(team_id);
+
 -- =========================================================
 -- 7. SNS（フォロー & 通知）
 -- =========================================================
@@ -368,6 +389,19 @@ create table notifications (
 );
 create index idx_notifications_user on notifications(user_id);
 
+-- 3.20 notification_deliveries（外部配信の状況: Discord DM / Webhook）
+create table notification_deliveries (
+  id              uuid primary key default gen_random_uuid(),
+  notification_id uuid references notifications(id) on delete cascade,
+  channel         delivery_channel not null,
+  status          delivery_status not null default 'pending',
+  target_ref      text,
+  error           text,
+  sent_at         timestamptz,
+  created_at      timestamptz not null default now()
+);
+create index idx_deliveries_notification on notification_deliveries(notification_id);
+
 -- =========================================================
 -- 8. RLS（Row Level Security）有効化
 -- ポリシーの本体は 0002 以降で定義する。まずは全テーブルで RLS を ON にし、
@@ -395,6 +429,8 @@ alter table matches               enable row level security;
 alter table match_results         enable row level security;
 alter table match_lineups         enable row level security;
 alter table standings             enable row level security;
+alter table scrims                enable row level security;
 alter table follows               enable row level security;
 alter table notification_events   enable row level security;
 alter table notifications         enable row level security;
+alter table notification_deliveries enable row level security;

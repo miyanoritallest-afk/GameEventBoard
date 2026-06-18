@@ -7,6 +7,27 @@
 
 ---
 
+## 2026-06-18 — Discord通知の宛先設計とスクリム管理の追加
+
+「Discordに通知を飛ばせるか？」という問いから、通知の宛先設計を整理し、スクリム管理を要件に正式追加。
+
+### やったこと
+- 要件定義書: 3.5.2（通知の宛先分類とDiscord連携3レイヤー・二段構え）、3.4.3（スクリム管理）を新設。Phase3に #7 スクリムを追加。
+- DB設計書: users に `discord_dm_opt_in`、events/event_series に `discord_webhook_url`(events に `auto_announce` も)、`scrims`・`notification_deliveries` テーブル追加、ENUM 2種(delivery_channel/delivery_status)。
+- migration SQL(0001) を同期更新。
+- ER図に scrims / notification_deliveries を反映。
+
+### 決めたこと（と、その理由）
+- **通知を「宛先」で2分類**: 全体向け(イベント公開/「本日各試合」)=Discord Webhook(告知チャンネル)、個人向け(参加確定/「あなたの試合は21時」/スクリム)=Discord Bot DM。理由: 個人向けを全員のチャンネルに流すのはノイズ＆本人の見落とし。ユーザーの指摘どおり宛先で配信先を分ける。
+- **Discord連携は3レイヤー**: アプリ内通知(Realtime) / Webhook(チャンネル,Bot不要) / Bot DM(個人)。Webhookは軽くPhase1から、DMはBot必要。
+- **個人向けは「二段構え(アプリ内＋Discord DM)」を正式要件に**: ユーザーの「DMでほぼ必ず予定に気づける」価値を中心に据える。ただしDM単独だとDM拒否の人に届かず通知が消えるため、アプリ内に必ず記録＋DMで見落とし防止。誰も取りこぼさない。`notification_deliveries` で配信状況(skipped=DM拒否等)を記録。
+- **実装順: アプリ内通知 → 直後にBot DM**: 既存の notification_events→集約 の土台に配信レイヤーを足すだけなので自然に乗る。要件には正式採用しつつ確実な土台(アプリ内)の上に乗せる。
+- **スクリム(練習試合)管理を正式採用(Phase3 #7)**: カレンダーを活かすチーム単位の練習管理。本戦matchesと別概念(scrims、勝敗は順位に無関係)。登録/変更で対象チームへ個人通知。
+
+### 次にやること（候補）
+- [ ] Supabaseクラウド接続（migration実行・Discord OAuth・Bot/Webhook設定はユーザー作業）
+- [ ] RLSポリシー / 認証フロー実装 / 画面設計
+
 ## 2026-06-18 — リモートリポジトリ作成とGit運用ルール
 
 ### やったこと

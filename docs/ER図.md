@@ -27,6 +27,8 @@ erDiagram
     event_series ||--o{ series_invites : "招待(将来)"
 
     notification_events ||--o{ notifications : "出来事から配信生成"
+    notifications ||--o{ notification_deliveries : "外部配信(DM/Webhook)"
+    teams ||--o{ scrims : "練習試合"
 
     games ||--o{ rank_definitions : "ランク定義を持つ"
     games ||--o{ events : "対象タイトル"
@@ -274,6 +276,21 @@ erDiagram
         text title
         boolean is_read
     }
+
+    notification_deliveries {
+        uuid id PK
+        uuid notification_id FK
+        enum channel "discord_dm/discord_webhook"
+        enum status "pending/sent/failed/skipped"
+    }
+
+    scrims {
+        uuid id PK
+        uuid team_id FK
+        timestamptz scheduled_at
+        text opponent_name
+        uuid opponent_team_id FK
+    }
 ```
 
 > **注: `follows.target_id` はポリモーフィック参照**（target_type に応じて event_series / events / users を指す）。
@@ -413,6 +430,7 @@ erDiagram
     users ||--o{ follows : "follower"
     notification_events ||--o{ notifications : "出来事→配信(重複排除)"
     users ||--o{ notifications : "宛先"
+    notifications ||--o{ notification_deliveries : "外部配信(DM/Webhook)"
 
     event_series {
         text name "OSL"
@@ -434,9 +452,14 @@ erDiagram
         uuid source_event_id FK "UNIQUE(user,source)"
         boolean is_read
     }
+    notification_deliveries {
+        enum channel "discord_dm/discord_webhook"
+        enum status "pending/sent/failed/skipped"
+    }
 ```
 > フォロー対象は series/event/user の3種。`follows` は target_id がポリモーフィック（FK制約なし、アプリ層で担保）。
 > 「OSL Season3告知」のような出来事は `notification_events` に1件 → シリーズ/主催者/開催回の各フォロワーを集約しユニーク化 → `notifications` に1人1件。`UNIQUE(user_id, source_event_id)` で重複通知を防ぐ。
+> **配信の二段構え**: アプリ内通知(notifications)は必ず残し、`notification_deliveries` で Discord DM(個人向け)/Webhook(全体向け) への外部配信を記録。DM拒否などは status=skipped で記録し取りこぼしを把握（要件 3.5.2）。
 
 ---
 
