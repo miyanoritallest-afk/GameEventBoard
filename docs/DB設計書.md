@@ -1,0 +1,517 @@
+# GameEventBoard DB設計書
+
+最終更新: 2026-06-18
+ステータス: ドラフト（要件定義書ベース）
+DBMS: PostgreSQL（Supabase）
+
+関連: [要件定義書](./要件定義書.md)
+
+---
+
+## 0. 設計方針
+- Supabase（PostgreSQL）前提。認証は Supabase Auth（Discord OAuth のみ）。
+- ランク体系・タグ等の「変わりうる定義」はマスタテーブルに外出しし、多タイトル対応・運用調整をコード改修なしで可能にする。
+- 個人スコアは「応募時点のスナップショット」を `registrations` に保存する（後のランク変動で過去記録が変わらないように）。
+- 排他制御の本体はDB（条件付きUPDATE＋楽観ロック＋CHECK制約）。
+- 命名: テーブルは複数形スネークケース、PKは `id`（uuid想定）、外部キーは `<対象単数>_id`、日時は `created_at` / `updated_at`。
+
+---
+
+## 1. テーブル一覧（全体像）
+
+| 分類 | テーブル | 役割 |
+|------|---------|------|
+| ユーザー | `users` | プロフィール（Discord情報・Battle Tag） |
+| ユーザー | `user_season_ranks` | シーズン×ロールのランク履歴（最大9） |
+| ユーザー | `user_peak_achievement` | 高ランク到達経験（人単位ボーナス用） |
+| マスタ | `games` | ゲームタイトル（OW2等） |
+| マスタ | `rank_definitions` | ランク↔スコア対応表（タイトル別） |
+| マスタ | `tags` | カテゴリ・タグ（初心者限定等。開発者が事前定義） |
+| シリーズ | `event_series` | 継続する企画（OSL等）。開催回(events)の親 |
+| シリーズ | `series_members` | シリーズの共同運営（owner/admin・承認状態） |
+| シリーズ | `series_invites` | （将来）招待リンク用。当面は検索招待のみで未使用可 |
+| イベント | `events` | イベント本体（=開催回。定員・日程・応募フロー設定・スコアリング設定・series_id・version） |
+| イベント | `event_tags` | イベント↔タグ（多対多） |
+| イベント | `event_form_fields` | 募集フォームのカスタム質問定義（フォームビルダー） |
+| 応募 | `registrations` | 参加応募（承認状態・マッチング希望・個人スコアのスナップショット） |
+| 応募 | `registration_answers` | カスタム質問への回答 |
+| チーム | `teams` | チーム（所属イベント・応募ステータス・代表・version） |
+| チーム | `team_members` | チーム所属（担当ロール・レギュラー/リザーブ・代表） |
+| 進行 | `groups` | 予選グループ（A〜D等） |
+| 進行 | `group_teams` | グループ↔チーム所属 |
+| 進行 | `matches` | 試合（対戦カード・日時・リプレイコード・配信URL） |
+| 進行 | `match_lineups` | （Phase2任意）試合ごとの出場メンバー記録。交代履歴 |
+| 進行 | `match_results` | 試合結果（スコア・勝敗） |
+| 進行 | `standings` | 順位表（グループ内/全体） |
+| SNS | `follows` | フォロー関係（series/event/user） |
+| SNS | `notification_events` | 通知の発生源（出来事）。1出来事1行 |
+| SNS | `notifications` | 各ユーザーへの実配信（出来事から重複排除して生成） |
+
+---
+
+## 2. ENUM / 区分値
+```
+role            : tank | dps | support
+member_position : regular | reserve
+reg_status      : pending | approved | rejected | withdrawn
+event_status    : draft | published | recruiting | closed | ongoing | finished
+match_phase     : group | tournament
+peak_tier       : none | master | gm | champion
+follow_target   : series | event | user            # フォロー対象（3種）
+entry_type      : individual | team | mixed        # 参加表明の単位
+team_formation  : self | organizer | none          # チームの作られ方
+team_status     : pending | approved | rejected     # チーム応募の状態
+field_type      : text | textarea | select | url | number   # フォームビルダー入力型
+series_role     : owner | admin                     # シリーズ運営の権限
+member_state    : invited | active                  # シリーズ運営の承認状態
+```
+
+---
+
+## 3. テーブル定義
+
+### 3.1 users（プロフィール）
+Supabase Auth の `auth.users` と1対1で対応（`id` = auth uid）。
+
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK（=auth.uid） | Supabase Authのユーザー |
+| discord_id | text | UNIQUE NOT NULL | Discord OAuth取得 |
+| discord_name | text | NOT NULL | 表示名 |
+| discord_avatar_url | text | | アイコン |
+| battle_tag | text | NOT NULL | ゲーム内ID（必須・初回登録） |
+| is_admin | boolean | DEFAULT false | サイト管理者か |
+| created_at | timestamptz | DEFAULT now() | |
+| updated_at | timestamptz | DEFAULT now() | |
+
+> battle_tag は「初回ログイン後に必須登録」。登録前はプロフィール未完了として応募不可（アプリ側で制御）。
+
+### 3.2 user_season_ranks（シーズン×ロールのランク履歴）
+本人申告。1ユーザーにつき「Nシーズン × 3ロール」分の行を持つ。
+
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| user_id | uuid | FK→users, NOT NULL | |
+| game_id | uuid | FK→games, NOT NULL | どのタイトルか |
+| season_label | text | NOT NULL | 例: "2024-S3"。相対でなく絶対表記 |
+| season_order | int | NOT NULL | 新しいほど大。直近N件抽出用 |
+| role | role | NOT NULL | tank/dps/support |
+| rank_definition_id | uuid | FK→rank_definitions, NOT NULL | 申告ランク |
+| created_at | timestamptz | DEFAULT now() | |
+
+制約: UNIQUE(user_id, game_id, season_label, role)
+
+### 3.3 user_peak_achievement（高ランク到達経験・人単位）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| user_id | uuid | PK, FK→users | |
+| game_id | uuid | PK, FK→games | タイトル別に保持 |
+| peak_tier | peak_tier | NOT NULL DEFAULT 'none' | none/master/gm/champion |
+| updated_at | timestamptz | DEFAULT now() | |
+
+> 人単位（最高到達ランクを1つ）。加点の点数はイベント設定側に持つ。
+
+### 3.4 games（ゲームタイトル・マスタ）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| name | text | UNIQUE NOT NULL | 例: "Overwatch 2" |
+| roles | role[] | NOT NULL | 対応ロール（OW2は tank/dps/support） |
+| team_size | int | NOT NULL | 例: 5 |
+| created_at | timestamptz | DEFAULT now() | |
+
+### 3.5 rank_definitions（ランク↔スコア対応表・マスタ）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| game_id | uuid | FK→games, NOT NULL | |
+| tier | text | NOT NULL | 例: "ブロンズ", "チャンピオン" |
+| division | int | | 例: 5〜1。タイトルにより無しもあり |
+| label | text | NOT NULL | 例: "ブロンズ5" |
+| score | numeric | NOT NULL | 例: 1, 2, …, 40 |
+| sort_order | int | NOT NULL | 表示・選択順 |
+
+制約: UNIQUE(game_id, label)
+> OW2は40段階。スコアはnumericで小数も許容（将来の重み調整用）。
+
+### 3.6 tags（タグ・マスタ／開発者が事前定義）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| name | text | UNIQUE NOT NULL | 例: "初心者限定", "ランクフリー" |
+| category | text | | 任意のグルーピング |
+| created_at | timestamptz | DEFAULT now() | |
+
+### 3.6.1 event_series（シリーズ＝継続する企画）
+開催回(events)の親。「OSL」のような継続企画を表し、フォロー・共同運営の単位（要件 3.5.1）。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| name | text | NOT NULL | 例: "OSL（社会人OW部リーグ）" |
+| description | text | | |
+| logo_url | text | | シリーズロゴ |
+| created_by | uuid | FK→users, NOT NULL | 作成者（初期owner） |
+| created_at | timestamptz | DEFAULT now() | |
+
+### 3.6.2 series_members（シリーズの共同運営）
+owner/admin の2段階権限。検索招待 → 本人承認のフローを status で表現（要件 3.5.1）。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| series_id | uuid | FK→event_series, NOT NULL | |
+| user_id | uuid | FK→users, NOT NULL | 運営メンバー |
+| role | series_role | NOT NULL DEFAULT 'admin' | owner=全権限 / admin=運営業務 |
+| status | member_state | NOT NULL DEFAULT 'invited' | invited=承認待ち / active=承認済み |
+| invited_by | uuid | FK→users | 招待した人 |
+| invited_at | timestamptz | DEFAULT now() | |
+| joined_at | timestamptz | | 承認した日時 |
+
+制約: UNIQUE(series_id, user_id)
+> 各シリーズに role='owner' AND status='active' が最低1人。owner のみ運営の追加削除・シリーズ削除が可能。
+
+### 3.6.3 series_invites（招待リンク・将来用）
+当面は検索招待のみで運用。招待リンク方式を採用する際に使用。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| series_id | uuid | FK→event_series, NOT NULL | |
+| token | text | UNIQUE NOT NULL | 招待URL用 |
+| role | series_role | NOT NULL DEFAULT 'admin' | 付与する権限 |
+| expires_at | timestamptz | | 有効期限（流出対策） |
+| max_uses | int | | 使用回数上限 |
+| used_count | int | NOT NULL DEFAULT 0 | |
+| created_by | uuid | FK→users | |
+| created_at | timestamptz | DEFAULT now() | |
+
+### 3.7 events（イベント本体＝開催回）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| series_id | uuid | FK→event_series | 所属シリーズ（単発はnull） |
+| game_id | uuid | FK→games, NOT NULL | |
+| organizer_id | uuid | FK→users, NOT NULL | 主催者（series未使用時の運営主体） |
+| title | text | NOT NULL | |
+| description | text | | |
+| slug | text | UNIQUE | 公開URL用 |
+| status | event_status | NOT NULL DEFAULT 'draft' | |
+| capacity | int | | **定員＝チーム数**（参加できる/成立させるチーム枠） |
+| current_count | int | NOT NULL DEFAULT 0 | 現在の成立チーム数（排他制御対象） |
+| starts_at | timestamptz | | 開催日時 |
+| recruit_deadline | timestamptz | | 募集締切 |
+| **— 応募フロー設定 —** | | | (3.4.0) |
+| entry_type | entry_type | NOT NULL DEFAULT 'individual' | 参加表明の単位 |
+| team_formation | team_formation | NOT NULL DEFAULT 'organizer' | チームの作られ方 |
+| allow_matching_choice | boolean | NOT NULL DEFAULT false | mixed時、応募者がマッチング希望を選べるか |
+| **— 募集フォーム設定（構造化項目トグル） —** | | | (3.4.2) |
+| require_score | boolean | NOT NULL DEFAULT true | 個人スコア（ランク申告）を求めるか |
+| require_role | boolean | NOT NULL DEFAULT true | 希望ロールを求めるか |
+| require_battle_tag | boolean | NOT NULL DEFAULT true | Battle Tagを使うか |
+| **— スコアリング設定 —** | | | (3.1.1) |
+| role_swap_allowed | boolean | NOT NULL DEFAULT true | ロールスワップ可否 |
+| declared_seasons | int | NOT NULL DEFAULT 3 | 申告シーズン数（モーダル行数） |
+| bonus_master | numeric | NOT NULL DEFAULT 0 | master到達加点 |
+| bonus_gm | numeric | NOT NULL DEFAULT 0 | gm到達加点 |
+| bonus_champion | numeric | NOT NULL DEFAULT 0 | champion到達加点 |
+| **— チーム構成・上限設定 —** | | | (3.1.2) |
+| reserve_slots | int | NOT NULL DEFAULT 0 | リザーブ上限（OSL=2、なし=0）。チーム最大人数 = games.team_size + reserve_slots |
+| team_score_cap | numeric | | チームスコア上限。**出場メンバーの final_score 平均**で判定（旧 team_avg_cap） |
+| **— 排他制御 —** | | | |
+| version | int | NOT NULL DEFAULT 0 | 楽観的ロック |
+| created_at | timestamptz | DEFAULT now() | |
+| updated_at | timestamptz | DEFAULT now() | |
+
+CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
+
+### 3.8 event_tags（イベント↔タグ 多対多）
+| 列 | 型 | 制約 |
+|----|----|------|
+| event_id | uuid | PK, FK→events |
+| tag_id | uuid | PK, FK→tags |
+
+### 3.8.1 event_form_fields（募集フォームのカスタム質問・フォームビルダー）
+構造化項目（ランク/ロール等）とは分離した、表示用の自由項目定義（3.4.2）。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| event_id | uuid | FK→events, NOT NULL | |
+| label | text | NOT NULL | 質問文（例: 意気込み） |
+| field_type | field_type | NOT NULL | text/textarea/select/url/number |
+| options | jsonb | | select時の選択肢 |
+| is_required | boolean | NOT NULL DEFAULT false | 必須か |
+| sort_order | int | NOT NULL DEFAULT 0 | 表示順 |
+| created_at | timestamptz | DEFAULT now() | |
+
+### 3.9 registrations（参加応募）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| event_id | uuid | FK→events, NOT NULL | |
+| user_id | uuid | FK→users, NOT NULL | |
+| preferred_role | role | | 希望ロール（require_role時） |
+| assigned_role | role | | そのイベントで担当するロール（確定後） |
+| wants_matching | boolean | | mixed時: 運営あっせん希望か(true)/自分でチーム(false) |
+| status | reg_status | NOT NULL DEFAULT 'pending' | 承認状態（pending=参加表明のみ） |
+| **— スコアのスナップショット —** | | | (3.1.1) |
+| individual_score | numeric | | ①個人スコア（シーズン×ロールから算出した基礎値） |
+| final_score | numeric | | ②個人ファイナルスコア = individual_score + 到達ボーナス。**チームスコア計算に使う値** |
+| score_breakdown | jsonb | | 算出根拠（参照した9個・ボーナス内訳） |
+| organizer_override_score | numeric | | 運営による上書きスコア（任意。あれば final_score に優先） |
+| created_at | timestamptz | DEFAULT now() | |
+| updated_at | timestamptz | DEFAULT now() | |
+
+制約: UNIQUE(event_id, user_id)
+> 振り分け・平均計算には organizer_override_score があればそれを、なければ individual_score を使う。
+
+### 3.9.1 registration_answers（カスタム質問への回答）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| registration_id | uuid | FK→registrations, NOT NULL | |
+| field_id | uuid | FK→event_form_fields, NOT NULL | |
+| value | text | | 回答（型に関わらずtextで保持し、表示時に解釈） |
+
+制約: UNIQUE(registration_id, field_id)
+
+### 3.10 teams（チーム）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| event_id | uuid | FK→events, NOT NULL | |
+| name | text | NOT NULL | チーム名 |
+| status | team_status | NOT NULL DEFAULT 'approved' | チーム応募(self)時の承認状態。organizer振り分けは即approved |
+| captain_registration_id | uuid | FK→registrations | チーム代表者（self応募時の代表） |
+| version | int | NOT NULL DEFAULT 0 | 楽観的ロック（チーム枠の排他制御） |
+| created_at | timestamptz | DEFAULT now() | |
+
+制約: UNIQUE(event_id, name)
+> チーム平均スコアは team_members から集計（保存列にせず算出。必要なら集計ビュー）。
+> self応募（チーム単位）の場合は teams が応募の主体となり status で承認管理。organizer振り分けの場合は運営が作成し即approved。
+
+### 3.11 team_members（チーム所属）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| team_id | uuid | FK→teams, NOT NULL | |
+| registration_id | uuid | FK→registrations, NOT NULL | 応募（＝スコア源） |
+| role | role | NOT NULL | チーム内の担当ロール |
+| position | member_position | NOT NULL DEFAULT 'regular' | regular/reserve |
+| is_representative | boolean | NOT NULL DEFAULT false | チーム代表者 |
+| created_at | timestamptz | DEFAULT now() | |
+
+制約: UNIQUE(registration_id)（1応募は1チームのみ）
+
+### 3.12 groups（予選グループ）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| event_id | uuid | FK→events, NOT NULL | |
+| name | text | NOT NULL | 例: "グループA" |
+
+制約: UNIQUE(event_id, name)
+
+### 3.13 group_teams（グループ↔チーム）
+| 列 | 型 | 制約 |
+|----|----|------|
+| group_id | uuid | PK, FK→groups |
+| team_id | uuid | PK, FK→teams |
+
+### 3.14 matches（試合）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| event_id | uuid | FK→events, NOT NULL | |
+| phase | match_phase | NOT NULL | group / tournament |
+| group_id | uuid | FK→groups | 予選時のグループ |
+| round | int | | トーナメントのラウンド |
+| bracket_position | int | | トーナメント表上の位置 |
+| team_a_id | uuid | FK→teams | 対戦カード |
+| team_b_id | uuid | FK→teams | |
+| scheduled_at | timestamptz | | 試合日時 |
+| replay_code | text | | OWリプレイコード |
+| stream_url | text | | Twitch/YouTube等の配信URL |
+| streamer_name | text | | 配信者名 |
+| notified_at | timestamptz | | スケジュール通知済みフラグ（Cron用） |
+| created_at | timestamptz | DEFAULT now() | |
+
+### 3.15 match_results（試合結果）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| match_id | uuid | PK, FK→matches | 1試合1結果 |
+| team_a_score | int | NOT NULL | |
+| team_b_score | int | NOT NULL | |
+| winner_team_id | uuid | FK→teams | 引分null可 |
+| reported_by | uuid | FK→users | 入力者 |
+| created_at | timestamptz | DEFAULT now() | |
+| updated_at | timestamptz | DEFAULT now() | |
+
+### 3.15.1 match_lineups（試合ごとの出場メンバー・Phase2任意）
+「試合ごとに出場者が変わる」運用への対応（3.1.2）。Phase1ではチーム編成時のレギュラー/リザーブ（team_members.position）で判定し、試合単位の交代記録が必要になったら本テーブルを使う。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| match_id | uuid | FK→matches, NOT NULL | |
+| team_id | uuid | FK→teams, NOT NULL | |
+| team_member_id | uuid | FK→team_members, NOT NULL | その試合で出場したメンバー |
+| created_at | timestamptz | DEFAULT now() | |
+
+制約: UNIQUE(match_id, team_member_id)
+> その試合のチームスコアは、この出場メンバーの final_score 平均で算出（4.2の出場者をlineupに置き換え）。
+
+### 3.16 standings（順位表）
+試合結果から集計。ビューでもよいが、確定順位の保存用にテーブルでも持てる構成。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| event_id | uuid | FK→events, NOT NULL | |
+| group_id | uuid | FK→groups | 全体順位ならnull |
+| team_id | uuid | FK→teams, NOT NULL | |
+| wins | int | DEFAULT 0 | |
+| losses | int | DEFAULT 0 | |
+| draws | int | DEFAULT 0 | |
+| points | int | DEFAULT 0 | 勝点 |
+| rank | int | | 順位 |
+| updated_at | timestamptz | DEFAULT now() | |
+
+制約: UNIQUE(event_id, group_id, team_id)
+
+### 3.17 follows（フォロー）
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| follower_id | uuid | FK→users, NOT NULL | フォローする人 |
+| target_type | follow_target | NOT NULL | series / event / user |
+| target_id | uuid | NOT NULL | 対象（event_series / events / users のid） |
+| created_at | timestamptz | DEFAULT now() | |
+
+制約: UNIQUE(follower_id, target_type, target_id)
+> target_id はポリモーフィック参照（target_type で指す先が変わる）。RDBのFK制約は単一テーブルにしか張れないため、参照整合性はアプリ層で担保する。
+> イベント応募者は当該 event を自動フォロー扱いにする想定（更新通知のため）。
+
+### 3.18 notification_events（通知の発生源＝出来事）
+「何が起きたか」を1出来事1行で記録。ここから宛先を集約・重複排除して notifications を生成（要件 3.6.1）。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| type | text | NOT NULL | series_new_event / event_published / match_soon / result_updated 等 |
+| source_type | follow_target | NOT NULL | 出来事の主体種別（series/event/user） |
+| source_id | uuid | NOT NULL | 主体のid |
+| payload | jsonb | | 通知本文生成用の付随情報 |
+| created_at | timestamptz | DEFAULT now() | |
+
+### 3.19 notifications（各ユーザーへの実配信）
+notification_events 1件から、フォロワーを集約・ユニーク化して各人1件生成。
+| 列 | 型 | 制約 | 説明 |
+|----|----|------|------|
+| id | uuid | PK | |
+| user_id | uuid | FK→users, NOT NULL | 宛先 |
+| source_event_id | uuid | FK→notification_events, NOT NULL | 由来の出来事 |
+| title | text | NOT NULL | |
+| body | text | | |
+| link_url | text | | 遷移先 |
+| is_read | boolean | NOT NULL DEFAULT false | |
+| created_at | timestamptz | DEFAULT now() | |
+
+制約: **UNIQUE(user_id, source_event_id)** ← 同一出来事から同一ユーザーへの二重通知をDBで物理的に防ぐ（重複排除の最終防衛）。
+
+---
+
+## 4. スコア算出ロジック（擬似）
+
+### 4.1 個人スコア → 個人ファイナルスコア（応募時に算出・スナップショット）
+```
+function calcScores(registration, event):
+    ranks = user_season_ranks(user, game)
+            直近 event.declared_seasons シーズンを抽出
+    if event.role_swap_allowed:
+        base = avg( 抽出した全ロール×全シーズンのスコア )   # 最大9個 ＝ ①individual_score
+    else:
+        base = avg( assigned_role の 抽出シーズン分のスコア ) # ＝ ①individual_score
+    peak = user_peak_achievement(user, game).peak_tier
+    bonus = { master: event.bonus_master, gm: event.bonus_gm,
+              champion: event.bonus_champion }[peak] or 0
+    individual_score = base
+    final_score      = base + bonus                          # ＝ ②個人ファイナルスコア
+    return (individual_score, final_score)
+# registrations に individual_score と final_score をスナップショット保存
+# score_breakdown(jsonb) に参照値・ボーナス内訳を記録
+```
+
+### 4.2 チームスコア（保存せず算出。出場メンバーのみ）
+```
+function teamScore(team):
+    出場メンバー = team_members(team) で position='regular' の registration
+    scores = [ reg.organizer_override_score ?? reg.final_score for 出場メンバー ]
+    return avg(scores)              # ③チームスコア = 出場者の final_score 平均
+# リザーブ(position='reserve')は平均に含めない（出場者のみで判定）
+# team_score_cap との比較で上限超過を判定
+```
+
+### 4.3 交代シミュレーション（編成画面の中核機能・3.1.2）
+「リザーブBを出すなら、レギュラーの誰と交代すれば team_score_cap 以内か」を全パターン提示。
+```
+function swapCandidates(team, reserve, event):
+    候補 = []
+    for regular in team の position='regular':
+        仮編成 = (現レギュラー - regular + reserve)
+        平均 = avg(仮編成の final_score)
+        候補.push({ out: regular, in: reserve, team_score: 平均,
+                    ok: 平均 <= event.team_score_cap })
+    return 候補   # ok=true の組合せを「交代可能」として提示
+```
+> OSL運営が手作業（誰と入れ替えれば上限内か総当たり）で消耗していた計算を自動化する。final_score が分かっていれば全パターン即時算出可能。
+
+---
+
+## 5. 排他制御（同時申込）方針
+- 申込は単一トランザクションで条件付きUPDATE:
+```sql
+UPDATE events
+SET current_count = current_count + 1, version = version + 1
+WHERE id = :event_id
+  AND version = :read_version
+  AND (capacity IS NULL OR current_count < capacity);
+-- 更新行数 0 → 「満員 or 競合」としてアプリ側で弾く
+```
+- 最終防衛として CHECK(current_count <= capacity) と registrations の UNIQUE(event_id,user_id)。
+
+---
+
+## 5.1 通知の生成（重複排除）方針
+1出来事＝notification_events 1行。そこから宛先を集約・ユニーク化して notifications を生成（要件 3.6.1）。
+```
+on 出来事発生(type, source_type, source_id, payload):
+    ev = insert notification_events(...)
+    宛先 = ∪ {
+        follows(target_type='series', target_id=該当シリーズ)  # シリーズ起点
+        follows(target_type='user',   target_id=主催者)        # 主催者起点
+        follows(target_type='event',  target_id=該当event)     # 開催回起点(更新時)
+    } の follower_id を DISTINCT
+    宛先から発生者本人を除外（自分の操作で自分に通知しない）
+    for user in 宛先:
+        insert notifications(user_id=user, source_event_id=ev.id, ...)
+        # UNIQUE(user_id, source_event_id) により二重INSERTは弾かれる（冪等）
+```
+> アプリ層でDISTINCTしつつ、DBの UNIQUE で最終防衛。再実行しても二重通知にならない（冪等）。
+
+---
+
+## 6. RLS（Row Level Security）方針メモ
+Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
+- users: 本人のみ更新可、参照は公開情報のみ。
+- event_series / series_members: series_members(active) のみ更新可。owner のみ運営追加削除・シリーズ削除。参照は公開。
+- events: 該当シリーズの運営（series_members active）または organizer のみ更新可、published は全員参照可。
+- registrations: 本人＋該当イベントの運営が参照/更新。
+- 結果/順位: 参照は公開、更新は運営。
+- follows / notifications: 本人のみ。
+- is_admin は全権限のエスケープハッチ。
+
+---
+
+## 7. 未決事項
+- [x] capacity の単位 → **チーム数**で確定（3.7）
+- [ ] standings をビューにするかテーブル実体にするか（リアルタイム更新との兼ね合い）
+- [ ] season_label の入力方法（自由入力 or マスタ化）
+- [ ] notifications と Discord通知の送り分け詳細
+- [ ] トーナメント表の bracket 構造（round/bracket_position で足りるか）
+- [ ] capacity（チーム数）の排他制御 = チーム成立(self応募 or 運営振り分け確定)のタイミングで current_count を増減。individual応募の参加表明自体は定員カウント対象外（チーム成立時にカウント）
