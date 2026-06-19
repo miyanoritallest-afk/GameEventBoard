@@ -7,6 +7,28 @@
 
 ---
 
+## 2026-06-19 — Supabase クラウド接続・型生成
+
+実装フェーズ開始。Supabase プロジェクトを作成し、ローカルアプリからの接続と型生成まで完了。
+
+### やったこと
+- Supabase プロジェクト作成（東京リージョン・Freeプラン）。作成時設定: Data API=ON / 新テーブル自動公開=OFF / 自動RLS=ON（デフォルト拒否・安全側）。
+- SQL Editor で `0001_initial_schema.sql` を実行 → 全28テーブル作成（type衝突は public スキーマをリセットして再実行で解決）。
+- 鍵（URL/anon/service_role）を `.env.local` に記入。形式・role取り違えを検証。
+- 接続ヘルスチェック（一時 `/health` ページ）で「ローカル→クラウド接続成功・games 0件」を確認 → ページ削除。
+- `supabase gen types` で `src/lib/supabase/types.ts`（全28テーブルの型）を生成。`client.ts`/`server.ts` に `<Database>` を組み込み。build 成功。
+
+### 決めたこと / 詰まり（と対処）
+- **作成時のセキュリティ設定**: 「新テーブル自動公開=OFF」を選択（手動制御＝デフォルト拒否の思想）。「自動RLS=ON」でRLSかけ忘れ防止。
+- **型生成は CLI + アクセストークン**: `npx supabase gen types --project-id ...`。トークンは30日のまま（強い権限は短命に。使い終わったら revoke 推奨）。
+- **PowerShellの `>` が UTF-16 で書き出す罠**: 生成直後の types.ts が UTF-16+BOM になり検索不一致。UTF-8へ変換＋BOM除去で解決。次回はGit Bashか `Out-File -Encoding utf8` を使う。
+- **.env.local は gitignore 済み**で漏れない。`supabase/.temp/` も gitignore に追加。
+
+### 次にやること
+- [ ] Discord OAuth 設定（STEP6）
+- [ ] RLSポリシー本体（0002マイグレーション）
+- [ ] 認証フロー実装（Discordログイン → 初回Battle Tag登録）
+
 ## 2026-06-19 — アーキテクチャ設計書に層構造・テスト方針・データアクセス選定を追記
 
 開発環境とアーキテクチャの概念整理（壁打ち）を経て、確定した方針をアーキテクチャ設計書に明文化。
