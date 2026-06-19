@@ -7,6 +7,27 @@
 
 ---
 
+## 2026-06-19 — Discord OAuth ログインの実装（認証の土台）
+
+設計どおり Discord OAuth ログインを実装し、ブラウザで一周（ログイン→認可→復帰→ログイン状態表示）を確認。
+
+### やったこと
+- Discord Developer Portal でアプリ登録、Redirect URL に Supabase コールバックを設定、Client ID/Secret を Supabase の Discord プロバイダに登録。Supabase の Redirect URLs に `http://localhost:3000/**` を追加。
+- 実装:
+  - `src/middleware.ts` + `src/lib/supabase/middleware.ts`: リクエストごとにセッション更新（SSR認証の定番）。
+  - `src/app/login/page.tsx`: 「Discordでログイン」ボタン（`signInWithOAuth`）。
+  - `src/app/auth/callback/route.ts`: 認証後の `code` をセッションに交換するコールバック。
+  - `src/app/me/page.tsx` + `logout-button.tsx`: ログイン状態の確認・ログアウト。
+- ブラウザで実ログイン成功・`/me` に Discord 情報表示を確認。
+
+### 決めたこと / 詰まり（と対処）
+- **今回は認証の土台のみ**: usersテーブル保存や Battle Tag 登録は次段階。「Discordログインが動くか」だけを最小実装で確認（段階を分けて確実に）。
+- **詰まり: /login が500 → 原因は複数の dev サーバーが `.next` を取り合っていた**。残存 node プロセスを停止＋`.next` をクリアし、Ready を待ってから疎通したら解決。コードは正常だった。教訓: dev は1つだけ起動し、確認前に Ready を待つ。
+
+### 次にやること
+- [ ] 初回ログイン時の Battle Tag 登録 ＋ users テーブルへの保存（プロフィール作成フロー）
+- [ ] RLSポリシー本体（0002マイグレーション）
+
 ## 2026-06-19 — Supabase クラウド接続・型生成
 
 実装フェーズ開始。Supabase プロジェクトを作成し、ローカルアプリからの接続と型生成まで完了。
