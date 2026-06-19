@@ -43,3 +43,6 @@ next-env.d.ts
 # Playwright プロトタイプ確認用スクショ
 /.playwright-mcp/
 /*.png
+
+# Supabase CLI の一時ファイル
+supabase/.temp/
