@@ -1,21 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+/** オープンリダイレクト対策: 内部パス（/始まり・//除く）のみ許可。 */
+function safeRedirect(raw: string | null): string {
+  if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return "/";
+}
+
+function LoginInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
   async function signInWithDiscord() {
     setLoading(true);
     setError(null);
+    const next = safeRedirect(searchParams.get("redirect"));
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "discord",
       options: {
-        // Discord認証後に戻ってくる先（このアプリのコールバックルート）
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // Discord認証後に戻ってくる先（このアプリのコールバックルート）。
+        // 認証完了後の最終遷移先を next で持ち回る。
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     if (error) {
@@ -51,5 +61,14 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams は Suspense 境界が必要。
+  return (
+    <Suspense>
+      <LoginInner />
+    </Suspense>
   );
 }
