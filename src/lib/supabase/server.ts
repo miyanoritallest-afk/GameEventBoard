@@ -26,7 +26,7 @@ export async function createClient() {
             );
           } catch {
             // Server Component から呼ばれた場合、cookie の書き込みは不可。
-            // middleware でセッションを更新する想定のため、ここでは握りつぶしてよい。
+            // proxy でセッションを更新する想定のため、ここでは握りつぶしてよい。
           }
         },
       },
