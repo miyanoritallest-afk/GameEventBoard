@@ -4,7 +4,7 @@ import type { Database } from "./types";
 
 /**
  * リクエストごとに Supabase のセッションを更新する。
- * middleware.ts から呼ぶ。これにより、サーバー側でも常に最新のログイン状態が
+ * proxy.ts から呼ぶ。これにより、サーバー側でも常に最新のログイン状態が
  * cookie に反映され、Server Component / Server Action から認証情報を読める。
  */
 export async function updateSession(request: NextRequest) {
