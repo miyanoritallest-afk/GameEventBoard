@@ -136,6 +136,7 @@ export type Database = {
           declared_seasons: number
           description: string | null
           discord_webhook_url: string | null
+          ends_at: string | null
           entry_type: Database["public"]["Enums"]["entry_type"]
           game_id: string
           id: string
@@ -168,6 +169,7 @@ export type Database = {
           declared_seasons?: number
           description?: string | null
           discord_webhook_url?: string | null
+          ends_at?: string | null
           entry_type?: Database["public"]["Enums"]["entry_type"]
           game_id: string
           id?: string
@@ -200,6 +202,7 @@ export type Database = {
           declared_seasons?: number
           description?: string | null
           discord_webhook_url?: string | null
+          ends_at?: string | null
           entry_type?: Database["public"]["Enums"]["entry_type"]
           game_id?: string
           id?: string
@@ -1216,7 +1219,7 @@ export type Database = {
       }
       users: {
         Row: {
-          battle_tag: string
+          battle_tag: string | null
           created_at: string
           discord_avatar_url: string | null
           discord_dm_opt_in: boolean
@@ -1227,7 +1230,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          battle_tag: string
+          battle_tag?: string | null
           created_at?: string
           discord_avatar_url?: string | null
           discord_dm_opt_in?: boolean
@@ -1238,7 +1241,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          battle_tag?: string
+          battle_tag?: string | null
           created_at?: string
           discord_avatar_url?: string | null
           discord_dm_opt_in?: boolean

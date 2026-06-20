@@ -8,8 +8,13 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // 認証後の遷移先（指定なければトップ）
-  const next = searchParams.get("next") ?? "/";
+  // 認証後の遷移先（指定なければトップ）。
+  // オープンリダイレクト対策: 内部パス（/始まり・//除く）のみ許可。
+  const rawNext = searchParams.get("next");
+  const next =
+    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
+      ? rawNext
+      : "/";
 
   if (code) {
     const supabase = await createClient();
