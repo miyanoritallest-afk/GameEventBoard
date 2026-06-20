@@ -7,6 +7,30 @@
 
 ---
 
+## 2026-06-21 — テスト基盤の導入＋イベント作成の単体・結合テスト
+
+イベント作成機能のテストを整備。あわせて、これまで無かったテスト基盤（Vitest）と静的解析の統合コマンドをこのタイミングで導入した。
+
+### やったこと
+- **テスト基盤を新規導入**: Vitest を devDependency に追加。`vitest.config.mts` は environment=node・tsconfig paths ネイティブ解決（`@/*`）。
+  - npm scripts に `test` / `test:run` / `typecheck`(`tsc --noEmit`) / `check`(lint→typecheck→test を順に実行) を追加。
+- **単体テスト** `src/app/events/__tests__/schema.test.ts`（16ケース）: 2段階バリデーションの下書き側契約を固定。
+  - 必須はタイトル・ゲームのみ／任意項目の null・空文字の正規化／既定値（申告シーズン=3・ボーナス=0）／期間・締切 refine は「両方そろったときだけ」効くこと。
+- **結合テスト** `src/app/events/__tests__/actions.test.ts`（8ケース）: `createEvent` を Supabase/Repository/redirect をモックして検証。
+  - 未ログインは DB に触れず戻り値でエラー（認証バイパス対策）／`organizer_id`・`status` のサーバー固定（マスアサインメント対策）／JST→UTC 保存／成功で `/events/:id` へ redirect。
+- 静的解析: `prototype/**`（使い捨て UI 実験）を ESLint 除外。`npm run check` が緑（lint・typecheck・28テスト）。
+
+### 決めたこと（なぜ）
+- **ランナーは Vitest**: TS/ESM ネイティブで設定が軽く、Zod・Next と相性が良い。既存テスト資産が無いため Jest を選ぶ利点が薄い。
+- **描画系（フォーム/ページ）の単体テストは今回見送り**: 公式ガイドどおり Vitest は async Server Component 未サポート。描画の動線確認は E2E に委ね、今回はロジック（schema）と Server Action の契約に集中。
+- **実DB・RLS の結合テストは別途**: Supabase ローカル環境が必要で重い。今回は Supabase をモックした Server Action レベルの結合に留め、RLS 検証は後続で分離する。
+- **prototype は静的解析の対象外**: 本番品質ゲートに試作のラフさ（React Compiler メモ化警告など）を混ぜない。本番コードは引き続き lint 対象。
+
+### 次にやること
+- [ ] イベント公開フロー（公開時の必須項目チェック・status 遷移）とそのテスト
+- [ ] イベント一覧/詳細の閲覧画面（下書き/公開の出し分け）
+- [ ] （後続）Supabase ローカルでの RLS 結合テスト ／ CI で `npm run check` を回す
+
 ## 2026-06-20 — イベント下書き作成の実装＋RLSポリシー整備
 
 イベント作成機能（feature/event-create）の最初の縦1本を実装。「下書き」を最小入力で保存できるところまで通し、ブラウザで動作確認した。途中で詰まった作成失敗の原因は RLS 未整備だったため、ポリシー本体（0004）も併せて整備した。

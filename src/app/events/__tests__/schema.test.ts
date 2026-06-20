@@ -1,0 +1,195 @@
+import { describe, it, expect } from "vitest";
+import { createDraftEventSchema } from "../schema";
+
+/**
+ * イベント下書き作成スキーマの単体テスト。
+ * 検証の主眼は「2段階バリデーション」の下書き側の契約:
+ *  - 必須はタイトル・ゲームのみ。日程/説明/定員などは未入力で通る。
+ *  - HTML フォーム由来の null / 空文字を preprocess が正しく正規化する。
+ *  - 期間・締切の整合 refine は「両方そろったときだけ」働く。
+ */
+
+// Zod v4 の .uuid() は RFC 4122 準拠（version=4 / variant=8〜b）を要求するため有効な v4 を使う。
+const VALID_UUID = "11111111-1111-4111-8111-111111111111";
+
+/** 下書きの最小有効入力（タイトル・ゲームのみ）。各テストで上書きして使う。 */
+function baseInput(overrides: Record<string, unknown> = {}) {
+  return { title: "テスト大会", gameId: VALID_UUID, ...overrides };
+}
+
+describe("createDraftEventSchema — 必須項目", () => {
+  it("タイトルとゲームだけで成功する（下書きは最小入力で保存できる）", () => {
+    const result = createDraftEventSchema.safeParse(baseInput());
+    expect(result.success).toBe(true);
+  });
+
+  it("タイトル未入力（null）は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(baseInput({ title: null }));
+    expect(result.success).toBe(false);
+    const issue = result.success
+      ? undefined
+      : result.error.issues.find((i) => i.path[0] === "title");
+    expect(issue?.message).toBe("タイトルを入力してください");
+  });
+
+  it("タイトルが空白のみは trim 後に空となり失敗する", () => {
+    const result = createDraftEventSchema.safeParse(baseInput({ title: "   " }));
+    expect(result.success).toBe(false);
+  });
+
+  it("タイトルが80文字超は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ title: "あ".repeat(81) }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("ゲーム未選択（null）は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(baseInput({ gameId: null }));
+    expect(result.success).toBe(false);
+  });
+
+  it("ゲームIDが UUID 形式でないと失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ gameId: "not-a-uuid" }),
+    );
+    expect(result.success).toBe(false);
+    const issue = result.success
+      ? undefined
+      : result.error.issues.find((i) => i.path[0] === "gameId");
+    expect(issue?.message).toBe("ゲームを選択してください");
+  });
+});
+
+describe("createDraftEventSchema — 任意項目の正規化", () => {
+  it("説明が null でも通り、空文字に正規化される", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ description: null }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.description).toBe("");
+  });
+
+  it("説明は trim される", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ description: "  こんにちは  " }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.description).toBe("こんにちは");
+  });
+
+  it("日程系（startsAt/endsAt/recruitDeadline）は未入力で通る", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ startsAt: null, endsAt: null, recruitDeadline: null }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("定員は空文字なら未設定として通る", () => {
+    const result = createDraftEventSchema.safeParse(baseInput({ capacity: "" }));
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.capacity).toBe("");
+  });
+
+  it("定員は文字列の数値を数値に強制変換する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ capacity: "8" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.capacity).toBe(8);
+  });
+
+  it("定員が0以下は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ capacity: "0" }),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("createDraftEventSchema — スコアリング設定の既定値", () => {
+  it("申告シーズン数は未入力なら 3 に既定化される", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ declaredSeasons: "" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.declaredSeasons).toBe(3);
+  });
+
+  it("ボーナス各種は未入力なら 0 に既定化される", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ bonusMaster: "", bonusGm: "", bonusChampion: "" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.bonusMaster).toBe(0);
+      expect(result.data.bonusGm).toBe(0);
+      expect(result.data.bonusChampion).toBe(0);
+    }
+  });
+
+  it("申告シーズン数が範囲外（11）は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ declaredSeasons: "11" }),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("createDraftEventSchema — 期間・締切の整合（両方そろったときだけ）", () => {
+  it("開始のみ指定（終了なし）は整合チェックされず通る", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ startsAt: "2026-07-01T10:00" }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("終了が開始より前だと失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ startsAt: "2026-07-01T10:00", endsAt: "2026-07-01T09:00" }),
+    );
+    expect(result.success).toBe(false);
+    const issue = result.success
+      ? undefined
+      : result.error.issues.find((i) => i.path[0] === "endsAt");
+    expect(issue?.message).toBe("開催終了は開始日時以降にしてください");
+  });
+
+  it("終了が開始と同時刻なら通る（以降を許容）", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ startsAt: "2026-07-01T10:00", endsAt: "2026-07-01T10:00" }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("募集締切が開始以降だと失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({
+        startsAt: "2026-07-01T10:00",
+        recruitDeadline: "2026-07-01T10:00",
+      }),
+    );
+    expect(result.success).toBe(false);
+    const issue = result.success
+      ? undefined
+      : result.error.issues.find((i) => i.path[0] === "recruitDeadline");
+    expect(issue?.message).toBe("募集締切は開催開始より前にしてください");
+  });
+
+  it("募集締切が開始より前なら通る", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({
+        startsAt: "2026-07-01T10:00",
+        recruitDeadline: "2026-06-30T23:59",
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("開始がないと締切だけ指定しても整合チェックされず通る", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ recruitDeadline: "2026-06-30T23:59" }),
+    );
+    expect(result.success).toBe(true);
+  });
+});
