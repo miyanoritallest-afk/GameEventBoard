@@ -457,7 +457,13 @@ notification_events 1件から、フォロワーを集約・ユニーク化し�
 ## 4. スコア算出ロジック（擬似）
 
 ### 4.1 個人スコア → 個人ファイナルスコア（応募時に算出・スナップショット）
+
+> **⚠️ 2026-06-21 更新**: 本 4.1 の単純平均モデルは、壁打ちで OSL 実運用に基づき**新仕様**へ更新した。
+> ランクは「事前登録」でなく**応募時入力**、未認定セルの**補完3方式（主催者選択）**、role_swap 分岐、
+> ボーナスのオプション有効化を含む。**正は [スコアリング設計.md](./スコアリング設計.md)**。以下は旧モデル（参考）。
+
 ```
+# ↓ 旧モデル（参考。現行の正は スコアリング設計.md）
 function calcScores(registration, event):
     ranks = user_season_ranks(user, game)
             直近 event.declared_seasons シーズンを抽出
@@ -474,6 +480,12 @@ function calcScores(registration, event):
 # registrations に individual_score と final_score をスナップショット保存
 # score_breakdown(jsonb) に参照値・ボーナス内訳を記録
 ```
+
+**新仕様の要点（詳細は スコアリング設計.md）**:
+- ランクは応募時入力（user_season_ranks に永続しない。declared_seasons × ロールの2次元グリッド）。
+- 未認定セルの補完は主催者選択の3方式: `fill_by_role`（横軸）/ `fill_by_season`（縦軸）/ `exclude`（除外）。
+- role_swap=false は担当ロール1つのスコアをそのまま使用（個人ファイナルスコア不要）。
+- ボーナスはイベントのオプションで有効化したときのみ加算。
 
 ### 4.2 チームスコア（保存せず算出。出場メンバーのみ）
 ```
