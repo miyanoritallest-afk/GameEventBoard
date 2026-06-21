@@ -73,10 +73,32 @@ export async function listRegistrationsByEvent(eventId: string) {
   const { data, error } = await supabase
     .from("registrations")
     .select(
-      "id, status, created_at, users(discord_name, discord_avatar_url, battle_tag)",
+      "id, status, created_at, preferred_role, individual_score, final_score, organizer_override_score, score_breakdown, users(discord_name, discord_avatar_url, battle_tag)",
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 運営によるスコア上書き（organizer_override_score を設定/解除）。
+ * score=null でクリア（算出値に戻る）。主催者確認はアクション側＋ RLS（0006 UPDATE）。
+ * 算出元の individual/final_score・score_breakdown は触らない（根拠を保持）。
+ * 行が無ければ null。
+ */
+export async function setOverrideScore(params: {
+  registrationId: string;
+  score: number | null;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("registrations")
+    .update({ organizer_override_score: params.score })
+    .eq("id", params.registrationId)
+    .select("id, organizer_override_score")
+    .maybeSingle();
 
   if (error) throw error;
   return data;

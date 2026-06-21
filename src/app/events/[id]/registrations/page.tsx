@@ -3,16 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
 import { listRegistrationsByEvent } from "@/lib/repositories/registrations";
-import { DecideButtons } from "./decide-buttons";
+import {
+  RegistrationRow,
+  type RegistrationRowData,
+} from "./registration-row";
 
 export const dynamic = "force-dynamic";
-
-const REG_STATUS_LABEL: Record<string, string> = {
-  pending: "承認待ち",
-  approved: "参加確定",
-  rejected: "不参加",
-  withdrawn: "取り下げ",
-};
 
 /** UTC(ISO) を JST 表示に整形する。 */
 function fmtJst(iso: string): string {
@@ -77,27 +73,27 @@ export default async function EventRegistrationsPage({
                 discord_avatar_url: string | null;
                 battle_tag: string | null;
               } | null;
+              const row: RegistrationRowData = {
+                id: reg.id,
+                status: reg.status,
+                createdAtLabel: fmtJst(reg.created_at),
+                discordName: u?.discord_name ?? "-",
+                battleTag: u?.battle_tag ?? null,
+                preferredRole: reg.preferred_role,
+                individualScore: reg.individual_score,
+                finalScore: reg.final_score,
+                overrideScore: reg.organizer_override_score,
+                breakdown:
+                  (reg.score_breakdown as RegistrationRowData["breakdown"]) ??
+                  null,
+              };
+              // スコアレスイベント（require_score=false）はスコア列・上書きを出さない。
               return (
-                <li
+                <RegistrationRow
                   key={reg.id}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4"
-                >
-                  <div>
-                    <p className="font-medium">{u?.discord_name ?? "-"}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {u?.battle_tag ? `${u.battle_tag} ／ ` : ""}
-                      応募 {fmtJst(reg.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="rounded bg-muted px-2 py-0.5 text-xs">
-                      {REG_STATUS_LABEL[reg.status] ?? reg.status}
-                    </span>
-                    {reg.status === "pending" && (
-                      <DecideButtons registrationId={reg.id} />
-                    )}
-                  </div>
-                </li>
+                  reg={row}
+                  showScore={event.require_score}
+                />
               );
             })}
           </ul>

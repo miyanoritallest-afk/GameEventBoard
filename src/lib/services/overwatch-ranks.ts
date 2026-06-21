@@ -55,3 +55,22 @@ export function buildOverwatchRankDefinitions(): RankDefinition[] {
   });
   return defs.sort((a, b) => a.score - b.score);
 }
+
+/**
+ * スコア値からランク名（label）へ逆引きする（算出根拠の表示用）。
+ * 補完で生じる非整数スコア（例 22.5）は最も近い段階のラベルにする。
+ * null は未認定。一致する段階が無ければ score を文字列で返す。
+ */
+export function scoreToRankLabel(score: number | null): string {
+  if (score === null) return "未認定";
+  const defs = buildOverwatchRankDefinitions();
+  // 最も近いスコアのラベル（補完値は段階の中間になりうるため）。
+  let nearest = defs[0];
+  for (const d of defs) {
+    if (Math.abs(d.score - score) < Math.abs(nearest.score - score)) {
+      nearest = d;
+    }
+  }
+  // 補完で中間値のときは「ダイヤ3 相当」と分かるよう近似表記。
+  return nearest.score === score ? nearest.label : `${nearest.label}相当`;
+}
