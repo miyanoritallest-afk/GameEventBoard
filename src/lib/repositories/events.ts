@@ -34,6 +34,36 @@ export async function findEventById(id: string) {
   return data;
 }
 
+/** slug でイベントを1件取得する。存在しなければ null。 */
+export async function findEventBySlug(slug: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("*, games(name)")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 公開済みイベントの一覧を取得する（新しい順）。
+ * アプリ層で status='draft' を除外（RLS 0005 と二重で下書き漏れを防ぐ）。
+ * 一覧は概要表示なので必要な列だけ取る。
+ */
+export async function listPublishedEvents() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, slug, title, status, starts_at, recruit_deadline, games(name)")
+    .neq("status", "draft")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
 /**
  * イベントを公開する（status を published に上げる）。
  *

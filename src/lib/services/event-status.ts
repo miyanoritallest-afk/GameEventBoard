@@ -16,6 +16,21 @@ export function canPublish(status: EventStatus): boolean {
   return status === "draft";
 }
 
+/**
+ * 詳細ページの閲覧可否（純粋関数）。RLS 0005 と同じルールをアプリ層でも持つ。
+ * - 公開済み（draft 以外）は誰でも閲覧可。
+ * - 下書き（draft）は主催者本人のみ。
+ * viewerId は未ログインなら null。
+ */
+export function canViewEvent(
+  status: EventStatus,
+  organizerId: string,
+  viewerId: string | null,
+): boolean {
+  if (status !== "draft") return true;
+  return viewerId !== null && viewerId === organizerId;
+}
+
 /** 公開不可だった場合に、状態に応じた利用者向けメッセージを返す。 */
 export function publishRejectionReason(status: EventStatus): string {
   if (status === "published" || status === "recruiting") {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   canPublish,
+  canViewEvent,
   publishRejectionReason,
   type EventStatus,
 } from "../event-status";
@@ -39,5 +40,32 @@ describe("publishRejectionReason", () => {
     for (const s of ["closed", "ongoing", "finished"] as EventStatus[]) {
       expect(publishRejectionReason(s)).toContain("公開できる状態ではありません");
     }
+  });
+});
+
+describe("canViewEvent", () => {
+  const OWNER = "owner-id";
+  const OTHER = "other-id";
+
+  it("公開済み（draft 以外）は誰でも閲覧可（未ログイン含む）", () => {
+    for (const s of [
+      "published",
+      "recruiting",
+      "closed",
+      "ongoing",
+      "finished",
+    ] as EventStatus[]) {
+      expect(canViewEvent(s, OWNER, null)).toBe(true);
+      expect(canViewEvent(s, OWNER, OTHER)).toBe(true);
+    }
+  });
+
+  it("下書きは主催者本人のみ閲覧可", () => {
+    expect(canViewEvent("draft", OWNER, OWNER)).toBe(true);
+  });
+
+  it("下書きは他人・未ログインには見せない", () => {
+    expect(canViewEvent("draft", OWNER, OTHER)).toBe(false);
+    expect(canViewEvent("draft", OWNER, null)).toBe(false);
   });
 });
