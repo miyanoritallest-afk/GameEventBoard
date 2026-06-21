@@ -118,7 +118,8 @@ export default async function EventDetailPage({
           />
         </dl>
 
-        {/* 応募導線（非主催者・公開中）。応募済みなら状態表示、未応募なら応募ボタン。 */}
+        {/* 応募導線（非主催者・公開中）。応募済みなら状態表示。
+            未応募は、スコアあり(require_score)なら専用フォームへ誘導、なしなら即時応募。 */}
         {canApply &&
           (myRegistration ? (
             <p className="mt-6 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
@@ -126,6 +127,19 @@ export default async function EventDetailPage({
               {REG_STATUS_LABEL[myRegistration.status] ?? myRegistration.status}
               ）
             </p>
+          ) : event.require_score ? (
+            <div className="mt-6 rounded-xl border border-border bg-card p-5">
+              <h2 className="text-sm font-semibold">このイベントに応募する</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                希望ロールとランクを申告して応募します。
+              </p>
+              <Link
+                href={`/events/${event.id}/apply`}
+                className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                応募フォームへ
+              </Link>
+            </div>
           ) : (
             <ApplyButton eventId={event.id} />
           ))}

@@ -7,6 +7,32 @@
 
 ---
 
+## 2026-06-21 — スコアあり応募フォーム＋算出スナップショット（スコアあり応募 PR-D・完）
+
+スコアあり応募の総仕上げ。PR-A（マスタ）・PR-B（算出）・PR-C（設定）が全部つながり、応募時にランクを入力 → スコア算出 → registrations へスナップショット保存できるようになった。
+
+### やったこと
+- **専用ページ** `/events/[id]/apply`（require_score=true のイベント用）。ガード: 未ログイン→/login、主催者/下書き/スコアなし/応募済み→詳細へリダイレクト。
+- **応募フォーム**（client）: 希望ロール選択＋ランクグリッド（各セル=単一ドロップダウン、40段階を帯ごとに optgroup＋「未認定」）。role_swap=true は3ロール、false は希望ロール1つ分を表示。ボーナス有効時は peak 到達選択。
+- **Service** `scored-application.ts`: フォームのセル文字列→Cellグリッド変換、対象ロール決定、peak 検証（純粋関数）。
+- **Repository** `insertRegistration` を拡張: preferred_role / individual_score / final_score / score_breakdown を受ける（スコアなし応募と共有。未指定は null）。
+- **Action** `registerWithScore`: 認可（主催者不可・公開中・require_score限定・重複）→ 希望ロール/peak を Zod 検証 → グリッドを formData から parse → **calcScore（PR-B）で算出** → registrations にスナップショット（**user_id/status はサーバー固定**）。score_breakdown に算出根拠＋入力グリッドを保存。
+- **詳細ページ**: require_score=true なら「応募フォームへ」リンク、false なら従来の即時応募ボタンに出し分け。
+- テスト +17（計141 緑）: scored-application 単体／registerWithScore 結合（なりすまし防止=user_id固定・IDOR・require_score限定・重複・role_swap両分岐の算出値・ボーナス・全未認定null）。
+- ブラウザ実機確認（単一アカウント範囲）: apply ページの主催者→詳細リダイレクト、詳細の管理表示。
+
+### 決めたこと（なぜ）
+- **専用ページ**: グリッド入力は項目が多く、詳細ページに混ぜると重い。応募に集中できる /apply に分離。
+- **ランクセルは単一ドロップダウン＋未認定選択肢**: 最大9セルでも画面が破綻せず実装が素直。帯ごと optgroup で探しやすく。
+- **insertRegistration を共有拡張**: スコアなし/ありで応募の骨格は同じ。scored 系を任意引数にして1関数に集約。
+- **算出は応募時に確定しスナップショット**: 後のランク変動・マスタ変更で過去記録が変わらないよう score_breakdown に根拠も保存。
+- **単一アカウント検証の限界**: 主催者≠応募者が作れず、applicant 向けグリッド応募の実機通しは未確認。算出・スナップショット・IDOR の中核は結合テストで担保。
+
+### 次にやること（スコアあり応募は一区切り）
+- [ ] PR-E（任意）: 応募者一覧でのスコア表示・運営上書き（organizer_override_score）
+- [ ] 別アカウントでの応募フロー実機確認（スコアあり/なし両方）
+- [ ] チーム編成・交代シミュレーション（final_score を使う本命機能）
+
 ## 2026-06-21 — イベントのスコアリング設定（階層導線）（スコアあり応募 PR-C）
 
 主催者がイベント作成/編集時に、未認定の補完方式・スコア計算の有無・ボーナスを設定できるようにした。
