@@ -56,6 +56,8 @@ export default async function EditEventPage({
     endsAt: utcIsoToJstLocal(event.ends_at),
     recruitDeadline: utcIsoToJstLocal(event.recruit_deadline),
     capacity: event.capacity != null ? String(event.capacity) : "",
+    requireScore: event.require_score,
+    uncertifiedHandling: event.uncertified_handling,
     roleSwapAllowed: event.role_swap_allowed,
     declaredSeasons: event.declared_seasons,
     bonusMaster: event.bonus_master,

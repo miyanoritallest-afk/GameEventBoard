@@ -7,6 +7,28 @@
 
 ---
 
+## 2026-06-21 — イベントのスコアリング設定（階層導線）（スコアあり応募 PR-C）
+
+主催者がイベント作成/編集時に、未認定の補完方式・スコア計算の有無・ボーナスを設定できるようにした。
+
+### やったこと
+- **マイグレーション 0007**（手動適用）: `uncertified_handling` enum（fill_by_role/fill_by_season/exclude）を新規作成し、events に同カラム追加（既定 exclude）。
+- **types.ts を手動更新**: 新 enum と events.uncertified_handling を Row/Insert/Update/Enums/Constants に追記（Supabase CLI 未導入のため手作業）。
+- **schema.ts**: `requireScore`（既定 true）/`uncertifiedHandling`（enum・既定 exclude）を受理。
+- **EventForm を階層導線に**: 「個人スコアを計算する」親トグル → ON のとき申告シーズン数・未認定方式・ロールスワップ・「到達ボーナスを使う」孫トグルを表示 → ボーナス ON のとき加点欄を表示。useState で出し分け。
+- **actions/Repository**: parseEventFormData に require_score / uncertified_handling を追加。編集の許可カラム（EventEditableColumns）と編集ページ defaultValues も更新。
+- テスト +5（計124 緑）: requireScore 既定/false、uncertifiedHandling 3方式・既定・不正値。
+- ブラウザ実機確認: 親OFFで子が全消え／親ON＋ボーナスONで加点欄出現／未認定 select の3方式。
+
+### 決めたこと（なぜ）
+- **未認定方式は enum 型**: 3方式で確定し増える見込みが薄いため、既存 enum 群と統一して型安全に。
+- **スコア計算の有無は既存 require_score で表現**: 新カラムを増やさず、「計算する→配下を出す」の親に流用。
+- **ボーナス有効化は専用カラムを足さない**: bonus_* の値（0=オフ）で十分。フォームのトグルは UI 上の出し分けのみ（保存値は加点数）。
+- **types.ts は手動更新**: CLI 未導入のため。マイグレーションと手で整合を取り、将来 CLI 導入時に再生成で照合。
+
+### 次にやること
+- [ ] PR-D: スコアあり応募フォーム（ランクグリッド入力・希望ロール・未認定選択）＋ calcScore 適用 → registrations にスナップショット
+
 ## 2026-06-21 — スコア算出 Service（スコアあり応募 PR-B）
 
 スコア算出ロジックを純粋関数として実装し、網羅テストで固定した。UI・DB には触れず、ロジックだけを確定させる回。

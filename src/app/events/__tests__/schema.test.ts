@@ -136,6 +136,45 @@ describe("createDraftEventSchema — スコアリング設定の既定値", () =
   });
 });
 
+describe("createDraftEventSchema — スコア計算設定（PR-C）", () => {
+  it("requireScore は未指定なら true に既定化される", () => {
+    const result = createDraftEventSchema.safeParse(baseInput());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.requireScore).toBe(true);
+  });
+
+  it("requireScore=false を受理する（スコアなしイベント）", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ requireScore: false }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.requireScore).toBe(false);
+  });
+
+  it("uncertifiedHandling は未指定なら exclude に既定化される", () => {
+    const result = createDraftEventSchema.safeParse(baseInput());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.uncertifiedHandling).toBe("exclude");
+  });
+
+  it("uncertifiedHandling は3方式を受理する", () => {
+    for (const h of ["fill_by_role", "fill_by_season", "exclude"] as const) {
+      const result = createDraftEventSchema.safeParse(
+        baseInput({ uncertifiedHandling: h }),
+      );
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.uncertifiedHandling).toBe(h);
+    }
+  });
+
+  it("uncertifiedHandling が不正な値は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ uncertifiedHandling: "invalid" }),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("createDraftEventSchema — 期間・締切の整合（両方そろったときだけ）", () => {
   it("開始のみ指定（終了なし）は整合チェックされず通る", () => {
     const result = createDraftEventSchema.safeParse(

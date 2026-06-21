@@ -73,6 +73,8 @@ function parseEventFormData(
     endsAt: formData.get("endsAt"),
     recruitDeadline: formData.get("recruitDeadline"),
     capacity: formData.get("capacity"),
+    requireScore: formData.get("requireScore") === "on",
+    uncertifiedHandling: formData.get("uncertifiedHandling") ?? "exclude",
     roleSwapAllowed: formData.get("roleSwapAllowed") === "on",
     declaredSeasons: formData.get("declaredSeasons"),
     bonusMaster: formData.get("bonusMaster"),
@@ -103,6 +105,8 @@ function parseEventFormData(
       ends_at: jstLocalToUtcIso(v.endsAt),
       recruit_deadline: jstLocalToUtcIso(v.recruitDeadline),
       capacity: typeof v.capacity === "number" ? v.capacity : null,
+      require_score: v.requireScore,
+      uncertified_handling: v.uncertifiedHandling,
       role_swap_allowed: v.roleSwapAllowed,
       declared_seasons: v.declaredSeasons,
       bonus_master: v.bonusMaster,
@@ -121,6 +125,8 @@ type EventEditableValues = {
   ends_at: string | null;
   recruit_deadline: string | null;
   capacity: number | null;
+  require_score: boolean;
+  uncertified_handling: "fill_by_role" | "fill_by_season" | "exclude";
   role_swap_allowed: boolean;
   declared_seasons: number;
   bonus_master: number;
