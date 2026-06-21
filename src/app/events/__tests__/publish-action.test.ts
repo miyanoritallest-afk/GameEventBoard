@@ -138,12 +138,12 @@ describe("publishEvent — 公開時の必須化", () => {
     expect(mocks.publishEventRepo).not.toHaveBeenCalled();
   });
 
-  it("定員未設定でも fieldErrors を返す", async () => {
+  it("定員未設定でも公開できる（定員は公開時も任意）", async () => {
     loggedIn();
     mocks.findEventById.mockResolvedValue(draftEvent({ capacity: null }));
     const result = await publishEvent(EVENT_ID);
-    expect(result.fieldErrors?.capacity).toBeDefined();
-    expect(mocks.publishEventRepo).not.toHaveBeenCalled();
+    expect(result.error).toBeUndefined();
+    expect(mocks.publishEventRepo).toHaveBeenCalledTimes(1);
   });
 });
 

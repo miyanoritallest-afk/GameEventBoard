@@ -6,7 +6,8 @@ import { z } from "zod";
  * 設計（2段階バリデーション）:
  * - 下書き作成（createDraftEventSchema）: タイトル・ゲームのみ必須。日程/説明/定員は任意で
  *   保存できる（日程などを後から詰める運用に合わせる）。
- * - 公開時（publishEventSchema・本ファイル末尾）: 下書きで緩めた日程・定員等を必須化する。
+ * - 公開時（publishEventSchema・本ファイル末尾）: 日程・募集締切を必須化する
+ *   （定員は公開時も任意）。
  *
  * 重要（マスアサインメント対策）:
  * - ここで定義した項目以外は受理しない。
@@ -110,9 +111,11 @@ export type CreateDraftEventInput = z.infer<typeof createDraftEventSchema>;
  * 公開の最低条件（募集を開始できる状態か）:
  * - 開催開始（starts_at）が設定済み
  * - 募集締切（recruit_deadline）が設定済み
- * - 定員（capacity）が設定済み・1以上
  * - タイトル・ゲームは下書き時点で必須のため、ここでは前提として再掲のみ
  * - 期間・締切の整合（終了が開始以降 / 締切が開始より前）は引き続き成立すること
+ *
+ * 定員（capacity）は公開時も任意（未定のまま募集を開始する運用を許容）。
+ * ただし設定する場合は1以上であること（0・負数は無意味なので弾く）。
  */
 export const publishEventSchema = z
   .object({
@@ -125,10 +128,12 @@ export const publishEventSchema = z
     recruit_deadline: z
       .string({ message: "募集締切を設定してください" })
       .min(1, "募集締切を設定してください"),
+    // 任意。null は未設定。値があるなら1以上の整数。
     capacity: z
-      .number({ message: "定員を設定してください" })
+      .number()
       .int()
-      .min(1, "定員は1以上で設定してください"),
+      .min(1, "定員は1以上で設定してください")
+      .nullable(),
   })
   .refine(
     (v) =>

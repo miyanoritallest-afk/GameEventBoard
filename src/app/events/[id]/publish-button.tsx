@@ -31,7 +31,7 @@ export function PublishButton({ eventId }: { eventId: string }) {
     <div className="mt-6 rounded-xl border border-border bg-card p-5">
       <h2 className="text-sm font-semibold">公開する</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        公開すると参加者が応募できるようになります。日程・募集締切・定員の設定が必要です。
+        公開すると参加者が応募できるようになります。開催日時・募集締切の設定が必要です（定員は任意）。
       </p>
 
       {error && (

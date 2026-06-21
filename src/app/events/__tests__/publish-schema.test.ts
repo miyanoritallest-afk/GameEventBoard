@@ -51,12 +51,12 @@ describe("publishEventSchema — 必須項目の欠落", () => {
     expect(result.success).toBe(false);
   });
 
-  it("定員が null だと公開できない", () => {
+  it("定員が null（未設定）でも公開できる（公開時も任意）", () => {
     const result = publishEventSchema.safeParse(fullEvent({ capacity: null }));
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
-  it("定員が0以下だと公開できない", () => {
+  it("定員を設定する場合は0以下だと公開できない", () => {
     expect(
       publishEventSchema.safeParse(fullEvent({ capacity: 0 })).success,
     ).toBe(false);

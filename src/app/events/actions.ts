@@ -127,7 +127,7 @@ async function allocateUniqueSlug(maxAttempts = 5): Promise<string> {
  * 2. 対象イベントを取得し、organizer_id === user.id を確認（アプリ層 IDOR 対策）。
  *    存在しない/他人の行は同じ「権限なし」応答にして列挙を防ぐ。
  * 3. canPublish(status) で状態遷移を検証（二重公開・終了後公開を防ぐ）。
- * 4. publishEventSchema で公開時の必須項目（日程・締切・定員）を検証。
+ * 4. publishEventSchema で公開時の必須項目（日程・締切）を検証（定員は任意）。
  * 5. 公開URL用に slug を採番（重複しない ID ベース slug）。
  * 6. publishEvent で楽観ロック付き更新（version 競合は戻り値で通知）。slug も保存。
  *    最終防衛は DB の RLS（events_update_own / 0004）。
