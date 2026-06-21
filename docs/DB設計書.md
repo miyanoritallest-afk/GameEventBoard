@@ -541,6 +541,7 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
 - events: 該当シリーズの運営（series_members active）または organizer のみ更新可、published は全員参照可。
   - 実装状況: SELECT は「公開済み（status≠draft）は全員 / 下書きは organizer 本人のみ」を 0005 で設定。INSERT/UPDATE/DELETE は organizer 本人を 0004 で設定（series 運営による更新は未実装・後続）。
 - registrations: 本人＋該当イベントの運営が参照/更新。
+  - 実装状況: 0006 で設定。SELECT=応募者本人 or イベント主催者（events への EXISTS サブクエリ）、INSERT=本人のみ（user_id=auth.uid()）、UPDATE=イベント主催者のみ（承認/却下）。DELETE は未定義（取り下げは後続）。本コードベース初の EXISTS サブクエリ RLS。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
 - is_admin は全権限のエスケープハッチ。
