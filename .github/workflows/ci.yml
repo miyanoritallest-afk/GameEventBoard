@@ -1,0 +1,37 @@
+name: CI
+
+# PR と main への push で品質ゲート（lint・typecheck・test）を回す。
+# ローカルの `npm run check` と同じコマンドを CI でも実行し、
+# 「手動確認はまとめて」方針の前提となる自動チェックを担保する。
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# 同一ブランチで新しい push があれば、進行中の古い実行を打ち切る（無駄なCI時間の節約）。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint / typecheck / test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22" # アクティブ LTS。npm キャッシュで依存解決を高速化。
+          cache: "npm"
+
+      # lockfile に厳密一致でインストール（再現性のため install ではなく ci）。
+      - name: Install dependencies
+        run: npm ci
+
+      # lint → typecheck → test を順に実行（package.json の check スクリプト）。
+      - name: Run checks
+        run: npm run check
