@@ -60,6 +60,12 @@ export const createDraftEventSchema = z
     ),
 
     // スコアリング設定（既定値あり）。
+    // 個人スコアを計算するか（スコアあり応募の親トグル）。OFF なら配下は無効。
+    requireScore: z.coerce.boolean().default(true),
+    // 未認定セルの補完方式（role_swap=true の算出時に使う）。既定は除外。
+    uncertifiedHandling: z
+      .enum(["fill_by_role", "fill_by_season", "exclude"])
+      .default("exclude"),
     roleSwapAllowed: z.coerce.boolean().default(false),
     declaredSeasons: z.preprocess(
       (v) => (v == null || v === "" ? 3 : v),

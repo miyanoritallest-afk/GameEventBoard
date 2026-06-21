@@ -154,6 +154,7 @@ export type Database = {
           team_formation: Database["public"]["Enums"]["team_formation"]
           team_score_cap: number | null
           title: string
+          uncertified_handling: Database["public"]["Enums"]["uncertified_handling"]
           updated_at: string
           version: number
         }
@@ -187,6 +188,7 @@ export type Database = {
           team_formation?: Database["public"]["Enums"]["team_formation"]
           team_score_cap?: number | null
           title: string
+          uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string
           version?: number
         }
@@ -220,6 +222,7 @@ export type Database = {
           team_formation?: Database["public"]["Enums"]["team_formation"]
           team_score_cap?: number | null
           title?: string
+          uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string
           version?: number
         }
@@ -1283,6 +1286,7 @@ export type Database = {
       series_role: "owner" | "admin"
       team_formation: "self" | "organizer" | "none"
       team_status: "pending" | "approved" | "rejected"
+      uncertified_handling: "fill_by_role" | "fill_by_season" | "exclude"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1432,6 +1436,7 @@ export const Constants = {
       series_role: ["owner", "admin"],
       team_formation: ["self", "organizer", "none"],
       team_status: ["pending", "approved", "rejected"],
+      uncertified_handling: ["fill_by_role", "fill_by_season", "exclude"],
     },
   },
 } as const

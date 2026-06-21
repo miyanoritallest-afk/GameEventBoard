@@ -219,6 +219,7 @@ owner/admin の2段階権限。検索招待 → 本人承認のフローを stat
 | bonus_master | numeric | NOT NULL DEFAULT 0 | master到達加点 |
 | bonus_gm | numeric | NOT NULL DEFAULT 0 | gm到達加点 |
 | bonus_champion | numeric | NOT NULL DEFAULT 0 | champion到達加点 |
+| uncertified_handling | uncertified_handling | NOT NULL DEFAULT 'exclude' | 未認定セルの補完方式（fill_by_role/fill_by_season/exclude）。0007で追加 |
 | **— チーム構成・上限設定 —** | | | (3.1.2) |
 | reserve_slots | int | NOT NULL DEFAULT 0 | リザーブ上限（OSL=2、なし=0）。チーム最大人数 = games.team_size + reserve_slots |
 | team_score_cap | numeric | | チームスコア上限。**出場メンバーの final_score 平均**で判定（旧 team_avg_cap） |

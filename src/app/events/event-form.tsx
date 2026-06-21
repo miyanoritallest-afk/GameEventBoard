@@ -1,9 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { DateTimePicker } from "@/components/datetime-picker";
 
 type GameOption = { id: string; name: string };
+
+/** 未認定補完方式の選択肢（表示ラベル付き）。 */
+const UNCERTIFIED_OPTIONS = [
+  { value: "exclude", label: "計算に含めない（除外）" },
+  { value: "fill_by_season", label: "同ロールの他シーズン平均で補完（縦軸）" },
+  { value: "fill_by_role", label: "同シーズンの他ロール平均で補完（横軸）" },
+] as const;
 
 /** 作成・編集で共有するフォーム状態（Server Action の戻り値）。 */
 export type EventFormState = {
@@ -20,6 +27,8 @@ export type EventFormDefaults = {
   endsAt?: string;
   recruitDeadline?: string;
   capacity?: string;
+  requireScore?: boolean;
+  uncertifiedHandling?: "fill_by_role" | "fill_by_season" | "exclude";
   roleSwapAllowed?: boolean;
   declaredSeasons?: number;
   bonusMaster?: number;
@@ -56,6 +65,16 @@ export function EventForm({
   const [state, formAction, pending] = useActionState(action, {});
   const fe = state.fieldErrors ?? {};
   const d = defaultValues;
+
+  // 階層導線の表示制御。
+  // 親: 個人スコアを計算するか（OFF なら配下を隠す＝スコアなしイベント）。
+  const [requireScore, setRequireScore] = useState(d.requireScore ?? true);
+  // 子: 到達ボーナスを使うか（既定値が1つでも >0 なら ON とみなす）。
+  const [useBonus, setUseBonus] = useState(
+    (d.bonusMaster ?? 0) > 0 ||
+      (d.bonusGm ?? 0) > 0 ||
+      (d.bonusChampion ?? 0) > 0,
+  );
 
   return (
     <form action={formAction} className="mt-6 space-y-6">
@@ -132,61 +151,109 @@ export function EventForm({
       <fieldset className="rounded-xl border border-border bg-card p-4">
         <legend className="px-1 text-sm font-semibold">スコアリング設定</legend>
 
+        {/* 親トグル: 個人スコアを計算するか。OFF なら配下を隠す（スコアなしイベント）。 */}
         <label className="mt-2 flex items-center gap-2 text-sm">
           <input
-            name="roleSwapAllowed"
+            name="requireScore"
             type="checkbox"
-            defaultChecked={d.roleSwapAllowed ?? false}
+            checked={requireScore}
+            onChange={(e) => setRequireScore(e.target.checked)}
             className="size-4"
           />
-          ロールスワップを許可する（複数ロールのランク申告）
+          個人スコアを計算する（ランク申告から算出）
         </label>
 
-        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Field label="申告シーズン数" error={fe.declaredSeasons}>
-            <input
-              name="declaredSeasons"
-              type="number"
-              min={1}
-              max={10}
-              defaultValue={d.declaredSeasons ?? 3}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </Field>
-          <Field label="ボーナス: マスター" error={fe.bonusMaster}>
-            <input
-              name="bonusMaster"
-              type="number"
-              min={0}
-              max={10}
-              step="0.5"
-              defaultValue={d.bonusMaster ?? 0}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </Field>
-          <Field label="ボーナス: GM" error={fe.bonusGm}>
-            <input
-              name="bonusGm"
-              type="number"
-              min={0}
-              max={10}
-              step="0.5"
-              defaultValue={d.bonusGm ?? 0}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </Field>
-          <Field label="ボーナス: チャンピオン" error={fe.bonusChampion}>
-            <input
-              name="bonusChampion"
-              type="number"
-              min={0}
-              max={10}
-              step="0.5"
-              defaultValue={d.bonusChampion ?? 0}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </Field>
-        </div>
+        {requireScore && (
+          <div className="mt-4 space-y-4 border-l-2 border-border pl-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                name="roleSwapAllowed"
+                type="checkbox"
+                defaultChecked={d.roleSwapAllowed ?? false}
+                className="size-4"
+              />
+              ロールスワップを許可する（全ロールのランクを参照）
+            </label>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="申告シーズン数" error={fe.declaredSeasons}>
+                <input
+                  name="declaredSeasons"
+                  type="number"
+                  min={1}
+                  max={10}
+                  defaultValue={d.declaredSeasons ?? 3}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field
+                label="未認定ロールの扱い"
+                error={fe.uncertifiedHandling}
+              >
+                <select
+                  name="uncertifiedHandling"
+                  defaultValue={d.uncertifiedHandling ?? "exclude"}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  {UNCERTIFIED_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            {/* 孫トグル: 到達ボーナスを使うか。ON のときだけ加点欄を表示。 */}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useBonus}
+                onChange={(e) => setUseBonus(e.target.checked)}
+                className="size-4"
+              />
+              到達ボーナスを使う（最高到達ランクで加点）
+            </label>
+
+            {useBonus && (
+              <div className="grid grid-cols-3 gap-4">
+                <Field label="ボーナス: マスター" error={fe.bonusMaster}>
+                  <input
+                    name="bonusMaster"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step="0.5"
+                    defaultValue={d.bonusMaster ?? 0}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </Field>
+                <Field label="ボーナス: GM" error={fe.bonusGm}>
+                  <input
+                    name="bonusGm"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step="0.5"
+                    defaultValue={d.bonusGm ?? 0}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </Field>
+                <Field label="ボーナス: チャンピオン" error={fe.bonusChampion}>
+                  <input
+                    name="bonusChampion"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step="0.5"
+                    defaultValue={d.bonusChampion ?? 0}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
+        )}
       </fieldset>
 
       <button
