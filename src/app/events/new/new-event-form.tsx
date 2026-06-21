@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { createEvent, type CreateEventState } from "../actions";
+import { DateTimePicker } from "@/components/datetime-picker";
 
 type GameOption = { id: string; name: string };
 
@@ -55,31 +56,16 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
       {/* 開催期間 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="開催開始（JST）" required error={fe.startsAt}>
-          <input
-            name="startsAt"
-            type="datetime-local"
-            step={900}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          />
+          <DateTimePicker name="startsAt" />
         </Field>
         <Field label="開催終了（JST）" required error={fe.endsAt}>
-          <input
-            name="endsAt"
-            type="datetime-local"
-            step={900}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          />
+          <DateTimePicker name="endsAt" />
         </Field>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="募集締切（任意・JST）" error={fe.recruitDeadline}>
-          <input
-            name="recruitDeadline"
-            type="datetime-local"
-            step={900}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          />
+          <DateTimePicker name="recruitDeadline" />
         </Field>
         <Field label="定員（チーム数・任意）" error={fe.capacity}>
           <input
