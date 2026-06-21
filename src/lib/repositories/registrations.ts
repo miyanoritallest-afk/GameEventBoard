@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
 type RegStatus = Database["public"]["Enums"]["reg_status"];
+type Role = Database["public"]["Enums"]["role"];
+type Json = Database["public"]["Tables"]["registrations"]["Insert"]["score_breakdown"];
 
 /**
  * 応募（registration）Repository。DB アクセスを集約する（実装ガイドライン: 層構造）。
@@ -9,14 +11,22 @@ type RegStatus = Database["public"]["Enums"]["reg_status"];
  */
 
 /**
- * 応募を1件作成する（status='pending' 固定）。
+ * 応募を1件作成する（status='pending' 固定）。スコアなし／ありで共有。
  * 1ユーザー1応募は UNIQUE(event_id, user_id) が最終防衛。
  * 同時連打などで UNIQUE 違反（Postgres 23505）になったら、呼び出し側が
  * 「応募済み」として扱えるよう { duplicate: true } を返す（throw しない）。
+ *
+ * scored 系（preferred_role / individual_score / final_score / score_breakdown）は
+ * スコアあり応募のスナップショット。未指定なら null（スコアなし応募）。
+ * user_id / status はサーバー固定（なりすまし・マスアサインメント対策）。
  */
 export async function insertRegistration(params: {
   eventId: string;
   userId: string;
+  preferredRole?: Role | null;
+  individualScore?: number | null;
+  finalScore?: number | null;
+  scoreBreakdown?: Json;
 }): Promise<{ ok: true; id: string } | { ok: false; duplicate: true }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -25,6 +35,10 @@ export async function insertRegistration(params: {
       event_id: params.eventId,
       user_id: params.userId,
       status: "pending",
+      preferred_role: params.preferredRole ?? null,
+      individual_score: params.individualScore ?? null,
+      final_score: params.finalScore ?? null,
+      score_breakdown: params.scoreBreakdown ?? null,
     })
     .select("id")
     .single();

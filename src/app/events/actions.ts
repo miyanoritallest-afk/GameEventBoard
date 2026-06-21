@@ -24,7 +24,15 @@ import {
   registerRejectionReason,
 } from "@/lib/services/registration-status";
 import { generateEventSlug } from "@/lib/services/event-slug";
+import { calcScore } from "@/lib/services/scoring";
+import {
+  buildGrid,
+  parsePeak,
+  rolesForEvent,
+  type Role,
+} from "@/lib/services/scored-application";
 import { createDraftEventSchema, publishEventSchema } from "./schema";
+import { scoredApplicationSchema } from "./apply-schema";
 
 /**
  * イベント「下書き作成」 Server Action（Controller。薄く保つ）。
@@ -397,6 +405,119 @@ export async function registerForEvent(
 
   revalidatePath(`/events/${event.slug ?? event.id}`);
   return {};
+}
+
+export type ScoredRegisterState = {
+  error?: string;
+  fieldErrors?: Record<string, string>;
+};
+
+/**
+ * スコアあり応募 Server Action（Controller）。/events/[id]/apply から呼ぶ。
+ *
+ * 防御＋算出の段取り:
+ * 1. ログイン確認。
+ * 2. 対象イベント取得。存在しない→エラー。
+ * 3. 主催者本人は応募不可。
+ * 4. canRegister(status)：公開中のみ。
+ * 5. require_score=true 前提（false は即時応募ルート）。
+ * 6. 重複判定。
+ * 7. 離散項目（希望ロール・peak）を Zod 検証。
+ * 8. ランクグリッドを formData から parse（イベント設定で形が決まる）。
+ * 9. calcScore（PR-B）で算出。10. registrations にスナップショット保存
+ *    （user_id / status はサーバー固定＝なりすまし・マスアサインメント対策）。
+ */
+export async function registerWithScore(
+  eventId: string,
+  _prev: ScoredRegisterState,
+  formData: FormData,
+): Promise<ScoredRegisterState> {
+  // 1. ログイン確認
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "ログインが必要です。" };
+  }
+
+  // 2-4. 対象・所有者・公開中
+  const event = await findEventById(eventId);
+  if (!event) return { error: "イベントが見つかりません。" };
+  if (event.organizer_id === user.id) {
+    return { error: "主催者は自分のイベントに応募できません。" };
+  }
+  if (!canRegister(event.status)) {
+    return { error: registerRejectionReason(event.status) };
+  }
+
+  // 5. スコアあり応募はスコア計算ありイベント限定（出し分けと整合）。
+  if (!event.require_score) {
+    return { error: "このイベントはスコア入力なしで応募できます。" };
+  }
+
+  // 6. 重複判定
+  const existing = await findRegistration(eventId, user.id);
+  if (existing) {
+    return { error: "このイベントにはすでに応募済みです。" };
+  }
+
+  // 7. 離散項目の検証（希望ロール・peak）。
+  const parsed = scoredApplicationSchema.safeParse({
+    preferredRole: formData.get("preferredRole"),
+    peak: formData.get("peak") ?? "none",
+  });
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = String(issue.path[0] ?? "");
+      if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { error: "入力内容を確認してください。", fieldErrors };
+  }
+  const { preferredRole, peak } = parsed.data;
+
+  // 8. ランクグリッドを parse（対象ロール × declared_seasons）。
+  // フォームのセル名は rank_<role>_<seasonIndex>。値は score 文字列 or "uncertified"。
+  const roles = rolesForEvent(event.role_swap_allowed, preferredRole as Role);
+  const cellsByRole: Record<string, (string | null)[]> = {};
+  for (const role of roles) {
+    const cells: (string | null)[] = [];
+    for (let s = 0; s < event.declared_seasons; s++) {
+      cells.push((formData.get(`rank_${role}_${s}`) as string | null) ?? null);
+    }
+    cellsByRole[role] = cells;
+  }
+  const grid = buildGrid(roles, cellsByRole);
+
+  // 9. スコア算出（ボーナスはイベント設定の加点。peak は応募者入力）。
+  const result = calcScore({
+    roleSwapAllowed: event.role_swap_allowed,
+    grid,
+    handling: event.uncertified_handling,
+    peak: parsePeak(peak),
+    bonus: {
+      master: event.bonus_master,
+      gm: event.bonus_gm,
+      champion: event.bonus_champion,
+    },
+  });
+
+  // 10. スナップショット保存（user_id / status はサーバー固定）。
+  const inserted = await insertRegistration({
+    eventId,
+    userId: user.id,
+    preferredRole: preferredRole as Role,
+    individualScore: result.individualScore,
+    finalScore: result.finalScore,
+    scoreBreakdown: { ...result.breakdown, grid: cellsByRole },
+  });
+  if (!inserted.ok) {
+    return { error: "このイベントにはすでに応募済みです。" };
+  }
+
+  revalidatePath(`/events/${event.slug ?? event.id}`);
+  redirect(`/events/${event.slug ?? event.id}`);
 }
 
 export type DecideRegistrationState = {
