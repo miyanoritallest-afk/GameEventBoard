@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   findEventById: vi.fn(),
   publishEventRepo: vi.fn(),
+  slugExists: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -28,6 +29,7 @@ vi.mock("@/lib/repositories/events", () => ({
   findEventById: mocks.findEventById,
   insertEvent: vi.fn(),
   publishEvent: mocks.publishEventRepo,
+  slugExists: mocks.slugExists,
 }));
 
 vi.mock("next/cache", () => ({
@@ -68,6 +70,8 @@ function loggedIn() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 既定: slug は未使用（1回目の採番で成功する）。
+  mocks.slugExists.mockResolvedValue(false);
   // 既定: 公開成功（version インクリメント済みの行を返す）。
   mocks.publishEventRepo.mockResolvedValue({
     ...draftEvent(),
@@ -153,8 +157,22 @@ describe("publishEvent — 成功・楽観ロック", () => {
       id: EVENT_ID,
       organizerId: USER_ID,
       expectedVersion: 0,
+      slug: expect.stringMatching(/^event-[0-9a-z]{6}$/),
     });
     expect(mocks.revalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}`);
+  });
+
+  it("slug が衝突したら別 slug でリトライして公開できる", async () => {
+    loggedIn();
+    mocks.findEventById.mockResolvedValue(draftEvent());
+    // 1回目は使用済み、2回目は空き。
+    mocks.slugExists
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const result = await publishEvent(EVENT_ID);
+    expect(result.error).toBeUndefined();
+    expect(mocks.slugExists).toHaveBeenCalledTimes(2);
+    expect(mocks.publishEventRepo).toHaveBeenCalledTimes(1);
   });
 
   it("Repository が null（version 競合）を返したらエラーを返す", async () => {

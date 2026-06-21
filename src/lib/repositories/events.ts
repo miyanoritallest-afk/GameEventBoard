@@ -49,11 +49,16 @@ export async function publishEvent(params: {
   id: string;
   organizerId: string;
   expectedVersion: number;
+  slug: string;
 }) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("events")
-    .update({ status: "published", version: params.expectedVersion + 1 })
+    .update({
+      status: "published",
+      version: params.expectedVersion + 1,
+      slug: params.slug,
+    })
     .eq("id", params.id)
     .eq("organizer_id", params.organizerId)
     .eq("status", "draft")
@@ -63,4 +68,17 @@ export async function publishEvent(params: {
 
   if (error) throw error;
   return data;
+}
+
+/** 指定 slug がすでに使われているかを返す（採番時の重複チェック用）。 */
+export async function slugExists(slug: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
 }
