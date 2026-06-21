@@ -11,7 +11,18 @@ import {
   slugExists,
   updateEvent as updateEventRepo,
 } from "@/lib/repositories/events";
+import {
+  findRegistration,
+  findRegistrationWithEvent,
+  insertRegistration,
+  decideRegistration as decideRegistrationRepo,
+} from "@/lib/repositories/registrations";
 import { canPublish, publishRejectionReason } from "@/lib/services/event-status";
+import {
+  canDecide,
+  canRegister,
+  registerRejectionReason,
+} from "@/lib/services/registration-status";
 import { generateEventSlug } from "@/lib/services/event-slug";
 import { createDraftEventSchema, publishEventSchema } from "./schema";
 
@@ -320,4 +331,119 @@ export async function deleteDraftEvent(
 
   revalidatePath("/events/mine");
   redirect("/events/mine");
+}
+
+export type RegisterState = {
+  error?: string;
+};
+
+/**
+ * イベント「応募」 Server Action（Controller）。スコアなし最小応募。
+ *
+ * 防御（初めて「他人のイベントに自分のデータを書き込む」操作）:
+ * 1. ログイン確認（認証バイパス対策）。
+ * 2. 対象イベント取得。存在しない→エラー。
+ * 3. 主催者本人は応募不可（自分のイベントには応募させない）。
+ * 4. canRegister(status)：公開中のみ応募可。
+ * 5. 重複判定（1ユーザー1応募）。応募済みなら戻り値エラー。
+ * 6. insert（**user_id はセッション固定＝なりすまし防止／マスアサインメント対策**。
+ *    status は Repository で 'pending' 固定）。UNIQUE は DB 層の最終防衛。
+ */
+export async function registerForEvent(
+  eventId: string,
+): Promise<RegisterState> {
+  // 1. ログイン確認
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "ログインが必要です。" };
+  }
+
+  // 2. 対象イベント
+  const event = await findEventById(eventId);
+  if (!event) {
+    return { error: "イベントが見つかりません。" };
+  }
+
+  // 3. 主催者本人は応募不可
+  if (event.organizer_id === user.id) {
+    return { error: "主催者は自分のイベントに応募できません。" };
+  }
+
+  // 4. 公開中のみ
+  if (!canRegister(event.status)) {
+    return { error: registerRejectionReason(event.status) };
+  }
+
+  // 5. 重複判定（事前チェック）
+  const existing = await findRegistration(eventId, user.id);
+  if (existing) {
+    return { error: "このイベントにはすでに応募済みです。" };
+  }
+
+  // 6. 応募作成（user_id はセッション固定）。競合時は UNIQUE が最終防衛。
+  const result = await insertRegistration({ eventId, userId: user.id });
+  if (!result.ok) {
+    return { error: "このイベントにはすでに応募済みです。" };
+  }
+
+  revalidatePath(`/events/${event.slug ?? event.id}`);
+  return {};
+}
+
+export type DecideRegistrationState = {
+  error?: string;
+};
+
+/**
+ * 応募の「承認/却下」 Server Action（Controller）。主催者のみ。
+ *
+ * 防御（2テーブル跨ぎの所有権確認＝応募フロー固有の IDOR）:
+ * 1. ログイン確認。
+ * 2. 応募＋イベントを取得。存在しない／イベント主催者でない→同一の権限なし応答（列挙防止）。
+ * 3. canDecide(status)：pending のみ処理可（二重処理防止）。
+ * 4. update（pending のみ更新）。null→競合（既に処理済み）。最終防衛は RLS（0006）。
+ */
+export async function decideRegistration(
+  registrationId: string,
+  decision: "approve" | "reject",
+): Promise<DecideRegistrationState> {
+  // 1. ログイン確認
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "ログインが必要です。" };
+  }
+
+  // 2. 応募＋イベント取得し、主催者本人か確認（存在しない/他人は同一応答）。
+  const reg = await findRegistrationWithEvent(registrationId);
+  const event = reg?.events as { id: string; organizer_id: string } | null;
+  if (!reg || !event || event.organizer_id !== user.id) {
+    return { error: "この応募を操作する権限がありません。" };
+  }
+
+  // 3. pending のみ承認/却下できる。
+  if (!canDecide(reg.status)) {
+    return { error: "この応募はすでに処理済みです。" };
+  }
+
+  // 4. 更新（pending のみ）。null は競合。
+  const nextStatus = decision === "approve" ? "approved" : "rejected";
+  const updated = await decideRegistrationRepo({
+    registrationId,
+    expectedStatus: "pending",
+    nextStatus,
+  });
+  if (!updated) {
+    return {
+      error: "処理に失敗しました。画面を更新してからもう一度お試しください。",
+    };
+  }
+
+  revalidatePath(`/events/${event.id}/registrations`);
+  return {};
 }

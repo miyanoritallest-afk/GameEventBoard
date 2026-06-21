@@ -2,10 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById, findEventBySlug } from "@/lib/repositories/events";
+import { findRegistration } from "@/lib/repositories/registrations";
 import { canViewEvent } from "@/lib/services/event-status";
 import { isValidEventSlug } from "@/lib/services/event-slug";
 import { PublishButton } from "./publish-button";
 import { DeleteDraftButton } from "./delete-draft-button";
+import { ApplyButton } from "./apply-button";
+
+/** 応募ステータスの日本語ラベル。 */
+const REG_STATUS_LABEL: Record<string, string> = {
+  pending: "承認待ち",
+  approved: "参加確定",
+  rejected: "不参加",
+  withdrawn: "取り下げ",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +68,12 @@ export default async function EventDetailPage({
   const isOrganizer = viewerId !== null && viewerId === event.organizer_id;
   const statusLabel = STATUS_LABEL[event.status] ?? event.status;
 
+  // 応募の状態（ログイン済み・非主催者・公開中のときだけ意味を持つ）。
+  const canApply = viewerId !== null && !isOrganizer && event.status !== "draft";
+  const myRegistration = canApply
+    ? await findRegistration(event.id, viewerId)
+    : null;
+
   return (
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-3xl px-6 py-10">
@@ -102,6 +118,18 @@ export default async function EventDetailPage({
           />
         </dl>
 
+        {/* 応募導線（非主催者・公開中）。応募済みなら状態表示、未応募なら応募ボタン。 */}
+        {canApply &&
+          (myRegistration ? (
+            <p className="mt-6 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
+              ✓ 応募済み（
+              {REG_STATUS_LABEL[myRegistration.status] ?? myRegistration.status}
+              ）
+            </p>
+          ) : (
+            <ApplyButton eventId={event.id} />
+          ))}
+
         {isOrganizer && event.status === "draft" && (
           <PublishButton eventId={event.id} />
         )}
@@ -117,6 +145,14 @@ export default async function EventDetailPage({
             </Link>
             {event.status === "draft" && (
               <DeleteDraftButton eventId={event.id} />
+            )}
+            {event.status !== "draft" && (
+              <Link
+                href={`/events/${event.id}/registrations`}
+                className="text-sm text-primary hover:underline"
+              >
+                応募者を見る
+              </Link>
             )}
             <Link
               href="/events/mine"
