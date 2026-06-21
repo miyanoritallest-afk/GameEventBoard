@@ -58,6 +58,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
           <input
             name="startsAt"
             type="datetime-local"
+            step={900}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
@@ -65,6 +66,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
           <input
             name="endsAt"
             type="datetime-local"
+            step={900}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
@@ -75,6 +77,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
           <input
             name="recruitDeadline"
             type="datetime-local"
+            step={900}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
