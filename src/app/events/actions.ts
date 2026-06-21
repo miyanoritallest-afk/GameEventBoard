@@ -7,8 +7,10 @@ import {
   findEventById,
   insertEvent,
   publishEvent as publishEventRepo,
+  slugExists,
 } from "@/lib/repositories/events";
 import { canPublish, publishRejectionReason } from "@/lib/services/event-status";
+import { generateEventSlug } from "@/lib/services/event-slug";
 import { createDraftEventSchema, publishEventSchema } from "./schema";
 
 /**
@@ -104,6 +106,19 @@ export async function createEvent(
 }
 
 /**
+ * 重複しない slug を採番する。生成 → 既存チェック → 衝突ならリトライ。
+ * slug は ID ベース（タイトル非依存）なので衝突はまれ。数回で必ず空きが見つかる想定。
+ * それでも見つからなければ想定外として throw（error.tsx が受ける）。
+ */
+async function allocateUniqueSlug(maxAttempts = 5): Promise<string> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const candidate = generateEventSlug();
+    if (!(await slugExists(candidate))) return candidate;
+  }
+  throw new Error("slug の採番に失敗しました（重複が解消できませんでした）。");
+}
+
+/**
  * イベント「公開」 Server Action（Controller。薄く保つ）。
  * 下書き(draft)を published に上げる1遷移のみを扱う。
  *
@@ -113,7 +128,8 @@ export async function createEvent(
  *    存在しない/他人の行は同じ「権限なし」応答にして列挙を防ぐ。
  * 3. canPublish(status) で状態遷移を検証（二重公開・終了後公開を防ぐ）。
  * 4. publishEventSchema で公開時の必須項目（日程・締切・定員）を検証。
- * 5. publishEvent で楽観ロック付き更新（version 競合は戻り値で通知）。
+ * 5. 公開URL用に slug を採番（重複しない ID ベース slug）。
+ * 6. publishEvent で楽観ロック付き更新（version 競合は戻り値で通知）。slug も保存。
  *    最終防衛は DB の RLS（events_update_own / 0004）。
  */
 export async function publishEvent(
@@ -157,11 +173,15 @@ export async function publishEvent(
     return { error: "公開には未設定の項目があります。", fieldErrors };
   }
 
-  // 5. 楽観ロック付きで公開。条件に合致しなければ null（競合・横取り）。
+  // 5. 公開URL用の slug を採番（既に採番済みなら再利用。再公開でURLを変えない）。
+  const slug = event.slug ?? (await allocateUniqueSlug());
+
+  // 6. 楽観ロック付きで公開。条件に合致しなければ null（競合・横取り）。
   const updated = await publishEventRepo({
     id: event.id,
     organizerId: user.id,
     expectedVersion: event.version,
+    slug,
   });
   if (!updated) {
     return {
