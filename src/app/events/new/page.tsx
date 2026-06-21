@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listGames } from "@/lib/repositories/games";
-import { NewEventForm } from "./new-event-form";
+import { EventForm } from "../event-form";
+import { createEvent } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,12 @@ export default async function NewEventPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           下書きとして保存されます。応募者のスコア申告ルールもここで設定します。
         </p>
-        <NewEventForm games={games} />
+        <EventForm
+          games={games}
+          action={createEvent}
+          submitLabel="この内容で作成する（下書き）"
+          pendingLabel="作成中..."
+        />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { findEventById, findEventBySlug } from "@/lib/repositories/events";
 import { canViewEvent } from "@/lib/services/event-status";
 import { isValidEventSlug } from "@/lib/services/event-slug";
 import { PublishButton } from "./publish-button";
+import { DeleteDraftButton } from "./delete-draft-button";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,27 @@ export default async function EventDetailPage({
 
         {isOrganizer && event.status === "draft" && (
           <PublishButton eventId={event.id} />
+        )}
+
+        {/* 主催者向けの管理導線（編集はいつでも、削除は下書きのみ）。 */}
+        {isOrganizer && (
+          <div className="mt-6 flex items-center gap-4">
+            <Link
+              href={`/events/${event.id}/edit`}
+              className="text-sm text-primary hover:underline"
+            >
+              編集する
+            </Link>
+            {event.status === "draft" && (
+              <DeleteDraftButton eventId={event.id} />
+            )}
+            <Link
+              href="/events/mine"
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              自分のイベント一覧
+            </Link>
+          </div>
         )}
 
         <div className="mt-6">

@@ -1,16 +1,61 @@
 "use client";
 
 import { useActionState } from "react";
-import { createEvent, type CreateEventState } from "../actions";
 import { DateTimePicker } from "@/components/datetime-picker";
 
 type GameOption = { id: string; name: string };
 
-const initialState: CreateEventState = {};
+/** 作成・編集で共有するフォーム状態（Server Action の戻り値）。 */
+export type EventFormState = {
+  error?: string;
+  fieldErrors?: Record<string, string>;
+};
 
-export function NewEventForm({ games }: { games: GameOption[] }) {
-  const [state, formAction, pending] = useActionState(createEvent, initialState);
+/** フォームの初期値。編集時は保存済みイベントから埋める。作成時は未指定。 */
+export type EventFormDefaults = {
+  title?: string;
+  gameId?: string;
+  description?: string;
+  startsAt?: string; // "YYYY-MM-DDTHH:mm"（JST ローカル）
+  endsAt?: string;
+  recruitDeadline?: string;
+  capacity?: string;
+  roleSwapAllowed?: boolean;
+  declaredSeasons?: number;
+  bonusMaster?: number;
+  bonusGm?: number;
+  bonusChampion?: number;
+};
+
+type EventFormAction = (
+  prev: EventFormState,
+  formData: FormData,
+) => Promise<EventFormState>;
+
+/**
+ * イベント作成/編集の共通フォーム。
+ * - action: 作成 or 編集の Server Action（同じ State 形）。
+ * - defaultValues: 編集時の初期値（作成時は空）。
+ * - submitLabel / pendingLabel: ボタン表記。
+ *
+ * 日時は DateTimePicker（datetime-local 互換の hidden 値）を使う。
+ */
+export function EventForm({
+  games,
+  action,
+  defaultValues = {},
+  submitLabel,
+  pendingLabel,
+}: {
+  games: GameOption[];
+  action: EventFormAction;
+  defaultValues?: EventFormDefaults;
+  submitLabel: string;
+  pendingLabel: string;
+}) {
+  const [state, formAction, pending] = useActionState(action, {});
   const fe = state.fieldErrors ?? {};
+  const d = defaultValues;
 
   return (
     <form action={formAction} className="mt-6 space-y-6">
@@ -26,6 +71,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
           name="title"
           type="text"
           maxLength={80}
+          defaultValue={d.title ?? ""}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
       </Field>
@@ -33,7 +79,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
       <Field label="ゲーム" required error={fe.gameId}>
         <select
           name="gameId"
-          defaultValue={games[0]?.id ?? ""}
+          defaultValue={d.gameId ?? games[0]?.id ?? ""}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         >
           {games.map((g) => (
@@ -49,6 +95,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
           name="description"
           rows={4}
           maxLength={2000}
+          defaultValue={d.description ?? ""}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
       </Field>
@@ -56,22 +103,26 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
       {/* 開催期間 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="開催開始（JST）" required error={fe.startsAt}>
-          <DateTimePicker name="startsAt" />
+          <DateTimePicker name="startsAt" defaultValue={d.startsAt ?? ""} />
         </Field>
         <Field label="開催終了（JST）" required error={fe.endsAt}>
-          <DateTimePicker name="endsAt" />
+          <DateTimePicker name="endsAt" defaultValue={d.endsAt ?? ""} />
         </Field>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="募集締切（任意・JST）" error={fe.recruitDeadline}>
-          <DateTimePicker name="recruitDeadline" />
+          <DateTimePicker
+            name="recruitDeadline"
+            defaultValue={d.recruitDeadline ?? ""}
+          />
         </Field>
         <Field label="定員（チーム数・任意）" error={fe.capacity}>
           <input
             name="capacity"
             type="number"
             min={1}
+            defaultValue={d.capacity ?? ""}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
@@ -82,7 +133,12 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
         <legend className="px-1 text-sm font-semibold">スコアリング設定</legend>
 
         <label className="mt-2 flex items-center gap-2 text-sm">
-          <input name="roleSwapAllowed" type="checkbox" className="size-4" />
+          <input
+            name="roleSwapAllowed"
+            type="checkbox"
+            defaultChecked={d.roleSwapAllowed ?? false}
+            className="size-4"
+          />
           ロールスワップを許可する（複数ロールのランク申告）
         </label>
 
@@ -93,7 +149,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
               type="number"
               min={1}
               max={10}
-              defaultValue={3}
+              defaultValue={d.declaredSeasons ?? 3}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
@@ -104,7 +160,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
               min={0}
               max={10}
               step="0.5"
-              defaultValue={0}
+              defaultValue={d.bonusMaster ?? 0}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
@@ -115,7 +171,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
               min={0}
               max={10}
               step="0.5"
-              defaultValue={0}
+              defaultValue={d.bonusGm ?? 0}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
@@ -126,7 +182,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
               min={0}
               max={10}
               step="0.5"
-              defaultValue={0}
+              defaultValue={d.bonusChampion ?? 0}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
@@ -138,7 +194,7 @@ export function NewEventForm({ games }: { games: GameOption[] }) {
         disabled={pending}
         className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {pending ? "作成中..." : "この内容で作成する（下書き）"}
+        {pending ? pendingLabel : submitLabel}
       </button>
     </form>
   );
