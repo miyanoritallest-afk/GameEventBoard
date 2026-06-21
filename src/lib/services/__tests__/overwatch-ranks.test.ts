@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildOverwatchRankDefinitions,
+  scoreToRankLabel,
   OVERWATCH_TIERS,
 } from "../overwatch-ranks";
 
@@ -56,5 +57,21 @@ describe("buildOverwatchRankDefinitions — 帯の境界", () => {
     const silver5 = defs.find((d) => d.label === "シルバー5")!;
     expect(bronze1.score).toBe(5);
     expect(silver5.score).toBe(6);
+  });
+});
+
+describe("scoreToRankLabel — スコア→ランク名の逆引き", () => {
+  it("整数スコアは対応するラベル", () => {
+    expect(scoreToRankLabel(1)).toBe("ブロンズ5");
+    expect(scoreToRankLabel(40)).toBe("チャンピオン1");
+  });
+
+  it("null は未認定", () => {
+    expect(scoreToRankLabel(null)).toBe("未認定");
+  });
+
+  it("補完で生じた中間値は『相当』表記（最も近い段階）", () => {
+    // 22.5 は最も近い 22 or 23 のラベル＋相当。
+    expect(scoreToRankLabel(22.5)).toContain("相当");
   });
 });

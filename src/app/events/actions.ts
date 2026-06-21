@@ -16,6 +16,7 @@ import {
   findRegistrationWithEvent,
   insertRegistration,
   decideRegistration as decideRegistrationRepo,
+  setOverrideScore as setOverrideScoreRepo,
 } from "@/lib/repositories/registrations";
 import { canPublish, publishRejectionReason } from "@/lib/services/event-status";
 import {
@@ -568,6 +569,66 @@ export async function decideRegistration(
   if (!updated) {
     return {
       error: "処理に失敗しました。画面を更新してからもう一度お試しください。",
+    };
+  }
+
+  revalidatePath(`/events/${event.id}/registrations`);
+  return {};
+}
+
+export type OverrideScoreState = {
+  error?: string;
+};
+
+/**
+ * 応募の「スコア上書き」 Server Action（Controller）。主催者のみ。
+ * organizer_override_score を設定/解除する（誤入力の修正用）。
+ * 算出元のランク・score_breakdown は保持し、最終スコアだけ上書きする。
+ *
+ * 防御（承認/却下と同じ2テーブル跨ぎ所有権確認＝IDOR）:
+ * 1. ログイン確認。
+ * 2. 応募＋イベント取得。存在しない／主催者でない→同一の権限なし応答。
+ * 3. 上書き値の検証（null=クリア、または0以上の数値）。
+ * 4. setOverrideScore。最終防衛は RLS（0006 UPDATE）。
+ */
+export async function overrideRegistrationScore(
+  registrationId: string,
+  rawScore: string,
+): Promise<OverrideScoreState> {
+  // 1. ログイン確認
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "ログインが必要です。" };
+  }
+
+  // 2. 所有者確認（存在しない/他人は同一応答）。
+  const reg = await findRegistrationWithEvent(registrationId);
+  const event = reg?.events as { id: string; organizer_id: string } | null;
+  if (!reg || !event || event.organizer_id !== user.id) {
+    return { error: "この応募を操作する権限がありません。" };
+  }
+
+  // 3. 上書き値の検証。空文字＝クリア（null）、それ以外は 0 以上の数値。
+  const trimmed = rawScore.trim();
+  let score: number | null;
+  if (trimmed === "") {
+    score = null;
+  } else {
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0) {
+      return { error: "スコアは0以上の数値で入力してください。" };
+    }
+    score = n;
+  }
+
+  // 4. 上書き保存。
+  const updated = await setOverrideScoreRepo({ registrationId, score });
+  if (!updated) {
+    return {
+      error: "更新に失敗しました。画面を更新してからもう一度お試しください。",
     };
   }
 

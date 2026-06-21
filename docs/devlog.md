@@ -7,6 +7,30 @@
 
 ---
 
+## 2026-06-21 — 応募者一覧のスコア表示＋運営上書き（スコアあり応募 PR-E）
+
+応募者一覧に算出スコアを表示し、詳細モーダルで算出根拠を確認しつつ運営がスコアを上書き（誤入力修正）できるようにした。
+
+### やったこと
+- **Repository**: `listRegistrationsByEvent` にスコア列（preferred_role/individual_score/final_score/organizer_override_score/score_breakdown）を追加。`setOverrideScore`（organizer_override_score の設定/解除）を追加。
+- **Action** `overrideRegistrationScore`: 主催者のみ（承認/却下と同じ2テーブル跨ぎ所有権確認＝IDOR）。空文字でクリア（算出値に戻す）、それ以外は0以上の数値を検証。算出元のランク・score_breakdown は保持し最終スコアだけ上書き。
+- **UI** 応募者一覧を `RegistrationRow`（client）に刷新: スコア表示（override優先＝振り分け実効値）＋詳細モーダル。モーダルは score_breakdown を「ダイヤ3 / 未認定」のようにランク名で表示（`scoreToRankLabel` 逆引き）＋補完方式＋ボーナス＋上書き入力。承認/却下も同コンポーネントに統合（旧 decide-buttons は廃止）。
+- **スコアレス出し分け**: require_score=false のイベントはスコア列・詳細・上書きを出さない（算出してないので無意味）。
+- **Service** `overwatch-ranks.ts`: `scoreToRankLabel`（スコア→ランク名逆引き。補完中間値は「○○相当」）を追加。
+- テスト +9（計150 緑）: 逆引き／overrideRegistrationScore 結合（IDOR・値検証・クリア・成功）。
+- ブラウザ実機確認: 応募者一覧ページがエラーなく表示（応募0件の空状態）。
+
+### 決めたこと（なぜ）
+- **上書きは organizer_override_score**: 計算元ランクを保持し最終スコアだけ上書き。根拠（score_breakdown）を壊さず、振り分け・平均では override を優先（設計どおり）。
+- **モーダルで根拠を見せてから上書き**: 「なぜこのスコアか」を理解した上での修正に。誤入力修正の確実性が上がる。
+- **スコアレスはスコアを出さない**: 算出しないイベントにスコア列は無意味。require_score で出し分け。
+- **パターン②（ランク収集だが算出しない）は別PR**: スコアリング設計.md に記録。collect_rank フラグ追加＋応募フォーム分岐＋一覧ランク表示が要るため独立させる。
+
+### 次にやること
+- [ ] 明日: 別 Discord アカウントで応募フロー実機確認（スコアあり/なし両方・承認・上書き）
+- [ ] パターン②（ランク収集×算出なし）の設計＋実装
+- [ ] チーム編成・交代シミュレーション（final_score を使う本命機能）
+
 ## 2026-06-21 — スコアあり応募フォーム＋算出スナップショット（スコアあり応募 PR-D・完）
 
 スコアあり応募の総仕上げ。PR-A（マスタ）・PR-B（算出）・PR-C（設定）が全部つながり、応募時にランクを入力 → スコア算出 → registrations へスナップショット保存できるようになった。
