@@ -33,3 +33,34 @@ export async function findEventById(id: string) {
   if (error) throw error;
   return data;
 }
+
+/**
+ * イベントを公開する（status を published に上げる）。
+ *
+ * 防御の多層化:
+ * - organizer_id でも絞る（アプリ層 IDOR 対策。RLS と二重で他人の行を弾く）。
+ * - status='draft' を条件に含める（下書きのときだけ公開。二重公開を構造的に防ぐ）。
+ * - version で楽観ロック（編集と公開の競合を検出）。一致時のみ更新し version をインクリメント。
+ *
+ * 条件に合致する行が無ければ更新 0 件 → maybeSingle が null を返す。
+ * 呼び出し側は「所有者違い / 既に公開済み / version 競合」のいずれかとして扱う。
+ */
+export async function publishEvent(params: {
+  id: string;
+  organizerId: string;
+  expectedVersion: number;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .update({ status: "published", version: params.expectedVersion + 1 })
+    .eq("id", params.id)
+    .eq("organizer_id", params.organizerId)
+    .eq("status", "draft")
+    .eq("version", params.expectedVersion)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}

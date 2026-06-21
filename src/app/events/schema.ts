@@ -4,9 +4,9 @@ import { z } from "zod";
  * イベント「下書き作成」フォームの入力検証スキーマ（実装ガイドライン: 入力検証は Zod）。
  *
  * 設計（2段階バリデーション）:
- * - 下書き作成（このスキーマ）: タイトル・ゲームのみ必須。日程/説明/定員は任意で保存できる
- *   （日程などを後から詰める運用に合わせる）。
- * - 公開時（後続PR）: 日程等の必須チェックを別スキーマでかける。
+ * - 下書き作成（createDraftEventSchema）: タイトル・ゲームのみ必須。日程/説明/定員は任意で
+ *   保存できる（日程などを後から詰める運用に合わせる）。
+ * - 公開時（publishEventSchema・本ファイル末尾）: 下書きで緩めた日程・定員等を必須化する。
  *
  * 重要（マスアサインメント対策）:
  * - ここで定義した項目以外は受理しない。
@@ -99,3 +99,47 @@ export const createDraftEventSchema = z
   );
 
 export type CreateDraftEventInput = z.infer<typeof createDraftEventSchema>;
+
+/**
+ * イベント「公開」時の必須チェック（2段階バリデーションの公開側）。
+ *
+ * 下書きで緩めた項目を公開時に必須化する。検証対象は「保存済みイベントの値」
+ * （DB の Row 由来の ISO 文字列 / null）であり、フォーム入力ではない点に注意。
+ * 公開は status を上げるだけの操作で、内容は作成/編集時にすでに保存されている。
+ *
+ * 公開の最低条件（募集を開始できる状態か）:
+ * - 開催開始（starts_at）が設定済み
+ * - 募集締切（recruit_deadline）が設定済み
+ * - 定員（capacity）が設定済み・1以上
+ * - タイトル・ゲームは下書き時点で必須のため、ここでは前提として再掲のみ
+ * - 期間・締切の整合（終了が開始以降 / 締切が開始より前）は引き続き成立すること
+ */
+export const publishEventSchema = z
+  .object({
+    title: z.string().min(1, "タイトルが未設定です"),
+    game_id: z.string().uuid("ゲームが未設定です"),
+    starts_at: z
+      .string({ message: "開催開始日時を設定してください" })
+      .min(1, "開催開始日時を設定してください"),
+    ends_at: z.string().nullable(),
+    recruit_deadline: z
+      .string({ message: "募集締切を設定してください" })
+      .min(1, "募集締切を設定してください"),
+    capacity: z
+      .number({ message: "定員を設定してください" })
+      .int()
+      .min(1, "定員は1以上で設定してください"),
+  })
+  .refine(
+    (v) =>
+      !v.ends_at ||
+      new Date(v.ends_at).getTime() >= new Date(v.starts_at).getTime(),
+    { message: "開催終了は開始日時以降にしてください", path: ["ends_at"] },
+  )
+  .refine(
+    (v) =>
+      new Date(v.recruit_deadline).getTime() < new Date(v.starts_at).getTime(),
+    { message: "募集締切は開催開始より前にしてください", path: ["recruit_deadline"] },
+  );
+
+export type PublishEventInput = z.infer<typeof publishEventSchema>;

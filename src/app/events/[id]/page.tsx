@@ -1,8 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
+import { PublishButton } from "./publish-button";
 
 export const dynamic = "force-dynamic";
+
+/** status を日本語ラベルに（表示用）。 */
+const STATUS_LABEL: Record<string, string> = {
+  draft: "下書き",
+  published: "公開中",
+  recruiting: "募集中",
+  closed: "募集締切",
+  ongoing: "開催中",
+  finished: "終了",
+};
 
 /** UTC(ISO) を JST 表示に整形する。null は "未設定"。 */
 function fmtJst(iso: string | null): string {
@@ -28,17 +40,32 @@ export default async function EventDetailPage({
 
   const gameName = (event.games as { name: string } | null)?.name ?? "-";
 
+  // 公開ボタンは「主催者本人」かつ「下書き」のときだけ出す（A: 表示制御）。
+  // 実際の公開可否は Server Action 側で再検証する（B: 最後の砦）。
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isOrganizer = !!user && user.id === event.organizer_id;
+  const statusLabel = STATUS_LABEL[event.status] ?? event.status;
+
   return (
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <p className="rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
-          ✓ イベントを作成しました（下書き）
-        </p>
+        {event.status === "draft" ? (
+          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            このイベントは下書きです。{isOrganizer ? "内容を確認して公開できます。" : ""}
+          </p>
+        ) : (
+          <p className="rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
+            ✓ このイベントは公開されています
+          </p>
+        )}
 
         <h1 className="mt-6 text-2xl font-bold">{event.title}</h1>
         <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
           <span className="rounded bg-muted px-2 py-0.5">{gameName}</span>
-          <span className="rounded bg-muted px-2 py-0.5">状態: {event.status}</span>
+          <span className="rounded bg-muted px-2 py-0.5">状態: {statusLabel}</span>
         </div>
 
         {event.description && (
@@ -65,6 +92,10 @@ export default async function EventDetailPage({
             value={`マスター+${event.bonus_master} / GM+${event.bonus_gm} / チャンピオン+${event.bonus_champion}`}
           />
         </dl>
+
+        {isOrganizer && event.status === "draft" && (
+          <PublishButton eventId={event.id} />
+        )}
 
         <div className="mt-6">
           <Link
