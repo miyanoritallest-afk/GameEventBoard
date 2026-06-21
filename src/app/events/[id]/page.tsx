@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { findEventById } from "@/lib/repositories/events";
+import { findEventById, findEventBySlug } from "@/lib/repositories/events";
+import { canViewEvent } from "@/lib/services/event-status";
+import { isValidEventSlug } from "@/lib/services/event-slug";
 import { PublishButton } from "./publish-button";
 
 export const dynamic = "force-dynamic";
@@ -35,18 +37,24 @@ export default async function EventDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const event = await findEventById(id);
+  // URL は公開=slug / 下書き=uuid の2系統。slug 形式なら slug 検索、それ以外は id 検索。
+  const event = isValidEventSlug(id)
+    ? await findEventBySlug(id)
+    : await findEventById(id);
   if (!event) notFound();
 
-  const gameName = (event.games as { name: string } | null)?.name ?? "-";
-
-  // 公開ボタンは「主催者本人」かつ「下書き」のときだけ出す（A: 表示制御）。
-  // 実際の公開可否は Server Action 側で再検証する（B: 最後の砦）。
+  // 可視性: 公開済みは誰でも、下書きは本人のみ。本人以外には存在しないように 404。
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const isOrganizer = !!user && user.id === event.organizer_id;
+  const viewerId = user?.id ?? null;
+  if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
+    notFound();
+  }
+
+  const gameName = (event.games as { name: string } | null)?.name ?? "-";
+  const isOrganizer = viewerId !== null && viewerId === event.organizer_id;
   const statusLabel = STATUS_LABEL[event.status] ?? event.status;
 
   return (
