@@ -2,6 +2,24 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
+type EventUpdate = Database["public"]["Tables"]["events"]["Update"];
+
+/** 編集で更新を許可するカラム（マスアサインメント対策＝ホワイトリスト）。 */
+type EventEditableColumns = Pick<
+  EventUpdate,
+  | "title"
+  | "game_id"
+  | "description"
+  | "starts_at"
+  | "ends_at"
+  | "recruit_deadline"
+  | "capacity"
+  | "role_swap_allowed"
+  | "declared_seasons"
+  | "bonus_master"
+  | "bonus_gm"
+  | "bonus_champion"
+>;
 
 /**
  * イベント Repository。DB アクセスを集約する（実装ガイドライン: 層構造）。
@@ -111,4 +129,74 @@ export async function slugExists(slug: string): Promise<boolean> {
 
   if (error) throw error;
   return data !== null;
+}
+
+/**
+ * イベントを編集する（内容の更新）。
+ *
+ * 防御:
+ * - 更新カラムは EventEditableColumns のみ（マスアサインメント対策）。
+ *   organizer_id / status / slug / version は呼び出し側からは渡せない。
+ * - organizer_id で絞る（アプリ層 IDOR 対策。RLS と二重）。
+ * - version で楽観ロック。一致時のみ更新し version をインクリメント。
+ * - slug は触らない（公開後にタイトルを変えても URL を固定。共有URLを壊さない）。
+ *
+ * 条件に合致する行が無ければ null（所有者違い / version 競合）。
+ */
+export async function updateEvent(params: {
+  id: string;
+  organizerId: string;
+  expectedVersion: number;
+  values: EventEditableColumns;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .update({ ...params.values, version: params.expectedVersion + 1 })
+    .eq("id", params.id)
+    .eq("organizer_id", params.organizerId)
+    .eq("version", params.expectedVersion)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 主催者本人のイベント一覧（下書き＋公開）を新しい順で取得する。
+ * 「自分のイベント管理」用。RLS（0005）は本人の下書きも返すため整合する。
+ */
+export async function listEventsByOrganizer(organizerId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, slug, title, status, starts_at, recruit_deadline, games(name)")
+    .eq("organizer_id", organizerId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 下書きイベントを削除する。
+ * - organizer_id ＋ status='draft' を条件にし、本人の下書きのみ削除可（公開済みは消せない）。
+ * - 削除できた行数を返す（0 なら対象なし＝権限なし/公開済み）。
+ */
+export async function deleteDraftEvent(params: {
+  id: string;
+  organizerId: string;
+}): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .delete()
+    .eq("id", params.id)
+    .eq("organizer_id", params.organizerId)
+    .eq("status", "draft")
+    .select("id");
+
+  if (error) throw error;
+  return data?.length ?? 0;
 }

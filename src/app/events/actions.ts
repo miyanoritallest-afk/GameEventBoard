@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
+  deleteDraftEvent as deleteDraftEventRepo,
   findEventById,
   insertEvent,
   publishEvent as publishEventRepo,
   slugExists,
+  updateEvent as updateEventRepo,
 } from "@/lib/repositories/events";
 import { canPublish, publishRejectionReason } from "@/lib/services/event-status";
 import { generateEventSlug } from "@/lib/services/event-slug";
@@ -42,21 +44,16 @@ function jstLocalToUtcIso(local: string | undefined | null): string | null {
   return d.toISOString();
 }
 
-export async function createEvent(
-  _prev: CreateEventState,
+/**
+ * フォーム入力を Zod 検証し、DB 列名にマップする（作成・編集で共有）。
+ * 許可カラムのみ受理＝マスアサインメント対策。organizer_id / status / slug は含めない。
+ * 失敗時は fieldErrors を含む State を返す。
+ */
+function parseEventFormData(
   formData: FormData,
-): Promise<CreateEventState> {
-  // B: ログイン確認（必須）
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: "ログインが必要です。" };
-  }
-
-  // 入力検証（Zod）。許可カラムのみ受理＝マスアサインメント対策。
-  // null は schema 側の preprocess で正規化されるため、ここでは生値を渡す。
+):
+  | { ok: true; values: EventEditableValues }
+  | { ok: false; state: { error: string; fieldErrors: Record<string, string> } } {
   const parsed = createDraftEventSchema.safeParse({
     title: formData.get("title"),
     gameId: formData.get("gameId"),
@@ -78,28 +75,69 @@ export async function createEvent(
       const key = String(issue.path[0] ?? "");
       if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
     }
-    return { error: "入力内容を確認してください。", fieldErrors };
+    return {
+      ok: false,
+      state: { error: "入力内容を確認してください。", fieldErrors },
+    };
   }
 
   const v = parsed.data;
-  const capacity = typeof v.capacity === "number" ? v.capacity : null;
+  return {
+    ok: true,
+    values: {
+      title: v.title,
+      game_id: v.gameId,
+      description: v.description ? v.description : null,
+      starts_at: jstLocalToUtcIso(v.startsAt),
+      ends_at: jstLocalToUtcIso(v.endsAt),
+      recruit_deadline: jstLocalToUtcIso(v.recruitDeadline),
+      capacity: typeof v.capacity === "number" ? v.capacity : null,
+      role_swap_allowed: v.roleSwapAllowed,
+      declared_seasons: v.declaredSeasons,
+      bonus_master: v.bonusMaster,
+      bonus_gm: v.bonusGm,
+      bonus_champion: v.bonusChampion,
+    },
+  };
+}
+
+/** 作成・編集で共有する、DB 列名に揃えた編集可能値。 */
+type EventEditableValues = {
+  title: string;
+  game_id: string;
+  description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  recruit_deadline: string | null;
+  capacity: number | null;
+  role_swap_allowed: boolean;
+  declared_seasons: number;
+  bonus_master: number;
+  bonus_gm: number;
+  bonus_champion: number;
+};
+
+export async function createEvent(
+  _prev: CreateEventState,
+  formData: FormData,
+): Promise<CreateEventState> {
+  // B: ログイン確認（必須）
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "ログインが必要です。" };
+  }
+
+  const parsed = parseEventFormData(formData);
+  if (!parsed.ok) return parsed.state;
 
   // organizer_id / status はサーバー側で固定（入力から取らない）。
   const created = await insertEvent({
     organizer_id: user.id,
     status: "draft",
-    title: v.title,
-    game_id: v.gameId,
-    description: v.description ? v.description : null,
-    starts_at: jstLocalToUtcIso(v.startsAt),
-    ends_at: jstLocalToUtcIso(v.endsAt),
-    recruit_deadline: jstLocalToUtcIso(v.recruitDeadline),
-    capacity,
-    role_swap_allowed: v.roleSwapAllowed,
-    declared_seasons: v.declaredSeasons,
-    bonus_master: v.bonusMaster,
-    bonus_gm: v.bonusGm,
-    bonus_champion: v.bonusChampion,
+    ...parsed.values,
   });
 
   redirect(`/events/${created.id}`);
@@ -191,4 +229,95 @@ export async function publishEvent(
 
   revalidatePath(`/events/${event.id}`);
   return {};
+}
+
+export type EditEventState = {
+  error?: string;
+  fieldErrors?: Record<string, string>;
+};
+
+/**
+ * イベント「編集」 Server Action（Controller）。
+ *
+ * 防御:
+ * 1. ログイン確認（認証バイパス対策）。
+ * 2. 対象取得＋所有者確認（IDOR。存在しない/他人は同一の権限なし応答）。
+ * 3. Zod 検証（許可カラムのみ＝マスアサインメント対策）。
+ * 4. 楽観ロック付き更新（version 競合は戻り値）。slug は不変（Repository が触らない）。
+ *
+ * 公開後も編集可。定員の下限制約・日程変更通知は前提機能（応募/通知）実装時に追加する。
+ */
+export async function updateEvent(
+  eventId: string,
+  _prev: EditEventState,
+  formData: FormData,
+): Promise<EditEventState> {
+  // 1. ログイン確認
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "ログインが必要です。" };
+  }
+
+  // 2. 所有者確認（存在しない/他人は同一応答で列挙防止）。
+  const event = await findEventById(eventId);
+  if (!event || event.organizer_id !== user.id) {
+    return { error: "このイベントを編集する権限がありません。" };
+  }
+
+  // 3. 入力検証（許可カラムのみ）。
+  const parsed = parseEventFormData(formData);
+  if (!parsed.ok) return parsed.state;
+
+  // 4. 楽観ロック付き更新。slug は Repository 側で触らない（URL固定）。
+  const updated = await updateEventRepo({
+    id: event.id,
+    organizerId: user.id,
+    expectedVersion: event.version,
+    values: parsed.values,
+  });
+  if (!updated) {
+    return {
+      error: "更新に失敗しました。画面を更新してからもう一度お試しください。",
+    };
+  }
+
+  revalidatePath(`/events/${event.id}`);
+  redirect(`/events/${event.slug ?? event.id}`);
+}
+
+export type DeleteEventState = {
+  error?: string;
+};
+
+/**
+ * イベント「下書き削除」 Server Action（Controller）。
+ * 本人の下書きのみ削除可（Repository が organizer_id＋status='draft' で絞る）。
+ * 公開済みは削除不可。削除後は自分のイベント一覧へ。
+ */
+export async function deleteDraftEvent(
+  eventId: string,
+): Promise<DeleteEventState> {
+  // 1. ログイン確認
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "ログインが必要です。" };
+  }
+
+  // 2. 削除（本人の下書きのみ）。0 件なら権限なし/公開済み。
+  const deleted = await deleteDraftEventRepo({
+    id: eventId,
+    organizerId: user.id,
+  });
+  if (deleted === 0) {
+    return { error: "このイベントは削除できません（下書き・主催者のみ削除可）。" };
+  }
+
+  revalidatePath("/events/mine");
+  redirect("/events/mine");
 }
