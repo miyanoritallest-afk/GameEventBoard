@@ -87,6 +87,10 @@ export default async function EventTeamsPage({
   const teams: BoardTeam[] = (teamsRaw ?? []).map((t) => ({
     id: t.id,
     name: t.name,
+    status: t.status,
+    captainRegistrationId:
+      (t as { captain_registration_id?: string | null })
+        .captain_registration_id ?? null,
     members: (t.team_members ?? []).map((tm) => {
       const reg = tm.registrations as unknown as RegJoin;
       return toBoardMember(reg, { role: tm.role, position: tm.position });
@@ -115,6 +119,9 @@ export default async function EventTeamsPage({
         <TeamsBoard
           eventId={event.id}
           readOnly={!isOrganizer}
+          isOrganizer={isOrganizer}
+          selfFormation={event.team_formation === "self"}
+          myRegistrationId={myRegistration?.id ?? null}
           showScore={event.require_score}
           roleSwapAllowed={event.role_swap_allowed}
           teamSize={

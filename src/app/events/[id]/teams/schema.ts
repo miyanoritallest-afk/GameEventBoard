@@ -53,6 +53,36 @@ export const swapMembersSchema = z
     path: ["inRegistrationId"],
   });
 
+/**
+ * self 応募の「確定」（PR-3b）。試算チームを確定して主催者の承認に乗せる。
+ * メンバーは1〜（出場上限はクライアント/サーバーで別途判定。ここは過大入力の上限のみ）。
+ * captainRegistrationId は「メンバーに必ず含まれる本人」だが、その整合は Server Action で確認する。
+ */
+const memberDraftSchema = z.object({
+  registrationId: z.string().uuid("不正な応募IDです"),
+  role: ROLE,
+  position: z.enum(["regular", "reserve"]),
+});
+
+export const submitSelfTeamSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "チーム名を入力してください")
+    .max(50, "チーム名は50文字以内で入力してください"),
+  captainRegistrationId: z.string().uuid("不正な応募IDです"),
+  members: z
+    .array(memberDraftSchema)
+    .min(1, "メンバーを1人以上選んでください")
+    .max(20, "メンバーが多すぎます")
+    // 同一応募を二重に入れない（UNIQUE(registration_id) の事前防御）。
+    .refine(
+      (ms) => new Set(ms.map((m) => m.registrationId)).size === ms.length,
+      { message: "同じ応募者が重複しています" },
+    ),
+});
+
+export type SubmitSelfTeamInput = z.infer<typeof submitSelfTeamSchema>;
 export type TeamNameInput = z.infer<typeof teamNameSchema>;
 export type AssignMemberInput = z.infer<typeof assignMemberSchema>;
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;

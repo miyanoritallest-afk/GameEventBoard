@@ -7,6 +7,30 @@
 
 ---
 
+## 2026-06-22 — self応募 PR-3b（確定・主催者の承認・capacity排他制御）
+
+self応募の最後のピース。PR-3a で「応募者が編成を試算できる（保存しない）」状態を作った。本PRはその試算を **確定して主催者の承認に乗せる書き込みフロー** を実装し、応募フロー＋チーム編成を完成させた。
+
+### やったこと
+- **RLS 0012**: teams / team_members に self 応募者向けの INSERT/DELETE ポリシーを追加（主催者の 0010 と並存）。判定は security definer 関数 3 本に切り出し（`can_self_captain` / `is_approved_registration` / `is_own_pending_self_team`）、自己参照ポリシーの再帰評価を回避。**未適用 → Supabase SQL Editor で手動適用が必要**。
+- **self確定**: `submitSelfTeam`（応募者本人が叩く Server Action）。試算チームを `teams(status='pending')` ＋ `team_members` として一括INSERT。代表＝確定者本人を `captain_registration_id` ／ `is_representative` に設定。Supabase JS はトランザクションを張れないため、members 失敗時は作成した team を補償削除。
+- **取り下げ**: `cancelSelfTeam`（代表本人・pending のみ）。
+- **主催者の承認/却下**: `approveTeam` / `rejectTeam`。承認時に **capacity（=チーム数）を排他カウント**（events の version 条件付きUPDATE）。満員/競合は弾く。status 更新が競合したらカウントを補償的に戻す。却下は pending を rejected にするだけ（カウント不変）。
+- **UI**: 編成画面上部に主催者向け「承認待ちのチーム応募」セクション（承認/却下）。応募者の試算モードに「このチームで確定」バー（シミュレーション枠）＋自分が代表の確定チームの取り下げボタン。チームカードに承認状態バッジ（承認待ち/承認済み/却下）。
+- lint/typecheck/test（173緑）/build 通過。
+
+### 決めたこと（なぜ）
+- **capacity カウントは承認（approved）時**（DB設計7章の方針を確定へ）。定員＝「成立チーム数」なので、未承認の pending を数えると「申請しただけで枠を食う」副作用と却下時の戻し処理が増える。pending は枠を確保しない。
+- **self確定の対象は `team_formation='self'` のイベント（self/team/mixed）の approved 応募者全員**。`entry_type`・`wants_matching` では絞らない。理由＝あっせん希望者(wants_matching=true)も誘われて self でチームを組むことが実運用で起こるため。二重所属は `UNIQUE(registration_id)` が構造的に防ぐ。
+- **代理確定OK・通知/異議申立てなし**（合意はアプリ外Discord）。RLSで「確定者本人が代表かつメンバーに含まれる」を必須化し、最低限の巻き込み防止のみ担保。通知は後続PRへ切り出し。
+- **承認は主催者の `events` UPDATE（0004ポリシー）で排他**。service_role を使わず、主催者RLSの範囲で version 条件付きUPDATEを行う。最終防衛は CHECK(current_count <= capacity) と UNIQUE(registration_id)。
+
+### 次にやること
+- [ ] `0012_self_team_submit.sql` を Supabase SQL Editor で適用
+- [ ] 実機で「別アカウント（応募者）で確定→主催者で承認→定員カウント」「満員時に承認が弾かれる」を確認
+- [ ] self確定時のメンバーへの通知・異議申立て（巻き込み防止の強化）
+- [ ] 本戦機能（グループ/対戦表）。チーム編成（organizer/self）はこれで完成
+
 ## 2026-06-22 — self応募 PR-3a（応募者への閲覧開放＋試算モード）
 
 self応募（応募者が自分でチームを組んで応募）の第一歩。OSL実態（代表者が Google フォームで提出。応募データは全共有）に倣い、まず「応募者も応募者一覧・チーム編成画面を見られ、自由に編成を試算できる（保存しない）」状態を作る。確定・承認・排他制御は PR-3b。
