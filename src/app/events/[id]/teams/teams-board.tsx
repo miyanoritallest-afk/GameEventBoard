@@ -25,6 +25,10 @@ import {
   unassignMember,
   updateMember,
   swapMembers,
+  submitSelfTeam,
+  cancelSelfTeam,
+  approveTeam,
+  rejectTeam,
 } from "./actions";
 
 /** OW2 のロール順（ロール行の並び）。 */
@@ -43,9 +47,15 @@ export type BoardMember = {
   position: string; // regular / reserve
 };
 
+/** チーム応募の承認状態。organizer 振り分けは 'approved'、self 確定は 'pending' で生まれる。 */
+export type TeamStatus = "pending" | "approved" | "rejected";
+
 export type BoardTeam = {
   id: string;
   name: string;
+  status: TeamStatus;
+  /** self 確定時の代表（応募 id）。organizer 振り分けは null。 */
+  captainRegistrationId: string | null;
   members: BoardMember[];
 };
 
@@ -97,9 +107,15 @@ function toMemberScore(m: BoardMember): MemberScore {
   };
 }
 
+/** ローカル試算チームの id プレフィックス（DB 保存しない）。 */
+const SIM_TEAM_ID = "sim-1";
+
 export function TeamsBoard({
   eventId,
   readOnly = false,
+  isOrganizer = false,
+  selfFormation = false,
+  myRegistrationId = null,
   showScore,
   roleSwapAllowed,
   teamSize,
@@ -110,6 +126,12 @@ export function TeamsBoard({
   eventId: string;
   /** 試算モード（応募者の閲覧）。D&D で組み替えできるが保存しない・操作ボタンを隠す。 */
   readOnly?: boolean;
+  /** 主催者か（承認/却下ボタンの出し分け）。 */
+  isOrganizer?: boolean;
+  /** team_formation='self' のイベントか（応募者の確定ボタンの出し分け）。 */
+  selfFormation?: boolean;
+  /** 閲覧者（応募者）の応募 id。自分が代表のチームの取り下げ判定に使う。 */
+  myRegistrationId?: string | null;
   showScore: boolean;
   roleSwapAllowed: boolean;
   teamSize: number;
@@ -122,12 +144,23 @@ export function TeamsBoard({
   // 実チームがあれば、その後ろに参考として表示する（試算で組み替えても保存されない）。
   const [teams, setTeams] = useState<BoardTeam[]>(() =>
     readOnly
-      ? [{ id: "sim-1", name: "シミュレーション", members: [] }, ...initialTeams]
+      ? [
+          {
+            id: SIM_TEAM_ID,
+            name: "シミュレーション",
+            status: "pending",
+            captainRegistrationId: null,
+            members: [],
+          },
+          ...initialTeams,
+        ]
       : initialTeams,
   );
   const [unassigned, setUnassigned] = useState<BoardMember[]>(initialUnassigned);
   const [activeMember, setActiveMember] = useState<BoardMember | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
+  // self 確定（試算モード）のチーム名入力。
+  const [selfTeamName, setSelfTeamName] = useState("");
   const [error, setError] = useState<string | null>(null);
   // 保存フィードバック。表示中フラグ＋更新カウンタ（連続保存でタイマーを延長する）。
   const [saved, setSaved] = useState(false);
@@ -317,7 +350,16 @@ export function TeamsBoard({
         setError(r.error ?? "チームの作成に失敗しました。");
         return;
       }
-      setTeams((prev) => [...prev, { id: r.teamId as string, name, members: [] }]);
+      setTeams((prev) => [
+        ...prev,
+        {
+          id: r.teamId as string,
+          name,
+          status: "approved",
+          captainRegistrationId: null,
+          members: [],
+        },
+      ]);
       setNewTeamName("");
       flashSaved();
     });
@@ -391,6 +433,80 @@ export function TeamsBoard({
     });
   }
 
+  /**
+   * self 確定（試算モード）。シミュレーション枠 sim-1 の中身をサーバーへ送って確定する。
+   * 成功したらページが revalidate され、確定チームが pending として表示される。
+   */
+  function handleSubmitSelfTeam() {
+    if (!myRegistrationId) return;
+    const sim = teams.find((t) => t.id === SIM_TEAM_ID);
+    if (!sim || sim.members.length === 0) return;
+    // 代表（自分）がメンバーに含まれることを確認（含まれなければサーバーでも弾く）。
+    if (!sim.members.some((m) => m.registrationId === myRegistrationId)) {
+      setError("自分をメンバーに含めてください。");
+      return;
+    }
+    const name = selfTeamName.trim();
+    if (!name) {
+      setError("チーム名を入力してください。");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await submitSelfTeam(eventId, {
+        name,
+        captainRegistrationId: myRegistrationId,
+        members: sim.members.map((m) => ({
+          registrationId: m.registrationId,
+          role: (m.role as "tank" | "dps" | "support") ?? "tank",
+          position: m.position === "reserve" ? "reserve" : "regular",
+        })),
+      });
+      if (r.error) {
+        setError(r.error);
+        return;
+      }
+      setSelfTeamName("");
+      flashSaved();
+    });
+  }
+
+  /** self 確定チームの取り下げ（代表本人・pending のみ）。 */
+  function handleCancelSelfTeam(teamId: string) {
+    setError(null);
+    startTransition(async () => {
+      const r = await cancelSelfTeam(teamId);
+      if (r.error) setError(r.error);
+      else flashSaved();
+    });
+  }
+
+  /** 主催者: self チームの承認。 */
+  function handleApproveTeam(teamId: string) {
+    setError(null);
+    startTransition(async () => {
+      const r = await approveTeam(teamId);
+      if (r.error) setError(r.error);
+      else flashSaved();
+    });
+  }
+
+  /** 主催者: self チームの却下。 */
+  function handleRejectTeam(teamId: string) {
+    setError(null);
+    startTransition(async () => {
+      const r = await rejectTeam(teamId);
+      if (r.error) setError(r.error);
+      else flashSaved();
+    });
+  }
+
+  // 主催者の承認待ち（pending）チーム。編成画面上部にセクションで出す。
+  const pendingTeams = useMemo(
+    () => (isOrganizer ? teams.filter((t) => t.status === "pending") : []),
+    [isOrganizer, teams],
+  );
+
   return (
     <DndContext
       id="teams-board-dnd"
@@ -415,9 +531,81 @@ export function TeamsBoard({
       {readOnly && (
         <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           試算モードで閲覧しています。自由に組み替えてチーム平均を試算できますが、
-          <span className="font-medium">変更は保存されません</span>
-          （チームの確定・申請は今後のアップデートで対応予定）。
+          <span className="font-medium">変更は保存されません</span>。
+          {selfFormation && myRegistrationId
+            ? "組みたいメンバーを「シミュレーション」枠に入れ、下の「このチームで確定」で主催者の承認に申請できます。"
+            : "（チームの確定は主催者が行います。）"}
         </p>
+      )}
+
+      {/* 主催者: self 応募の承認待ちセクション（編成画面上部）。 */}
+      {isOrganizer && pendingTeams.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
+          <h2 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+            承認待ちのチーム応募（{pendingTeams.length}）
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            応募者が確定したチームです。承認すると参加チームとして成立し、定員にカウントされます。
+          </p>
+          <div className="mt-3 space-y-2">
+            {pendingTeams.map((team) => {
+              const score = teamScore(
+                team.members
+                  .filter((m) => m.position !== "reserve")
+                  .map(toMemberScore),
+              );
+              const overCap = isOverCap(score, teamScoreCap);
+              return (
+                <div
+                  key={team.id}
+                  className="rounded-lg border border-border bg-card p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">{team.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {team.members.map((m) => m.discordName).join("、")}
+                      </p>
+                      {showScore && (
+                        <p className="mt-0.5 text-xs">
+                          出場平均{" "}
+                          <span
+                            className={`font-semibold tabular-nums ${
+                              overCap ? "text-destructive" : "text-foreground"
+                            }`}
+                          >
+                            {score === null ? "—" : score.toFixed(1)}
+                          </span>
+                          {teamScoreCap !== null && overCap && (
+                            <span className="text-destructive"> ⚠ 上限超過</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleApproveTeam(team.id)}
+                        className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                      >
+                        承認
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleRejectTeam(team.id)}
+                        className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive disabled:opacity-60"
+                      >
+                        却下
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
@@ -455,20 +643,73 @@ export function TeamsBoard({
             </p>
           ) : (
             <div className="grid gap-4 2xl:grid-cols-2">
-              {teams.map((team) => (
-                <TeamCard
-                  key={team.id}
-                  team={team}
-                  readOnly={readOnly}
-                  showScore={showScore}
-                  roleSwapAllowed={roleSwapAllowed}
-                  teamSize={teamSize}
-                  teamScoreCap={teamScoreCap}
-                  onDelete={() => handleDeleteTeam(team.id)}
-                  onUnassign={handleUnassign}
-                  onSwap={handleSwap}
-                />
-              ))}
+              {teams.map((team) => {
+                const isSim = team.id === SIM_TEAM_ID;
+                // 応募者の試算モードで、自分が代表の確定済みチームは取り下げ可能。
+                const canCancelSelf =
+                  readOnly &&
+                  !isSim &&
+                  team.status === "pending" &&
+                  myRegistrationId !== null &&
+                  team.captainRegistrationId === myRegistrationId;
+                return (
+                  <div key={team.id} className="space-y-2">
+                    <TeamCard
+                      team={team}
+                      readOnly={readOnly}
+                      showStatus={!isSim}
+                      showScore={showScore}
+                      roleSwapAllowed={roleSwapAllowed}
+                      teamSize={teamSize}
+                      teamScoreCap={teamScoreCap}
+                      onDelete={() => handleDeleteTeam(team.id)}
+                      onUnassign={handleUnassign}
+                      onSwap={handleSwap}
+                    />
+
+                    {/* 応募者の確定バー（シミュレーション枠のみ・self イベント）。 */}
+                    {isSim && selfFormation && myRegistrationId && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                        <input
+                          type="text"
+                          value={selfTeamName}
+                          maxLength={50}
+                          onChange={(e) => setSelfTeamName(e.target.value)}
+                          placeholder="チーム名"
+                          className="w-40 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSubmitSelfTeam}
+                          disabled={
+                            isPending ||
+                            team.members.length === 0 ||
+                            selfTeamName.trim() === ""
+                          }
+                          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                        >
+                          このチームで確定
+                        </button>
+                        <span className="text-xs text-muted-foreground">
+                          確定すると主催者の承認に申請されます（承認まで定員枠は確保されません）。
+                        </span>
+                      </div>
+                    )}
+
+                    {/* 応募者: 自分が代表の確定チームの取り下げ。 */}
+                    {canCancelSelf && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelSelfTeam(team.id)}
+                        disabled={isPending}
+                        className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive disabled:opacity-60"
+                      >
+                        このチームの確定を取り下げる
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -481,6 +722,29 @@ export function TeamsBoard({
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+/** チーム応募の承認状態バッジ（approved は控えめ、pending/rejected を強調）。 */
+function StatusBadge({ status }: { status: TeamStatus }) {
+  if (status === "approved") {
+    return (
+      <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary align-middle">
+        承認済み
+      </span>
+    );
+  }
+  if (status === "pending") {
+    return (
+      <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400 align-middle">
+        承認待ち
+      </span>
+    );
+  }
+  return (
+    <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground align-middle">
+      却下
+    </span>
   );
 }
 
@@ -529,6 +793,7 @@ function Pool({
 function TeamCard({
   team,
   readOnly = false,
+  showStatus = false,
   showScore,
   roleSwapAllowed,
   teamSize,
@@ -539,6 +804,8 @@ function TeamCard({
 }: {
   team: BoardTeam;
   readOnly?: boolean;
+  /** 承認状態バッジを出すか（シミュレーション枠は出さない）。 */
+  showStatus?: boolean;
   showScore: boolean;
   roleSwapAllowed: boolean;
   teamSize: number;
@@ -575,7 +842,10 @@ function TeamCard({
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="font-semibold">{team.name}</h3>
+          <h3 className="font-semibold">
+            {team.name}
+            {showStatus && <StatusBadge status={team.status} />}
+          </h3>
           {showScore && (
             <p className="mt-0.5 text-xs">
               平均{" "}

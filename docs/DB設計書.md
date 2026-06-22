@@ -560,7 +560,8 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
   - 実装状況: 0006 で設定。SELECT=応募者本人 or イベント主催者（events への EXISTS サブクエリ）、INSERT=本人のみ（user_id=auth.uid()）、UPDATE=イベント主催者のみ（承認/却下）。DELETE は未定義（取り下げは後続）。本コードベース初の EXISTS サブクエリ RLS。
 - teams / team_members: イベント主催者が参照/編集（チーム編成）。
   - 実装状況: 0010 で設定（チーム編成 PR-1）。teams は SELECT/INSERT/UPDATE/DELETE すべて「対象イベントの主催者のみ」（events への EXISTS）。team_members は teams を経由して events.organizer_id を確認する2段の EXISTS。PR-1 は organizer 振り分けのみで、SELECT も主催者限定（参加チーム一覧の一般公開は本戦機能で緩和）。self 応募（応募者がチームを作る）のポリシーは PR-3 で追加。
-  - 0011（self応募 PR-3a）で SELECT を緩和: registrations / teams / team_members とも「本人/主催者＋**同イベントの参加者（応募者）**」が閲覧可。判定は `is_event_participant(event_id, uid)`（security definer 関数。RLS 内の自己参照による再帰評価を避けるため）。書き込みは引き続き主催者のみ（self の INSERT は PR-3b で追加予定）。公開範囲は壁打ちで「算出根拠含め全公開・全イベント」と確定（OSL は Google フォーム提出物を全共有していた運用に倣う）。
+  - 0011（self応募 PR-3a）で SELECT を緩和: registrations / teams / team_members とも「本人/主催者＋**同イベントの参加者（応募者）**」が閲覧可。判定は `is_event_participant(event_id, uid)`（security definer 関数。RLS 内の自己参照による再帰評価を避けるため）。公開範囲は壁打ちで「算出根拠含め全公開・全イベント」と確定（OSL は Google フォーム提出物を全共有していた運用に倣う）。
+  - 0012（self応募 PR-3b）で teams / team_members に **self 応募者向けの INSERT/DELETE** を追加（主催者の 0010 と並存）。許可条件は「`team_formation='self'` のイベントの approved 応募者が、自分を代表（captain）とする `status='pending'` チームを作り、approved な同イベント応募をメンバーに追加する」こと。判定は security definer 関数 `can_self_captain` / `is_approved_registration` / `is_own_pending_self_team` に切り出し（再帰評価回避）。承認後（approved）の改変・current_count の改竄は不可（events 列は self の書き込みで触らない）。承認時の current_count 排他は主催者の `events` UPDATE（0004）で行う。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
 - is_admin は全権限のエスケープハッチ。
@@ -573,4 +574,4 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
 - [ ] season_label の入力方法（自由入力 or マスタ化）
 - [ ] notifications と Discord通知の送り分け詳細
 - [ ] トーナメント表の bracket 構造（round/bracket_position で足りるか）
-- [ ] capacity（チーム数）の排他制御 = チーム成立(self応募 or 運営振り分け確定)のタイミングで current_count を増減。individual応募の参加表明自体は定員カウント対象外（チーム成立時にカウント）
+- [x] capacity（チーム数）の排他制御 = **主催者の承認（self チームの pending→approved）時に current_count を +1**（PR-3b で確定・実装）。pending は枠を確保しない。却下・取り下げはカウント不変。individual応募の参加表明自体は定員カウント対象外（チーム成立時にカウント）。排他は events の version 条件付きUPDATE（5章）。organizer 振り分けチームのカウント連動は本戦運用で再検討（現状 organizer 作成チームは即approvedだが current_count は未連動）。

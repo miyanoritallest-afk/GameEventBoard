@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
+import { findRegistration } from "@/lib/repositories/registrations";
 import {
   insertTeam,
   findTeamById,
@@ -15,12 +16,20 @@ import {
   swapMemberPositions,
   findRegistrationEventOwner,
   findMemberWithEventOwner,
+  insertSelfTeamWithMembers,
+  deleteSelfTeam,
+  setTeamStatus,
+  incrementEventCount,
+  findEventCapacity,
+  findTeamWithStatus,
 } from "@/lib/repositories/teams";
 import {
   teamNameSchema,
   assignMemberSchema,
   updateMemberSchema,
   swapMembersSchema,
+  submitSelfTeamSchema,
+  type SubmitSelfTeamInput,
 } from "./schema";
 
 /**
@@ -325,5 +334,209 @@ export async function swapMembers(input: {
   }
 
   revalidatePath(`/events/${outTeam.event_id}/teams`);
+  return {};
+}
+
+/* ========================================================================== *
+ * self 応募（PR-3b）: 応募者本人による「確定」、取り下げ、主催者の承認/却下。
+ * organizer 振り分け（上記）と異なり、確定・取り下げは「応募者本人」が叩く点に注意。
+ * 認可は requireOrganizer ではなく「team_formation='self' のイベントの approved な本人」。
+ * RLS（0012）が最終防衛。
+ * ========================================================================== */
+
+/**
+ * self 応募の「確定」。試算チームを teams(status='pending') ＋ team_members として登録する。
+ *
+ * 防御:
+ * 1. ログイン確認。
+ * 2. 入力検証（チーム名・メンバー配列＝許可フィールドのみ。重複なし）。
+ * 3. イベントが team_formation='self'（自分で組む）であること。
+ * 4. captain（代表）が自分の approved 応募であり、かつメンバーに含まれること（巻き込み元の確認）。
+ * 5. INSERT は RLS（0012）でも資格・pending・approved メンバーを担保。
+ * 想定内の失敗（同名・メンバー競合・満員前の権限）は戻り値で返す。
+ */
+export async function submitSelfTeam(
+  eventId: string,
+  input: SubmitSelfTeamInput,
+): Promise<TeamActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const parsed = submitSelfTeamSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
+  }
+  const { name, captainRegistrationId, members } = parsed.data;
+
+  // イベントが self 編成であることを確認（self/team/mixed のみ確定可）。
+  const event = await findEventById(eventId);
+  if (!event) return { error: "このイベントは確定できません。" };
+  if (event.team_formation !== "self") {
+    return { error: "このイベントは応募者によるチーム確定に対応していません。" };
+  }
+
+  // 代表は自分の approved 応募であること。
+  const myReg = await findRegistration(eventId, userId);
+  if (!myReg || myReg.status !== "approved") {
+    return { error: "参加確定（承認済み）の応募者のみチームを確定できます。" };
+  }
+  if (myReg.id !== captainRegistrationId) {
+    return { error: "代表は自分自身である必要があります。" };
+  }
+  // 代表は必ずメンバーに含まれる（自分が入っていないチームは作れない）。
+  if (!members.some((m) => m.registrationId === captainRegistrationId)) {
+    return { error: "自分をメンバーに含めてください。" };
+  }
+
+  const result = await insertSelfTeamWithMembers({
+    eventId,
+    name,
+    captainRegistrationId,
+    members,
+  });
+  if (!result.ok) {
+    if (result.duplicateName) {
+      return { error: "同じ名前のチームがすでに存在します。" };
+    }
+    if (result.memberConflict) {
+      return {
+        error:
+          "メンバーの中に、すでに別のチームに所属している人がいます。画面を更新して確認してください。",
+      };
+    }
+    return {
+      error: "チームの確定に失敗しました。画面を更新してからお試しください。",
+    };
+  }
+
+  revalidatePath(`/events/${eventId}/teams`);
+  return {};
+}
+
+/**
+ * self 確定チームの取り下げ（pending のみ）。代表本人が叩く。
+ * 承認済み（approved）は取り下げ不可（主催者の判断を覆さない）。RLS（0012）が pending/captain を担保。
+ */
+export async function cancelSelfTeam(teamId: string): Promise<TeamActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const team = await findTeamWithStatus(teamId);
+  if (!team) return { error: "このチームを操作する権限がありません。" };
+  if (team.status !== "pending") {
+    return { error: "承認待ちのチームのみ取り下げできます。" };
+  }
+
+  // 代表本人か（自分の応募が captain か）をアプリ層でも確認する。
+  const myReg = await findRegistration(team.event_id, userId);
+  if (!myReg || myReg.id !== team.captain_registration_id) {
+    return { error: "このチームを操作する権限がありません。" };
+  }
+
+  const deleted = await deleteSelfTeam(teamId);
+  if (!deleted) {
+    return { error: "取り下げに失敗しました。画面を更新してからお試しください。" };
+  }
+
+  revalidatePath(`/events/${team.event_id}/teams`);
+  return {};
+}
+
+/**
+ * 主催者による self チームの承認。status を pending → approved にし、
+ * capacity（=チーム数）を排他カウント（DB設計 5章）。満員/競合は弾く。
+ *
+ * 順序: 先に capacity を排他 +1 → 成功時のみ status=approved。
+ * status 更新が競合したら capacity を戻す（補償）。
+ */
+export async function approveTeam(teamId: string): Promise<TeamActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const team = await findTeamWithStatus(teamId);
+  if (!team) return { error: "このチームを操作する権限がありません。" };
+
+  const event = await requireOrganizer(team.event_id, userId);
+  if (!event) return { error: "このチームを操作する権限がありません。" };
+
+  if (team.status !== "pending") {
+    return { error: "承認待ちのチームのみ承認できます。" };
+  }
+
+  // capacity を排他 +1。満員/競合なら更新行なし＝弾く。
+  const ev = await findEventCapacity(team.event_id);
+  if (!ev) return { error: "イベントが見つかりません。" };
+  const counted = await incrementEventCount({
+    eventId: team.event_id,
+    expectedVersion: ev.version,
+  });
+  if (!counted.ok) {
+    return {
+      error:
+        "定員に達しているか、他の操作と競合しました。画面を更新して確認してください。",
+    };
+  }
+
+  // status を approved に。競合（既に処理済み・版ずれ）ならカウントを戻す。
+  const updated = await setTeamStatus({
+    teamId,
+    status: "approved",
+    expectedVersion: team.version,
+  });
+  if (!updated) {
+    // 補償: 直前に +1 した current_count を戻す（version 条件付き）。
+    await decrementEventCountCompensate(team.event_id);
+    return {
+      error: "承認に失敗しました。画面を更新してからお試しください。",
+    };
+  }
+
+  revalidatePath(`/events/${team.event_id}/teams`);
+  return {};
+}
+
+/**
+ * 承認の補償用に current_count を 1 戻す（status 更新失敗時のみ呼ぶ）。
+ * 競合に強くするため最新 version を読んでから戻す。失敗しても致命ではない（次回再集計可）。
+ */
+async function decrementEventCountCompensate(eventId: string): Promise<void> {
+  const supabase = await createClient();
+  const ev = await findEventCapacity(eventId);
+  if (!ev || ev.current_count <= 0) return;
+  await supabase
+    .from("events")
+    .update({ current_count: ev.current_count - 1, version: ev.version + 1 })
+    .eq("id", eventId)
+    .eq("version", ev.version);
+}
+
+/**
+ * 主催者による self チームの却下。status を pending → rejected にする。
+ * capacity は触らない（pending は元々カウントしていないため）。
+ */
+export async function rejectTeam(teamId: string): Promise<TeamActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const team = await findTeamWithStatus(teamId);
+  if (!team) return { error: "このチームを操作する権限がありません。" };
+
+  const event = await requireOrganizer(team.event_id, userId);
+  if (!event) return { error: "このチームを操作する権限がありません。" };
+
+  if (team.status !== "pending") {
+    return { error: "承認待ちのチームのみ却下できます。" };
+  }
+
+  const updated = await setTeamStatus({
+    teamId,
+    status: "rejected",
+    expectedVersion: team.version,
+  });
+  if (!updated) {
+    return { error: "却下に失敗しました。画面を更新してからお試しください。" };
+  }
+
+  revalidatePath(`/events/${team.event_id}/teams`);
   return {};
 }

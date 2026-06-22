@@ -265,6 +265,181 @@ export async function findMemberWithEventOwner(registrationId: string) {
   return data;
 }
 
+type MemberDraft = {
+  registrationId: string;
+  role: Role;
+  position: MemberPosition;
+};
+
+/**
+ * self 応募の「確定」（PR-3b）。試算チームを teams(status='pending') ＋ team_members として
+ * 一括登録する。代表（captain）は確定者本人の registration。
+ *
+ * Supabase JS は明示トランザクションを張れないため、teams を作ってから members を入れ、
+ * members で失敗したら作った team を補償的に削除する（孤児チームを残さない）。
+ * RLS（0012）が最終防衛: self 確定の資格・pending・approved メンバーを DB 層でも担保。
+ *
+ * 失敗の種別:
+ * - duplicateName: 同名チームが既存（UNIQUE(event_id, name)）。
+ * - memberConflict: メンバーの誰かが既に別チーム所属（UNIQUE(registration_id)）。
+ * - denied: RLS で弾かれた（資格なし・未承認など）。
+ */
+export async function insertSelfTeamWithMembers(params: {
+  eventId: string;
+  name: string;
+  captainRegistrationId: string;
+  members: MemberDraft[];
+}): Promise<
+  | { ok: true; teamId: string }
+  | { ok: false; duplicateName?: true; memberConflict?: true; denied?: true }
+> {
+  const supabase = await createClient();
+
+  const { data: team, error: teamErr } = await supabase
+    .from("teams")
+    .insert({
+      event_id: params.eventId,
+      name: params.name,
+      status: "pending",
+      captain_registration_id: params.captainRegistrationId,
+    })
+    .select("id")
+    .single();
+
+  if (teamErr) {
+    if (teamErr.code === "23505") return { ok: false, duplicateName: true };
+    // RLS 拒否は data なし＝ここでは error（権限なし）に出る。
+    return { ok: false, denied: true };
+  }
+
+  const rows = params.members.map((m) => ({
+    team_id: team.id,
+    registration_id: m.registrationId,
+    role: m.role,
+    position: m.position,
+    // 代表は is_representative を立てる（captain の registration と一致するメンバー）。
+    is_representative: m.registrationId === params.captainRegistrationId,
+  }));
+
+  const { error: memErr } = await supabase.from("team_members").insert(rows);
+
+  if (memErr) {
+    // 補償削除（作った team を消す）。pending かつ自分が captain なので RLS で消せる。
+    await supabase.from("teams").delete().eq("id", team.id);
+    if (memErr.code === "23505") return { ok: false, memberConflict: true };
+    return { ok: false, denied: true };
+  }
+
+  return { ok: true, teamId: team.id };
+}
+
+/**
+ * self 確定チームの取り下げ（pending のみ）。代表本人が叩く。
+ * team_members は FK の on delete cascade で連動削除。RLS（0012）が pending/captain を担保。
+ * 削除できたら data（id）が返る。null なら対象なし（既に承認/却下・権限なし）。
+ */
+export async function deleteSelfTeam(teamId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .delete()
+    .eq("id", teamId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 主催者によるチーム承認/却下（PR-3b）。status を pending → approved/rejected へ。
+ * 楽観ロック（version 一致時のみ）。承認時の current_count 排他カウントは
+ * approveEventCapacity と組み合わせて Server Action 側で行う。
+ * 競合（版ずれ・既に処理済み）なら null。
+ */
+export async function setTeamStatus(params: {
+  teamId: string;
+  status: "approved" | "rejected";
+  expectedVersion: number;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .update({ status: params.status, version: params.expectedVersion + 1 })
+    .eq("id", params.teamId)
+    .eq("status", "pending")
+    .eq("version", params.expectedVersion)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data; // null なら競合（既に処理済み・版ずれ）
+}
+
+/**
+ * capacity（=チーム数）の排他カウント（DB設計 5章）。events の version 条件付き UPDATE。
+ * 満員（current_count >= capacity）または競合（版ずれ）なら更新行なし＝null。
+ * events の UPDATE は 0004 の主催者ポリシーで担保（承認は主催者が叩く）。
+ */
+export async function incrementEventCount(params: {
+  eventId: string;
+  expectedVersion: number;
+}): Promise<{ ok: true } | { ok: false }> {
+  const supabase = await createClient();
+  // 現在値を読みつつ、capacity 未満なら +1。capacity IS NULL（無制限）は常に許可。
+  const { data: ev, error: readErr } = await supabase
+    .from("events")
+    .select("capacity, current_count, version")
+    .eq("id", params.eventId)
+    .maybeSingle();
+  if (readErr) throw readErr;
+  if (!ev || ev.version !== params.expectedVersion) return { ok: false };
+  if (ev.capacity !== null && ev.current_count >= ev.capacity) {
+    return { ok: false };
+  }
+
+  const { data, error } = await supabase
+    .from("events")
+    .update({
+      current_count: ev.current_count + 1,
+      version: ev.version + 1,
+    })
+    .eq("id", params.eventId)
+    .eq("version", params.expectedVersion)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? { ok: true } : { ok: false };
+}
+
+/** id でイベントの capacity/current_count/version を取得する（承認時の排他判定用）。 */
+export async function findEventCapacity(eventId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, organizer_id, capacity, current_count, version")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/** 承認画面用に、status を含むチーム（id/name/status/version/event_id）を取得する。 */
+export async function findTeamWithStatus(teamId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .select("id, event_id, name, status, version, captain_registration_id")
+    .eq("id", teamId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
 /**
  * 編成画面用の一括取得。イベントの全チーム＋メンバー（応募者情報・スコア込み）を返す。
  * RLS（0010）で主催者のイベントのみ返る。表示順はチーム作成順。
@@ -274,7 +449,7 @@ export async function listTeamsWithMembers(eventId: string) {
   const { data, error } = await supabase
     .from("teams")
     .select(
-      `id, name, status, version, created_at,
+      `id, name, status, version, created_at, captain_registration_id,
        team_members(
          id, role, position, is_representative, registration_id,
          registrations(
