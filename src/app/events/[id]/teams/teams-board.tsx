@@ -185,12 +185,17 @@ export function TeamsBoard({
     setError(null);
     startTransition(async () => {
       const r = await createTeam(eventId, name);
-      if (r.error) {
-        setError(r.error);
+      if (r.error || !r.teamId) {
+        setError(r.error ?? "チームの作成に失敗しました。");
         return;
       }
+      // 作成チームを即座に画面へ反映する（revalidate はクライアント state を
+      // 更新しないため、返ってきた id で楽観追加する）。
+      setTeams((prev) => [
+        ...prev,
+        { id: r.teamId as string, name, members: [] },
+      ]);
       setNewTeamName("");
-      // 作成結果は revalidate で反映される（簡潔さ優先で楽観追加はしない）。
     });
   }
 

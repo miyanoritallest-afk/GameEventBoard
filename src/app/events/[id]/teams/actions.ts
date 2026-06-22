@@ -45,13 +45,17 @@ async function requireOrganizer(eventId: string, userId: string) {
   return event;
 }
 
+/** createTeam だけは、楽観追加用に作成チームの id を返す。 */
+export type CreateTeamState = { error?: string; teamId?: string };
+
 /**
  * チーム作成。イベント主催者のみ。名前を Zod 検証し、event_id はサーバー固定。
+ * 成功時は作成チームの id を返す（クライアントが即座に楽観追加できるようにする）。
  */
 export async function createTeam(
   eventId: string,
   name: string,
-): Promise<TeamActionState> {
+): Promise<CreateTeamState> {
   const userId = await currentUserId();
   if (!userId) return { error: "ログインが必要です。" };
 
@@ -69,7 +73,7 @@ export async function createTeam(
   }
 
   revalidatePath(`/events/${eventId}/teams`);
-  return {};
+  return { teamId: result.id };
 }
 
 /**
