@@ -21,8 +21,8 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const HANDLING_LABEL: Record<string, string> = {
-  fill_by_role: "横軸補完（同シーズン他ロール平均）",
-  fill_by_season: "縦軸補完（同ロール他シーズン平均）",
+  fill_by_role: "同シーズンの他ロール平均で補完",
+  fill_by_season: "同ロールの他シーズン平均で補完",
   exclude: "未認定は除外",
 };
 
