@@ -91,7 +91,8 @@ export default async function EventTeamsPage({
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      {/* 編成画面は判断材料を横に並べるため広い幅を取る（他ページの max-w-3xl/6xl より広い）。 */}
+      <div className="mx-auto max-w-[1600px] px-6 py-10">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">チーム編成</h1>
           <Link
@@ -106,6 +107,10 @@ export default async function EventTeamsPage({
         <TeamsBoard
           eventId={event.id}
           showScore={event.require_score}
+          roleSwapAllowed={event.role_swap_allowed}
+          teamSize={
+            (event.games as { team_size: number } | null)?.team_size ?? 5
+          }
           teamScoreCap={event.team_score_cap}
           initialTeams={teams}
           initialUnassigned={unassigned}

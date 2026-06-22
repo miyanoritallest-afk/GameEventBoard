@@ -27,5 +27,33 @@ export const assignMemberSchema = z.object({
   role: ROLE,
 });
 
+/**
+ * メンバーの position（出場⇄リザーブ）/ role（担当ロール）を更新する。
+ * 同一チーム内のゾーン移動・ロール行移動の両方を扱う。どちらも任意指定。
+ */
+export const updateMemberSchema = z
+  .object({
+    registrationId: z.string().uuid("不正な応募IDです"),
+    position: z.enum(["regular", "reserve"]).optional(),
+    role: ROLE.optional(),
+  })
+  .refine((v) => v.position !== undefined || v.role !== undefined, {
+    message: "更新内容がありません",
+    path: ["registrationId"],
+  });
+
+/** 交代実行: 出る側（現レギュラー）と入る側（現リザーブ）の応募 id。 */
+export const swapMembersSchema = z
+  .object({
+    outRegistrationId: z.string().uuid("不正な応募IDです"),
+    inRegistrationId: z.string().uuid("不正な応募IDです"),
+  })
+  .refine((v) => v.outRegistrationId !== v.inRegistrationId, {
+    message: "同一メンバーは交代できません",
+    path: ["inRegistrationId"],
+  });
+
 export type TeamNameInput = z.infer<typeof teamNameSchema>;
 export type AssignMemberInput = z.infer<typeof assignMemberSchema>;
+export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
+export type SwapMembersInput = z.infer<typeof swapMembersSchema>;

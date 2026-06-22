@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -12,10 +12,10 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { scoreToRankLabel } from "@/lib/services/overwatch-ranks";
 import {
   teamScore,
   isOverCap,
+  swapCandidates,
   type MemberScore,
 } from "@/lib/services/team-score";
 import {
@@ -23,7 +23,13 @@ import {
   deleteTeam,
   assignMember,
   unassignMember,
+  updateMember,
+  swapMembers,
 } from "./actions";
+
+/** OW2 のロール順（ロール行の並び）。 */
+const ROLE_ORDER = ["tank", "dps", "support"] as const;
+type RoleKey = (typeof ROLE_ORDER)[number];
 
 /** ボード用のメンバー表現（page.tsx で DB から整形して渡す）。 */
 export type BoardMember = {
@@ -34,7 +40,7 @@ export type BoardMember = {
   finalScore: number | null;
   overrideScore: number | null;
   role: string; // チーム内の担当ロール（未割当は第1希望）
-  position: string; // regular / reserve（PR-1 は全員 regular）
+  position: string; // regular / reserve
 };
 
 export type BoardTeam = {
@@ -50,6 +56,31 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const POOL_ID = "pool"; // 未割当プールの droppable id
+
+/**
+ * droppable id を「チームID:position[:role]」で構成する（ゾーン識別）。
+ * role_swap 不可の出場ゾーンはロール行ごとに droppable を作るため role を含める。
+ */
+function zoneId(
+  teamId: string,
+  position: "regular" | "reserve",
+  role?: RoleKey,
+): string {
+  return role ? `${teamId}:${position}:${role}` : `${teamId}:${position}`;
+}
+
+/** droppable id を {teamId, position, role?} に分解する。pool は null。 */
+function parseZone(
+  id: string,
+): { teamId: string; position: "regular" | "reserve"; role?: RoleKey } | null {
+  if (id === POOL_ID) return null;
+  const [teamId, position, role] = id.split(":");
+  return {
+    teamId,
+    position: position === "reserve" ? "reserve" : "regular",
+    role: (role as RoleKey) || undefined,
+  };
+}
 
 /** 実効スコア = override ?? final（表示用）。 */
 function effective(m: BoardMember): number | null {
@@ -69,12 +100,16 @@ function toMemberScore(m: BoardMember): MemberScore {
 export function TeamsBoard({
   eventId,
   showScore,
+  roleSwapAllowed,
+  teamSize,
   teamScoreCap,
   initialTeams,
   initialUnassigned,
 }: {
   eventId: string;
   showScore: boolean;
+  roleSwapAllowed: boolean;
+  teamSize: number;
   teamScoreCap: number | null;
   initialTeams: BoardTeam[];
   initialUnassigned: BoardMember[];
@@ -84,7 +119,23 @@ export function TeamsBoard({
   const [activeMember, setActiveMember] = useState<BoardMember | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // 保存フィードバック。表示中フラグ＋更新カウンタ（連続保存でタイマーを延長する）。
+  const [saved, setSaved] = useState(false);
+  const [savedTick, setSavedTick] = useState(0);
   const [isPending, startTransition] = useTransition();
+
+  /** 保存成功を一定時間「✓ 保存しました」と示す。 */
+  function flashSaved() {
+    setSaved(true);
+    setSavedTick((n) => n + 1);
+  }
+
+  // 保存表示は最後の保存から 2 秒で自動的に消す（savedTick で延長）。
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 2000);
+    return () => clearTimeout(t);
+  }, [saved, savedTick]);
 
   // 数px動かして初めてドラッグ開始＝その場クリック（ボタン操作）と両立する。
   const sensors = useSensors(
@@ -102,14 +153,29 @@ export function TeamsBoard({
     return null;
   }
 
+  /** registrationId が今どのチームに属すか（プールなら null）。 */
+  function findOwningTeamId(registrationId: string): string | null {
+    return (
+      teams.find((t) =>
+        t.members.some((m) => m.registrationId === registrationId),
+      )?.id ?? null
+    );
+  }
+
+  /** 楽観更新の共通ロールバック。 */
+  function rollback(prevTeams: BoardTeam[], prevUnassigned: BoardMember[], msg: string) {
+    setTeams(prevTeams);
+    setUnassigned(prevUnassigned);
+    setError(msg);
+  }
+
   function handleDragStart(e: DragStartEvent) {
-    const id = String(e.active.id);
-    setActiveMember(findMember(id));
+    setActiveMember(findMember(String(e.active.id)));
   }
 
   /**
-   * ドラッグ完了。楽観的にローカル状態を更新してから Server Action を呼ぶ。
-   * Action が失敗したら元状態へロールバックしてエラー表示する。
+   * ドラッグ完了。ドロップ先（プール / チームの出場ゾーン / リザーブゾーン）に応じて
+   * 楽観更新し、対応する Server Action を呼ぶ。失敗時はロールバック。
    */
   function handleDragEnd(e: DragEndEvent) {
     setActiveMember(null);
@@ -117,23 +183,31 @@ export function TeamsBoard({
     if (!over) return;
 
     const registrationId = String(active.id);
-    const overId = String(over.id);
     const member = findMember(registrationId);
     if (!member) return;
 
-    // 現在の所在（プール or どのチームか）。
-    const fromTeam = teams.find((t) =>
-      t.members.some((m) => m.registrationId === registrationId),
-    );
-    const fromTeamId = fromTeam?.id ?? null;
-    const toTeamId = overId === POOL_ID ? null : overId;
+    const fromTeamId = findOwningTeamId(registrationId);
+    const dest = parseZone(String(over.id)); // null=プール
+    const toTeamId = dest?.teamId ?? null;
+    const toPosition = dest?.position ?? "regular";
+    // 出場ロール行へのドロップなら role 確定。無ければ既存/第1希望を維持。
+    const toRole = dest?.role ?? member.preferredRoles[0] ?? member.role ?? "tank";
 
-    if (fromTeamId === toTeamId) return; // 同じ場所なら何もしない。
+    // 変化なし（同じチーム・同じゾーン・同じロール、またはプール→プール）なら何もしない。
+    if (
+      fromTeamId === toTeamId &&
+      (toTeamId === null ||
+        (member.position === toPosition &&
+          (dest?.role === undefined || member.role === toRole)))
+    ) {
+      return;
+    }
 
     const prevTeams = teams;
     const prevUnassigned = unassigned;
+    setError(null);
 
-    // 楽観更新: いったん全所在から外し、移動先へ入れる。
+    // 全所在から外す（楽観）。
     const detachedTeams = teams.map((t) => ({
       ...t,
       members: t.members.filter((m) => m.registrationId !== registrationId),
@@ -142,40 +216,81 @@ export function TeamsBoard({
       (m) => m.registrationId !== registrationId,
     );
 
-    setError(null);
-
+    // --- プールへ戻す ---
     if (toTeamId === null) {
-      // プールへ戻す。
       setTeams(detachedTeams);
       setUnassigned([...detachedPool, { ...member, position: "regular" }]);
       startTransition(async () => {
         const r = await unassignMember(registrationId);
-        if (r.error) {
-          setTeams(prevTeams);
-          setUnassigned(prevUnassigned);
-          setError(r.error);
-        }
+        if (r.error) rollback(prevTeams, prevUnassigned, r.error);
+        else flashSaved();
       });
       return;
     }
 
-    // チームへ割当（移動）。割当ロールは本人の第1希望をデフォルトに。
-    const role = member.preferredRoles[0] ?? member.role ?? "tank";
+    // --- 同一チーム内の移動（ゾーン or ロール行）= position/role 更新のみ ---
+    if (fromTeamId === toTeamId) {
+      setUnassigned(detachedPool);
+      setTeams(
+        detachedTeams.map((t) =>
+          t.id === toTeamId
+            ? {
+                ...t,
+                members: [
+                  ...t.members,
+                  { ...member, position: toPosition, role: toRole },
+                ],
+              }
+            : t,
+        ),
+      );
+      startTransition(async () => {
+        const r = await updateMember({
+          registrationId,
+          position: toPosition,
+          role: toRole,
+        });
+        if (r.error) rollback(prevTeams, prevUnassigned, r.error);
+        else flashSaved();
+      });
+      return;
+    }
+
+    // --- 別所からチームへ割当（プール/別チーム → チームの指定ゾーン）---
     setUnassigned(detachedPool);
     setTeams(
       detachedTeams.map((t) =>
         t.id === toTeamId
-          ? { ...t, members: [...t.members, { ...member, role }] }
+          ? {
+              ...t,
+              members: [
+                ...t.members,
+                { ...member, role: toRole, position: toPosition },
+              ],
+            }
           : t,
       ),
     );
     startTransition(async () => {
-      const r = await assignMember({ registrationId, teamId: toTeamId, role });
+      // assign は position=regular で割当（role 指定）。リザーブゾーンなら続けて
+      // position を reserve へ更新する。
+      const r = await assignMember({
+        registrationId,
+        teamId: toTeamId,
+        role: toRole,
+      });
       if (r.error) {
-        setTeams(prevTeams);
-        setUnassigned(prevUnassigned);
-        setError(r.error);
+        rollback(prevTeams, prevUnassigned, r.error);
+        return;
       }
+      if (toPosition === "reserve") {
+        const r2 = await updateMember({ registrationId, position: "reserve" });
+        if (r2.error) {
+          rollback(prevTeams, prevUnassigned, r2.error);
+          return;
+        }
+      }
+      flashSaved();
     });
   }
 
@@ -189,13 +304,9 @@ export function TeamsBoard({
         setError(r.error ?? "チームの作成に失敗しました。");
         return;
       }
-      // 作成チームを即座に画面へ反映する（revalidate はクライアント state を
-      // 更新しないため、返ってきた id で楽観追加する）。
-      setTeams((prev) => [
-        ...prev,
-        { id: r.teamId as string, name, members: [] },
-      ]);
+      setTeams((prev) => [...prev, { id: r.teamId as string, name, members: [] }]);
       setNewTeamName("");
+      flashSaved();
     });
   }
 
@@ -205,7 +316,6 @@ export function TeamsBoard({
     setError(null);
     const prevTeams = teams;
     const prevUnassigned = unassigned;
-    // 楽観: チームを消し、所属メンバーをプールへ戻す。
     setTeams(teams.filter((t) => t.id !== teamId));
     setUnassigned([
       ...unassigned,
@@ -213,11 +323,58 @@ export function TeamsBoard({
     ]);
     startTransition(async () => {
       const r = await deleteTeam(teamId);
-      if (r.error) {
-        setTeams(prevTeams);
-        setUnassigned(prevUnassigned);
-        setError(r.error);
-      }
+      if (r.error) rollback(prevTeams, prevUnassigned, r.error);
+      else flashSaved();
+    });
+  }
+
+  /** ✕（チームから外す）。registration 単位で解除しプールへ戻す。 */
+  function handleUnassign(registrationId: string) {
+    const member = findMember(registrationId);
+    if (!member) return;
+    setError(null);
+    const prevTeams = teams;
+    const prevUnassigned = unassigned;
+    setTeams(
+      teams.map((t) => ({
+        ...t,
+        members: t.members.filter((m) => m.registrationId !== registrationId),
+      })),
+    );
+    setUnassigned([...unassigned, { ...member, position: "regular" }]);
+    startTransition(async () => {
+      const r = await unassignMember(registrationId);
+      if (r.error) rollback(prevTeams, prevUnassigned, r.error);
+      else flashSaved();
+    });
+  }
+
+  /** 交代実行: out（レギュラー）と in（リザーブ）の position を入れ替える。 */
+  function handleSwap(teamId: string, outId: string, inId: string) {
+    setError(null);
+    const prevTeams = teams;
+    const prevUnassigned = unassigned;
+    setTeams(
+      teams.map((t) =>
+        t.id === teamId
+          ? {
+              ...t,
+              members: t.members.map((m) => {
+                if (m.registrationId === outId) return { ...m, position: "reserve" };
+                if (m.registrationId === inId) return { ...m, position: "regular" };
+                return m;
+              }),
+            }
+          : t,
+      ),
+    );
+    startTransition(async () => {
+      const r = await swapMembers({
+        outRegistrationId: outId,
+        inRegistrationId: inId,
+      });
+      if (r.error) rollback(prevTeams, prevUnassigned, r.error);
+      else flashSaved();
     });
   }
 
@@ -231,6 +388,13 @@ export function TeamsBoard({
         <p className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
+      )}
+
+      {/* 保存フィードバック（右下に数秒表示）。即時保存されたことを伝える。 */}
+      {saved && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-md border border-primary/50 bg-primary/10 px-4 py-2 text-sm text-primary shadow-lg">
+          ✓ 保存しました
+        </div>
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
@@ -263,48 +427,18 @@ export function TeamsBoard({
               チームがまだありません。「+ チームを追加」で作成してください。
             </p>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 2xl:grid-cols-2">
               {teams.map((team) => (
                 <TeamCard
                   key={team.id}
                   team={team}
                   showScore={showScore}
+                  roleSwapAllowed={roleSwapAllowed}
+                  teamSize={teamSize}
                   teamScoreCap={teamScoreCap}
                   onDelete={() => handleDeleteTeam(team.id)}
-                  onUnassign={(rid) => {
-                    // ✕ ボタン: 即解除（楽観）。
-                    const prevTeams = teams;
-                    const prevUnassigned = unassigned;
-                    const m = team.members.find(
-                      (x) => x.registrationId === rid,
-                    );
-                    if (!m) return;
-                    setError(null);
-                    setTeams(
-                      teams.map((t) =>
-                        t.id === team.id
-                          ? {
-                              ...t,
-                              members: t.members.filter(
-                                (x) => x.registrationId !== rid,
-                              ),
-                            }
-                          : t,
-                      ),
-                    );
-                    setUnassigned([
-                      ...unassigned,
-                      { ...m, position: "regular" },
-                    ]);
-                    startTransition(async () => {
-                      const r = await unassignMember(rid);
-                      if (r.error) {
-                        setTeams(prevTeams);
-                        setUnassigned(prevUnassigned);
-                        setError(r.error);
-                      }
-                    });
-                  }}
+                  onUnassign={handleUnassign}
+                  onSwap={handleSwap}
                 />
               ))}
             </div>
@@ -360,35 +494,55 @@ function Pool({
   );
 }
 
-/** チームカード（droppable）。カード内はロール行ではなくメンバーリスト＋ロールラベル。 */
+/**
+ * チームカード。出場（レギュラー）とリザーブの2ゾーンに分け、ゾーン間も D&D で移動。
+ * チーム平均は出場メンバーのみで算出（DB設計 4.2）。交代シミュレーションを内蔵。
+ */
 function TeamCard({
   team,
   showScore,
+  roleSwapAllowed,
+  teamSize,
   teamScoreCap,
   onDelete,
   onUnassign,
+  onSwap,
 }: {
   team: BoardTeam;
   showScore: boolean;
+  roleSwapAllowed: boolean;
+  teamSize: number;
   teamScoreCap: number | null;
   onDelete: () => void;
   onUnassign: (registrationId: string) => void;
+  onSwap: (teamId: string, outId: string, inId: string) => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: team.id });
+  const regulars = team.members.filter((m) => m.position !== "reserve");
+  const reserves = team.members.filter((m) => m.position === "reserve");
 
   const score = useMemo(
     () => teamScore(team.members.map(toMemberScore)),
     [team.members],
   );
   const overCap = isOverCap(score, teamScoreCap);
+  const overSize = regulars.length > teamSize;
+
+  // 交代シミュレーション: 選択中のリザーブと全レギュラーの交代候補。
+  const [selectedReserveId, setSelectedReserveId] = useState<string | null>(null);
+  const selectedReserve = reserves.find(
+    (m) => m.registrationId === selectedReserveId,
+  );
+  const candidates = useMemo(() => {
+    if (!selectedReserve) return [];
+    return swapCandidates(
+      team.members.map(toMemberScore),
+      selectedReserve.registrationId,
+      teamScoreCap,
+    );
+  }, [team.members, selectedReserve, teamScoreCap]);
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`rounded-xl border p-4 ${
-        isOver ? "border-primary bg-primary/5" : "border-border bg-card"
-      }`}
-    >
+    <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="font-semibold">{team.name}</h3>
@@ -419,7 +573,6 @@ function TeamCard({
         </div>
         <button
           type="button"
-          // ドラッグ開始（active 化）を抑止してからクリック処理する。
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onDelete}
           className="text-xs text-muted-foreground hover:text-destructive"
@@ -428,18 +581,192 @@ function TeamCard({
         </button>
       </div>
 
-      <div className="mt-3 space-y-2">
-        {team.members.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-            ＋ ここにドラッグで追加
+      {/* 出場ゾーン（レギュラー）。平均はここのメンバーで算出。 */}
+      <div className="mt-3">
+        <p className="text-xs font-medium">
+          出場{" "}
+          <span className={overSize ? "text-destructive" : "text-muted-foreground"}>
+            {regulars.length}/{teamSize}
+            {overSize && " ⚠"}
+          </span>
+        </p>
+        {roleSwapAllowed ? (
+          // ロールスワップ可: 担当ロールを固定せずフラットに並べる。
+          <Zone
+            teamId={team.id}
+            position="regular"
+            members={regulars}
+            showScore={showScore}
+            onUnassign={onUnassign}
+          />
+        ) : (
+          // ロールスワップ不可: タンク/DPS/サポートのロール行に分け、担当を明示。
+          // ロール行へドロップすると担当ロールが確定する（人数は自由・上限は警告のみ）。
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
+            {ROLE_ORDER.map((role) => (
+              <Zone
+                key={role}
+                teamId={team.id}
+                position="regular"
+                role={role}
+                title={
+                  <span className="text-primary/80">{ROLE_LABEL[role]}</span>
+                }
+                members={regulars.filter((m) => m.role === role)}
+                showScore={showScore}
+                onUnassign={onUnassign}
+                compact
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* リザーブゾーン。クリックで交代シミュレーションを開く。 */}
+      <Zone
+        teamId={team.id}
+        position="reserve"
+        title={<span className="text-muted-foreground">リザーブ（控え）</span>}
+        members={reserves}
+        showScore={showScore}
+        onUnassign={onUnassign}
+        selectableReserve={showScore}
+        selectedReserveId={selectedReserveId}
+        onSelectReserve={(rid) =>
+          setSelectedReserveId((cur) => (cur === rid ? null : rid))
+        }
+      />
+
+      {/* 交代シミュレーション結果（リザーブ選択時のみ）。 */}
+      {showScore && selectedReserve && (
+        <div className="mt-3 rounded-lg border border-border bg-background p-3">
+          <p className="text-xs">
+            <span className="font-semibold">{selectedReserve.discordName}</span>{" "}
+            を出す場合の交代候補:
+          </p>
+          {candidates.length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              出場メンバーがいません。
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {candidates.map((c) => {
+                const out = team.members.find(
+                  (m) => m.registrationId === c.outId,
+                );
+                return (
+                  <li
+                    key={c.outId}
+                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5"
+                  >
+                    <span className="text-xs">
+                      {out?.discordName ?? "?"} と交代 → 平均{" "}
+                      <span className="font-semibold tabular-nums">
+                        {c.newTeamScore === null
+                          ? "—"
+                          : c.newTeamScore.toFixed(1)}
+                      </span>{" "}
+                      <span
+                        className={
+                          c.withinCap ? "text-primary" : "text-destructive"
+                        }
+                      >
+                        {teamScoreCap === null
+                          ? ""
+                          : c.withinCap
+                          ? "✓ 上限内"
+                          : "⚠ 超過"}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={teamScoreCap !== null && !c.withinCap}
+                      onClick={() => {
+                        onSwap(team.id, c.outId, selectedReserve.registrationId);
+                        setSelectedReserveId(null);
+                      }}
+                      className="rounded border border-primary/50 px-2 py-0.5 text-xs text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      交代する
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {teamScoreCap === null && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              ※ このイベントはチームスコア上限が未設定です。
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * チーム内の1ゾーン（出場 / 出場のロール行 / リザーブ）。droppable。
+ * role を渡すと「出場の特定ロール行」になり、ドロップで担当ロールが確定する。
+ */
+function Zone({
+  teamId,
+  position,
+  role,
+  title,
+  members,
+  showScore,
+  onUnassign,
+  compact = false,
+  selectableReserve = false,
+  selectedReserveId = null,
+  onSelectReserve,
+}: {
+  teamId: string;
+  position: "regular" | "reserve";
+  role?: RoleKey;
+  title?: React.ReactNode;
+  members: BoardMember[];
+  showScore: boolean;
+  onUnassign: (registrationId: string) => void;
+  compact?: boolean;
+  selectableReserve?: boolean;
+  selectedReserveId?: string | null;
+  onSelectReserve?: (registrationId: string) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: zoneId(teamId, position, role),
+  });
+  return (
+    <div className={compact ? "" : "mt-3"}>
+      {title && <p className="text-xs font-medium">{title}</p>}
+      <div
+        ref={setNodeRef}
+        className={`mt-1.5 space-y-2 rounded-md border p-2 ${
+          compact ? "min-h-[3rem]" : ""
+        } ${
+          isOver ? "border-primary bg-primary/5" : "border-dashed border-border"
+        }`}
+      >
+        {members.length === 0 ? (
+          <p className="px-1 py-2 text-center text-xs text-muted-foreground">
+            ＋ ここにドラッグ
           </p>
         ) : (
-          team.members.map((m) => (
+          members.map((m) => (
             <MemberCard
               key={m.registrationId}
               member={m}
               showScore={showScore}
               onUnassign={() => onUnassign(m.registrationId)}
+              selected={
+                selectableReserve && selectedReserveId === m.registrationId
+              }
+              onSelect={
+                selectableReserve && onSelectReserve
+                  ? () => onSelectReserve(m.registrationId)
+                  : undefined
+              }
             />
           ))
         )}
@@ -451,17 +778,22 @@ function TeamCard({
 /**
  * 応募者カード（draggable）。カード全体がドラッグ対象（ハンドルなし）。
  * ✕（解除）ボタンは pointer-down 伝播を止めて誤ドラッグを防ぐ。
+ * onSelect 指定時（リザーブ）はクリックで交代シミュレーションを開く。
  */
 function MemberCard({
   member,
   showScore,
   onUnassign,
   overlay = false,
+  selected = false,
+  onSelect,
 }: {
   member: BoardMember;
   showScore: boolean;
   onUnassign?: () => void;
   overlay?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   // overlay（DragOverlay 内の表示）は draggable にしない。
   const draggable = useDraggable({ id: member.registrationId });
@@ -477,9 +809,12 @@ function MemberCard({
       ref={overlay ? undefined : setNodeRef}
       {...(overlay ? {} : listeners)}
       {...(overlay ? {} : attributes)}
-      className={`cursor-grab rounded-lg border border-border bg-muted/40 px-3 py-2 ${
-        isDragging ? "opacity-40" : ""
-      } ${overlay ? "shadow-lg" : ""}`}
+      onClick={onSelect}
+      className={`cursor-grab rounded-lg border px-3 py-2 ${
+        selected
+          ? "border-primary bg-primary/15"
+          : "border-border bg-muted/40"
+      } ${isDragging ? "opacity-40" : ""} ${overlay ? "shadow-lg" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">{member.discordName}</span>
@@ -493,7 +828,10 @@ function MemberCard({
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={onUnassign}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnassign();
+              }}
               className="text-xs text-muted-foreground hover:text-destructive"
               aria-label="チームから外す"
             >
@@ -502,17 +840,11 @@ function MemberCard({
           )}
         </div>
       </div>
-      <div className="mt-0.5 text-xs text-muted-foreground">
-        {roles.length > 0 && (
-          <span>希望 {roles.map((r) => ROLE_LABEL[r] ?? r).join("→")}</span>
-        )}
-        {showScore && (
-          <span>
-            {roles.length > 0 ? " ／ " : ""}
-            {scoreToRankLabel(score)}
-          </span>
-        )}
-      </div>
+      {roles.length > 0 && (
+        <div className="mt-0.5 text-xs text-muted-foreground">
+          希望 {roles.map((r) => ROLE_LABEL[r] ?? r).join("→")}
+        </div>
+      )}
     </div>
   );
 }

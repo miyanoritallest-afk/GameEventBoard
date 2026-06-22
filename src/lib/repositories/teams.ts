@@ -137,6 +137,84 @@ export async function moveTeamMember(params: {
   return data;
 }
 
+type MemberPosition = Database["public"]["Enums"]["member_position"];
+
+/**
+ * メンバーの position（regular/reserve）を更新する。出場⇄リザーブのゾーン移動。
+ * 対象 registration の所属行を更新。無ければ null（未割当だった）。
+ */
+export async function setMemberPosition(params: {
+  registrationId: string;
+  position: MemberPosition;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("team_members")
+    .update({ position: params.position })
+    .eq("registration_id", params.registrationId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * メンバーの position / role を任意に更新する（同一チーム内のゾーン・ロール行移動）。
+ * 指定された項目だけ更新。対象 registration の所属行を更新。無ければ null。
+ */
+export async function updateMember(params: {
+  registrationId: string;
+  position?: MemberPosition;
+  role?: Role;
+}) {
+  const supabase = await createClient();
+  const patch: { position?: MemberPosition; role?: Role } = {};
+  if (params.position !== undefined) patch.position = params.position;
+  if (params.role !== undefined) patch.role = params.role;
+
+  const { data, error } = await supabase
+    .from("team_members")
+    .update(patch)
+    .eq("registration_id", params.registrationId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 交代シミュレーションの「交代する」実行。
+ * レギュラー（out）を reserve に、リザーブ（in）を regular に入れ替える。
+ * 2件の UPDATE を順に行い、両方成功で ok。片方でも対象行が無ければ failed を返す
+ * （呼び出し側でロールバック判断。RLS 0010 が最終防衛）。
+ */
+export async function swapMemberPositions(params: {
+  outRegistrationId: string; // 現レギュラー → reserve へ
+  inRegistrationId: string; // 現リザーブ → regular へ
+}): Promise<{ ok: true } | { ok: false }> {
+  const out = await setMemberPosition({
+    registrationId: params.outRegistrationId,
+    position: "reserve",
+  });
+  if (!out) return { ok: false };
+
+  const inn = await setMemberPosition({
+    registrationId: params.inRegistrationId,
+    position: "regular",
+  });
+  if (!inn) {
+    // in 側が失敗したら out をロールバック（regular に戻す）。
+    await setMemberPosition({
+      registrationId: params.outRegistrationId,
+      position: "regular",
+    });
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
 /** メンバーを解除する（チームから外して未割当プールへ戻す）。registration 単位。 */
 export async function deleteTeamMember(registrationId: string) {
   const supabase = await createClient();
@@ -161,6 +239,26 @@ export async function findRegistrationEventOwner(registrationId: string) {
     .from("registrations")
     .select("id, status, event_id, events(id, organizer_id)")
     .eq("id", registrationId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 所有権・整合性確認用に、team_member とその所属チーム・イベント主催者を取得する。
+ * position 系アクション（ゾーン移動・交代）で「自分のイベントか」「同一チームか」を
+ * アプリ層で確認するために team_id / event_id / organizer_id をまとめて返す。
+ * registration 単位（UNIQUE(registration_id)）。無ければ null。
+ */
+export async function findMemberWithEventOwner(registrationId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("team_members")
+    .select(
+      "id, position, team_id, teams(id, event_id, events(id, organizer_id))",
+    )
+    .eq("registration_id", registrationId)
     .maybeSingle();
 
   if (error) throw error;
