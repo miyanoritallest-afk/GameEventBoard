@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
+import { findRegistration } from "@/lib/repositories/registrations";
 import {
   listTeamsWithMembers,
   listUnassignedApproved,
@@ -34,8 +35,15 @@ export default async function EventTeamsPage({
     redirect(`/login?redirect=${encodeURIComponent(`/events/${id}/teams`)}`);
   }
 
+  // 閲覧は「主催者 or そのイベントの応募者」に開放（self 応募の前提＝PR-3a）。
+  // 主催者は編集可、応募者は試算のみ（read-only）。それ以外・存在しないは 404。
   const event = await findEventById(id);
-  if (!event || event.organizer_id !== user.id) {
+  if (!event) notFound();
+  const isOrganizer = event.organizer_id === user.id;
+  const myRegistration = isOrganizer
+    ? null
+    : await findRegistration(event.id, user.id);
+  if (!isOrganizer && !myRegistration) {
     notFound();
   }
 
@@ -106,6 +114,7 @@ export default async function EventTeamsPage({
 
         <TeamsBoard
           eventId={event.id}
+          readOnly={!isOrganizer}
           showScore={event.require_score}
           roleSwapAllowed={event.role_swap_allowed}
           teamSize={

@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
-import { listRegistrationsByEvent } from "@/lib/repositories/registrations";
+import {
+  findRegistration,
+  listRegistrationsByEvent,
+} from "@/lib/repositories/registrations";
 import {
   RegistrationRow,
   type RegistrationRowData,
@@ -39,9 +42,15 @@ export default async function EventRegistrationsPage({
     );
   }
 
-  // 管理は uuid 前提。主催者本人以外・存在しないは 404（存在を隠す）。
+  // 閲覧は「主催者 or そのイベントの応募者」に開放（self 応募の前提＝PR-3a）。
+  // それ以外・存在しないは 404（存在を隠す）。操作系は主催者のみ（canManage）。
   const event = await findEventById(id);
-  if (!event || event.organizer_id !== user.id) {
+  if (!event) notFound();
+  const isOrganizer = event.organizer_id === user.id;
+  const myRegistration = isOrganizer
+    ? null
+    : await findRegistration(event.id, user.id);
+  if (!isOrganizer && !myRegistration) {
     notFound();
   }
 
@@ -60,6 +69,11 @@ export default async function EventRegistrationsPage({
           </Link>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
+        {!isOrganizer && (
+          <p className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            参加者として閲覧しています。チーム編成の参考にできます（承認・スコア操作は主催者のみ）。
+          </p>
+        )}
 
         {registrations.length === 0 ? (
           <p className="mt-6 text-sm text-muted-foreground">
@@ -98,6 +112,7 @@ export default async function EventRegistrationsPage({
                   key={reg.id}
                   reg={row}
                   showScore={event.require_score}
+                  canManage={isOrganizer}
                 />
               );
             })}
