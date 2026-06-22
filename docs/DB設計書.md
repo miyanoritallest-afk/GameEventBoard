@@ -556,6 +556,8 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
   - 実装状況: SELECT は「公開済み（status≠draft）は全員 / 下書きは organizer 本人のみ」を 0005 で設定。INSERT/UPDATE/DELETE は organizer 本人を 0004 で設定（series 運営による更新は未実装・後続）。
 - registrations: 本人＋該当イベントの運営が参照/更新。
   - 実装状況: 0006 で設定。SELECT=応募者本人 or イベント主催者（events への EXISTS サブクエリ）、INSERT=本人のみ（user_id=auth.uid()）、UPDATE=イベント主催者のみ（承認/却下）。DELETE は未定義（取り下げは後続）。本コードベース初の EXISTS サブクエリ RLS。
+- teams / team_members: イベント主催者が参照/編集（チーム編成）。
+  - 実装状況: 0010 で設定（チーム編成 PR-1）。teams は SELECT/INSERT/UPDATE/DELETE すべて「対象イベントの主催者のみ」（events への EXISTS）。team_members は teams を経由して events.organizer_id を確認する2段の EXISTS。PR-1 は organizer 振り分けのみで、SELECT も主催者限定（参加チーム一覧の一般公開は本戦機能で緩和）。self 応募（応募者がチームを作る）のポリシーは PR-3 で追加。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
 - is_admin は全権限のエスケープハッチ。

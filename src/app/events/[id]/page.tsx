@@ -168,6 +168,14 @@ export default async function EventDetailPage({
                 応募者を見る
               </Link>
             )}
+            {event.status !== "draft" && (
+              <Link
+                href={`/events/${event.id}/teams`}
+                className="text-sm text-primary hover:underline"
+              >
+                チーム編成
+              </Link>
+            )}
             <Link
               href="/events/mine"
               className="text-sm text-muted-foreground hover:underline"
