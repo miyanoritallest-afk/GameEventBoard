@@ -501,6 +501,8 @@ function teamScore(team):
 
 ### 4.3 交代シミュレーション（編成画面の中核機能・3.1.2）
 「リザーブBを出すなら、レギュラーの誰と交代すれば team_score_cap 以内か」を全パターン提示。
+**リザーブはロール無概念（確定）**なので、候補は同ロール限定ではなく**全レギュラー総当たり**で出す（3.1.2）。
+実装は `lib/services/team-score.ts` の `swapCandidates`（regular 全員と総当たり）。
 ```
 function swapCandidates(team, reserve, event):
     候補 = []

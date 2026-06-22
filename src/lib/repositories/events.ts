@@ -46,7 +46,7 @@ export async function findEventById(id: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("events")
-    .select("*, games(name)")
+    .select("*, games(name, team_size)")
     .eq("id", id)
     .maybeSingle();
 

@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Supabase CLI の一時ファイル
 supabase/.temp/
+
+# 開発・確認専用のダミー投入SQL（auth.users へ直接 INSERT するため本番に流さない）
+supabase/dev_seed_*.sql
