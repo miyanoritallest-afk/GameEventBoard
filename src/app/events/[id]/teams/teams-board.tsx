@@ -99,6 +99,7 @@ function toMemberScore(m: BoardMember): MemberScore {
 
 export function TeamsBoard({
   eventId,
+  readOnly = false,
   showScore,
   roleSwapAllowed,
   teamSize,
@@ -107,6 +108,8 @@ export function TeamsBoard({
   initialUnassigned,
 }: {
   eventId: string;
+  /** 試算モード（応募者の閲覧）。D&D で組み替えできるが保存しない・操作ボタンを隠す。 */
+  readOnly?: boolean;
   showScore: boolean;
   roleSwapAllowed: boolean;
   teamSize: number;
@@ -114,7 +117,14 @@ export function TeamsBoard({
   initialTeams: BoardTeam[];
   initialUnassigned: BoardMember[];
 }) {
-  const [teams, setTeams] = useState<BoardTeam[]>(initialTeams);
+  // 試算モード（応募者の閲覧）では、実チームの有無に関わらず「シミュレーション」枠を
+  // 常に先頭に1枚用意する（自分の試算用。DB 保存しない。id はローカル専用プレフィックス）。
+  // 実チームがあれば、その後ろに参考として表示する（試算で組み替えても保存されない）。
+  const [teams, setTeams] = useState<BoardTeam[]>(() =>
+    readOnly
+      ? [{ id: "sim-1", name: "シミュレーション", members: [] }, ...initialTeams]
+      : initialTeams,
+  );
   const [unassigned, setUnassigned] = useState<BoardMember[]>(initialUnassigned);
   const [activeMember, setActiveMember] = useState<BoardMember | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
@@ -220,6 +230,7 @@ export function TeamsBoard({
     if (toTeamId === null) {
       setTeams(detachedTeams);
       setUnassigned([...detachedPool, { ...member, position: "regular" }]);
+      if (readOnly) return; // 試算モードは保存しない。
       startTransition(async () => {
         const r = await unassignMember(registrationId);
         if (r.error) rollback(prevTeams, prevUnassigned, r.error);
@@ -244,6 +255,7 @@ export function TeamsBoard({
             : t,
         ),
       );
+      if (readOnly) return; // 試算モードは保存しない。
       startTransition(async () => {
         const r = await updateMember({
           registrationId,
@@ -271,6 +283,7 @@ export function TeamsBoard({
           : t,
       ),
     );
+    if (readOnly) return; // 試算モードは保存しない。
     startTransition(async () => {
       // assign は position=regular で割当（role 指定）。リザーブゾーンなら続けて
       // position を reserve へ更新する。
@@ -380,6 +393,7 @@ export function TeamsBoard({
 
   return (
     <DndContext
+      id="teams-board-dnd"
       sensors={sensors}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -397,34 +411,47 @@ export function TeamsBoard({
         </div>
       )}
 
+      {/* 試算モードのバナー（応募者の閲覧）。保存されないことを明示する。 */}
+      {readOnly && (
+        <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          試算モードで閲覧しています。自由に組み替えてチーム平均を試算できますが、
+          <span className="font-medium">変更は保存されません</span>
+          （チームの確定・申請は今後のアップデートで対応予定）。
+        </p>
+      )}
+
       <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
         {/* 左: 未割当プール */}
         <Pool members={unassigned} showScore={showScore} />
 
         {/* 右: チーム群 */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={newTeamName}
-              maxLength={50}
-              onChange={(e) => setNewTeamName(e.target.value)}
-              placeholder="チーム名"
-              className="w-48 rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-            <button
-              type="button"
-              onClick={handleCreateTeam}
-              disabled={isPending || newTeamName.trim() === ""}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-            >
-              + チームを追加
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newTeamName}
+                maxLength={50}
+                onChange={(e) => setNewTeamName(e.target.value)}
+                placeholder="チーム名"
+                className="w-48 rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={handleCreateTeam}
+                disabled={isPending || newTeamName.trim() === ""}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                + チームを追加
+              </button>
+            </div>
+          )}
 
           {teams.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              チームがまだありません。「+ チームを追加」で作成してください。
+              {readOnly
+                ? "まだチームがありません。"
+                : "チームがまだありません。「+ チームを追加」で作成してください。"}
             </p>
           ) : (
             <div className="grid gap-4 2xl:grid-cols-2">
@@ -432,6 +459,7 @@ export function TeamsBoard({
                 <TeamCard
                   key={team.id}
                   team={team}
+                  readOnly={readOnly}
                   showScore={showScore}
                   roleSwapAllowed={roleSwapAllowed}
                   teamSize={teamSize}
@@ -500,6 +528,7 @@ function Pool({
  */
 function TeamCard({
   team,
+  readOnly = false,
   showScore,
   roleSwapAllowed,
   teamSize,
@@ -509,6 +538,7 @@ function TeamCard({
   onSwap,
 }: {
   team: BoardTeam;
+  readOnly?: boolean;
   showScore: boolean;
   roleSwapAllowed: boolean;
   teamSize: number;
@@ -571,14 +601,16 @@ function TeamCard({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={onDelete}
-          className="text-xs text-muted-foreground hover:text-destructive"
-        >
-          チーム削除
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={onDelete}
+            className="text-xs text-muted-foreground hover:text-destructive"
+          >
+            チーム削除
+          </button>
+        )}
       </div>
 
       {/* 出場ゾーン（レギュラー）。平均はここのメンバーで算出。 */}
@@ -596,6 +628,7 @@ function TeamCard({
             teamId={team.id}
             position="regular"
             members={regulars}
+            readOnly={readOnly}
             showScore={showScore}
             onUnassign={onUnassign}
           />
@@ -613,6 +646,7 @@ function TeamCard({
                   <span className="text-primary/80">{ROLE_LABEL[role]}</span>
                 }
                 members={regulars.filter((m) => m.role === role)}
+                readOnly={readOnly}
                 showScore={showScore}
                 onUnassign={onUnassign}
                 compact
@@ -628,6 +662,7 @@ function TeamCard({
         position="reserve"
         title={<span className="text-muted-foreground">リザーブ（控え）</span>}
         members={reserves}
+        readOnly={readOnly}
         showScore={showScore}
         onUnassign={onUnassign}
         selectableReserve={showScore}
@@ -678,17 +713,23 @@ function TeamCard({
                           : "⚠ 超過"}
                       </span>
                     </span>
-                    <button
-                      type="button"
-                      disabled={teamScoreCap !== null && !c.withinCap}
-                      onClick={() => {
-                        onSwap(team.id, c.outId, selectedReserve.registrationId);
-                        setSelectedReserveId(null);
-                      }}
-                      className="rounded border border-primary/50 px-2 py-0.5 text-xs text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      交代する
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        disabled={teamScoreCap !== null && !c.withinCap}
+                        onClick={() => {
+                          onSwap(
+                            team.id,
+                            c.outId,
+                            selectedReserve.registrationId,
+                          );
+                          setSelectedReserveId(null);
+                        }}
+                        className="rounded border border-primary/50 px-2 py-0.5 text-xs text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        交代する
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -715,6 +756,7 @@ function Zone({
   role,
   title,
   members,
+  readOnly = false,
   showScore,
   onUnassign,
   compact = false,
@@ -727,6 +769,7 @@ function Zone({
   role?: RoleKey;
   title?: React.ReactNode;
   members: BoardMember[];
+  readOnly?: boolean;
   showScore: boolean;
   onUnassign: (registrationId: string) => void;
   compact?: boolean;
@@ -758,7 +801,9 @@ function Zone({
               key={m.registrationId}
               member={m}
               showScore={showScore}
-              onUnassign={() => onUnassign(m.registrationId)}
+              onUnassign={
+                readOnly ? undefined : () => onUnassign(m.registrationId)
+              }
               selected={
                 selectableReserve && selectedReserveId === m.registrationId
               }

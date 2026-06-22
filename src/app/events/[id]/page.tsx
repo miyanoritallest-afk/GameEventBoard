@@ -122,11 +122,29 @@ export default async function EventDetailPage({
             未応募は、スコアあり(require_score)なら専用フォームへ誘導、なしなら即時応募。 */}
         {canApply &&
           (myRegistration ? (
-            <p className="mt-6 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
-              ✓ 応募済み（
-              {REG_STATUS_LABEL[myRegistration.status] ?? myRegistration.status}
-              ）
-            </p>
+            <div className="mt-6 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
+              <p>
+                ✓ 応募済み（
+                {REG_STATUS_LABEL[myRegistration.status] ??
+                  myRegistration.status}
+                ）
+              </p>
+              {/* 応募者は他の応募者を見て編成を試算できる（self 応募の前提）。 */}
+              <div className="mt-2 flex items-center gap-4">
+                <Link
+                  href={`/events/${event.id}/registrations`}
+                  className="text-xs underline hover:no-underline"
+                >
+                  応募者一覧を見る
+                </Link>
+                <Link
+                  href={`/events/${event.id}/teams`}
+                  className="text-xs underline hover:no-underline"
+                >
+                  チーム編成を試算する
+                </Link>
+              </div>
+            </div>
           ) : event.require_score ? (
             <div className="mt-6 rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold">このイベントに応募する</h2>

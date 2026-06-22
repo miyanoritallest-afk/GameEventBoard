@@ -58,9 +58,12 @@ function fmtScore(n: number | null): string {
 export function RegistrationRow({
   reg,
   showScore,
+  canManage,
 }: {
   reg: RegistrationRowData;
   showScore: boolean;
+  /** 操作系（承認/却下・スコア上書き）を出すか。主催者のみ true。 */
+  canManage: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -135,7 +138,7 @@ export function RegistrationRow({
               詳細
             </button>
           )}
-          {reg.status === "pending" && (
+          {canManage && reg.status === "pending" && (
             <div className="flex gap-2">
               <button
                 type="button"
@@ -220,32 +223,36 @@ export function RegistrationRow({
               </p>
             </div>
 
-            {/* スコア上書き */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium">
-                スコア上書き（空で解除＝算出値に戻す）
-              </label>
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.5"
-                  value={overrideInput}
-                  onChange={(e) => setOverrideInput(e.target.value)}
-                  placeholder={fmtScore(reg.finalScore)}
-                  className="w-32 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={saveOverride}
-                  disabled={isPending}
-                  className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                >
-                  保存
-                </button>
+            {/* スコア上書き（主催者のみ） */}
+            {canManage && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium">
+                  スコア上書き（空で解除＝算出値に戻す）
+                </label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.5"
+                    value={overrideInput}
+                    onChange={(e) => setOverrideInput(e.target.value)}
+                    placeholder={fmtScore(reg.finalScore)}
+                    className="w-32 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveOverride}
+                    disabled={isPending}
+                    className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                  >
+                    保存
+                  </button>
+                </div>
+                {error && (
+                  <p className="mt-1 text-xs text-destructive">{error}</p>
+                )}
               </div>
-              {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
-            </div>
+            )}
 
             <div className="mt-4 text-right">
               <button
