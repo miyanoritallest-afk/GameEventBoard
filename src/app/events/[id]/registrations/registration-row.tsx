@@ -43,6 +43,7 @@ export type RegistrationRowData = {
   discordName: string;
   battleTag: string | null;
   preferredRole: string | null;
+  preferredRoles: (string | null)[]; // [第1, 第2, 第3]
   individualScore: number | null;
   finalScore: number | null;
   overrideScore: number | null;
@@ -96,9 +97,19 @@ export function RegistrationRow({
           <p className="font-medium">{reg.discordName}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {reg.battleTag ? `${reg.battleTag} ／ ` : ""}
-            {reg.preferredRole
-              ? `${ROLE_LABEL[reg.preferredRole] ?? reg.preferredRole}希望 ／ `
-              : ""}
+            {(() => {
+              // 希望ロール: 第1〜第3を「タンク→DPS→サポート」のように表示。
+              const roles = reg.preferredRoles.filter(
+                (r): r is string => !!r,
+              );
+              if (roles.length > 0) {
+                return `希望 ${roles.map((r) => ROLE_LABEL[r] ?? r).join("→")} ／ `;
+              }
+              // 後方互換: 旧データは preferred_role 単体。
+              return reg.preferredRole
+                ? `${ROLE_LABEL[reg.preferredRole] ?? reg.preferredRole}希望 ／ `
+                : "";
+            })()}
             応募 {reg.createdAtLabel}
           </p>
         </div>

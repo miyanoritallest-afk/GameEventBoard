@@ -3,6 +3,10 @@
 import { useActionState, useState } from "react";
 import { registerWithScore, type ScoredRegisterState } from "../../actions";
 import { buildOverwatchRankDefinitions } from "@/lib/services/overwatch-ranks";
+import {
+  deriveThirdRole,
+  type Role,
+} from "@/lib/services/scored-application";
 
 const ROLE_LABEL: Record<string, string> = {
   tank: "タンク",
@@ -95,11 +99,15 @@ export function ApplyForm({
   >(action, {});
   const fe = state.fieldErrors ?? {};
 
-  // 希望ロール。role_swap=false ではこのロールのグリッドのみ表示する。
-  const [preferredRole, setPreferredRole] = useState("tank");
-  const gridRoles = roleSwapAllowed
-    ? ["tank", "dps", "support"]
-    : [preferredRole];
+  // 希望ロール（第1・第2）。第3は自動決定。
+  const [role1, setRole1] = useState<Role>("tank");
+  const [role2, setRole2] = useState<Role>("dps");
+  const role3 = deriveThirdRole(role1, role2);
+  const role2Conflict = role1 === role2;
+
+  // role_swap=false では第1希望ロールのグリッドのみ表示する。
+  const gridRoles = roleSwapAllowed ? ["tank", "dps", "support"] : [role1];
+  const ROLE_OPTIONS: Role[] = ["tank", "dps", "support"];
 
   return (
     <form action={formAction} className="mt-6 space-y-6">
@@ -109,25 +117,72 @@ export function ApplyForm({
         </p>
       )}
 
-      {/* 希望ロール */}
-      <div>
-        <label className="mb-1 block text-sm font-medium">
+      {/* 希望ロール（第1・第2を選択、第3は自動） */}
+      <fieldset className="rounded-xl border border-border bg-card p-4">
+        <legend className="px-1 text-sm font-semibold">
           希望ロール<span className="ml-1 text-destructive">*</span>
-        </label>
-        <select
-          name="preferredRole"
-          value={preferredRole}
-          onChange={(e) => setPreferredRole(e.target.value)}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        >
-          <option value="tank">タンク</option>
-          <option value="dps">DPS</option>
-          <option value="support">サポート</option>
-        </select>
-        {fe.preferredRole && (
-          <p className="mt-1 text-xs text-destructive">{fe.preferredRole}</p>
+        </legend>
+        <p className="mt-1 mb-3 text-xs text-muted-foreground">
+          第1・第2希望を選ぶと、第3希望は残り1つに自動で決まります。
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              第1希望
+            </label>
+            <select
+              name="preferredRole1"
+              value={role1}
+              onChange={(e) => setRole1(e.target.value as Role)}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABEL[r]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              第2希望
+            </label>
+            <select
+              name="preferredRole2"
+              value={role2}
+              onChange={(e) => setRole2(e.target.value as Role)}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABEL[r]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              第3希望（自動）
+            </label>
+            <input
+              type="text"
+              readOnly
+              value={role3 ? ROLE_LABEL[role3] : "—"}
+              className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
+            />
+          </div>
+        </div>
+        {/* 第3希望は hidden で送信（自動決定値）。 */}
+        <input type="hidden" name="preferredRole3" value={role3 ?? ""} />
+        {role2Conflict && (
+          <p className="mt-2 text-xs text-destructive">
+            第1希望と第2希望は別のロールを選んでください。
+          </p>
         )}
-      </div>
+        {fe.preferredRole1 && (
+          <p className="mt-1 text-xs text-destructive">{fe.preferredRole1}</p>
+        )}
+      </fieldset>
 
       {/* ランクグリッド */}
       <fieldset className="rounded-xl border border-border bg-card p-4">
@@ -167,7 +222,7 @@ export function ApplyForm({
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || role2Conflict}
         className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {pending ? "応募中..." : "この内容で応募する"}

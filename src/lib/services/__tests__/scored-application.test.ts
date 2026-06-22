@@ -4,6 +4,7 @@ import {
   buildGrid,
   rolesForEvent,
   parsePeak,
+  deriveThirdRole,
 } from "../scored-application";
 
 describe("parseCell", () => {
@@ -50,5 +51,21 @@ describe("parsePeak", () => {
   it("不正・未指定は none", () => {
     expect(parsePeak("invalid")).toBe("none");
     expect(parsePeak(null)).toBe("none");
+  });
+});
+
+describe("deriveThirdRole（第1・第2から第3を自動決定）", () => {
+  it("第1=tank・第2=dps → 第3=support", () => {
+    expect(deriveThirdRole("tank", "dps")).toBe("support");
+  });
+  it("第1=support・第2=tank → 第3=dps", () => {
+    expect(deriveThirdRole("support", "tank")).toBe("dps");
+  });
+  it("第1と第2が同じ → null（不正）", () => {
+    expect(deriveThirdRole("tank", "tank")).toBeNull();
+  });
+  it("いずれか未選択 → null", () => {
+    expect(deriveThirdRole(null, "dps")).toBeNull();
+    expect(deriveThirdRole("tank", null)).toBeNull();
   });
 });

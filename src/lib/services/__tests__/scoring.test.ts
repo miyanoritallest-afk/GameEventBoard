@@ -151,6 +151,35 @@ describe("全グリッド未認定 → null", () => {
   });
 });
 
+describe("スコアの丸め（小数第2位を四捨五入して第1位まで）", () => {
+  it("割り切れない平均は第1位に丸める（70/3=23.33→23.3）", () => {
+    // role_swap=true / 1シーズン / tank30 dps30 sup10 → 70/3 = 23.333…
+    const r = calcScore(
+      input({
+        roleSwapAllowed: true,
+        handling: "exclude",
+        grid: [
+          role("tank", [30]),
+          role("dps", [30]),
+          role("sup", [10]),
+        ],
+      }),
+    );
+    expect(r.individualScore).toBe(23.3);
+  });
+
+  it("第2位が5以上は切り上げ（80/3=26.67→26.7）", () => {
+    const r = calcScore(
+      input({
+        roleSwapAllowed: true,
+        handling: "exclude",
+        grid: [role("tank", [30]), role("dps", [30]), role("sup", [20])],
+      }),
+    );
+    expect(r.individualScore).toBe(26.7);
+  });
+});
+
 describe("ボーナス（peak 到達）", () => {
   it("有効な peak の加点を final_score に足す", () => {
     const r = calcScore(

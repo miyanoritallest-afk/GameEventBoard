@@ -740,6 +740,9 @@ export type Database = {
           individual_score: number | null
           organizer_override_score: number | null
           preferred_role: Database["public"]["Enums"]["role"] | null
+          preferred_role_1: Database["public"]["Enums"]["role"] | null
+          preferred_role_2: Database["public"]["Enums"]["role"] | null
+          preferred_role_3: Database["public"]["Enums"]["role"] | null
           score_breakdown: Json | null
           status: Database["public"]["Enums"]["reg_status"]
           updated_at: string
@@ -755,6 +758,9 @@ export type Database = {
           individual_score?: number | null
           organizer_override_score?: number | null
           preferred_role?: Database["public"]["Enums"]["role"] | null
+          preferred_role_1?: Database["public"]["Enums"]["role"] | null
+          preferred_role_2?: Database["public"]["Enums"]["role"] | null
+          preferred_role_3?: Database["public"]["Enums"]["role"] | null
           score_breakdown?: Json | null
           status?: Database["public"]["Enums"]["reg_status"]
           updated_at?: string
@@ -770,6 +776,9 @@ export type Database = {
           individual_score?: number | null
           organizer_override_score?: number | null
           preferred_role?: Database["public"]["Enums"]["role"] | null
+          preferred_role_1?: Database["public"]["Enums"]["role"] | null
+          preferred_role_2?: Database["public"]["Enums"]["role"] | null
+          preferred_role_3?: Database["public"]["Enums"]["role"] | null
           score_breakdown?: Json | null
           status?: Database["public"]["Enums"]["reg_status"]
           updated_at?: string

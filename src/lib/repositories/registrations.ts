@@ -24,6 +24,9 @@ export async function insertRegistration(params: {
   eventId: string;
   userId: string;
   preferredRole?: Role | null;
+  preferredRole1?: Role | null;
+  preferredRole2?: Role | null;
+  preferredRole3?: Role | null;
   individualScore?: number | null;
   finalScore?: number | null;
   scoreBreakdown?: Json;
@@ -36,6 +39,9 @@ export async function insertRegistration(params: {
       user_id: params.userId,
       status: "pending",
       preferred_role: params.preferredRole ?? null,
+      preferred_role_1: params.preferredRole1 ?? null,
+      preferred_role_2: params.preferredRole2 ?? null,
+      preferred_role_3: params.preferredRole3 ?? null,
       individual_score: params.individualScore ?? null,
       final_score: params.finalScore ?? null,
       score_breakdown: params.scoreBreakdown ?? null,
@@ -73,7 +79,7 @@ export async function listRegistrationsByEvent(eventId: string) {
   const { data, error } = await supabase
     .from("registrations")
     .select(
-      "id, status, created_at, preferred_role, individual_score, final_score, organizer_override_score, score_breakdown, users(discord_name, discord_avatar_url, battle_tag)",
+      "id, status, created_at, preferred_role, preferred_role_1, preferred_role_2, preferred_role_3, individual_score, final_score, organizer_override_score, score_breakdown, users(discord_name, discord_avatar_url, battle_tag)",
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });

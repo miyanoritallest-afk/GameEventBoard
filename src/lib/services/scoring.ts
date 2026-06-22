@@ -53,6 +53,11 @@ function average(values: number[]): number | null {
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
+/** 小数第2位を四捨五入して第1位までにする（保存・表示の一貫性のため）。 */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
 /** peak に応じたボーナス加点を引く。 */
 function bonusFor(
   peak: PeakTier,
@@ -141,13 +146,17 @@ export function calcScore(input: ScoringInput): ScoringResult {
 
   const bonusApplied = bonusFor(input.peak, input.bonus);
 
+  // スコアは小数第2位を四捨五入して第1位まで（保存値・表示・振り分けを一貫させる）。
+  const individualScore = base === null ? null : round1(base);
+  const finalScore = base === null ? null : round1(base + bonusApplied);
+
   return {
-    individualScore: base,
-    finalScore: base === null ? null : base + bonusApplied,
+    individualScore,
+    finalScore,
     breakdown: {
       method: input.roleSwapAllowed ? "grid" : "single_role",
       handling: input.roleSwapAllowed ? input.handling : undefined,
-      base,
+      base: individualScore,
       bonusApplied,
       peak: input.peak,
     },

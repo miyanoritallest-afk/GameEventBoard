@@ -263,7 +263,8 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | wants_matching | boolean | | mixed時: 運営あっせん希望か(true)/自分でチーム(false) |
 | status | reg_status | NOT NULL DEFAULT 'pending' | 承認状態（pending=参加表明のみ） |
 | **— スコアのスナップショット —** | | | (3.1.1) |
-| individual_score | numeric | | ①個人スコア（シーズン×ロールから算出した基礎値） |
+| preferred_role_1/2/3 | role | | 希望ロール第1〜第3（第3はフォームで自動決定）。0008で追加。チーム編成の参照用 |
+| individual_score | numeric | | ①個人スコア（シーズン×ロールから算出した基礎値。小数第1位に丸めて保存） |
 | final_score | numeric | | ②個人ファイナルスコア = individual_score + 到達ボーナス。**チームスコア計算に使う値** |
 | score_breakdown | jsonb | | 算出根拠（参照した9個・ボーナス内訳） |
 | organizer_override_score | numeric | | 運営による上書きスコア（任意。あれば final_score に優先） |
