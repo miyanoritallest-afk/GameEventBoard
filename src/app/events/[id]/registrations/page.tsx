@@ -80,6 +80,11 @@ export default async function EventRegistrationsPage({
                 discordName: u?.discord_name ?? "-",
                 battleTag: u?.battle_tag ?? null,
                 preferredRole: reg.preferred_role,
+                preferredRoles: [
+                  reg.preferred_role_1,
+                  reg.preferred_role_2,
+                  reg.preferred_role_3,
+                ],
                 individualScore: reg.individual_score,
                 finalScore: reg.final_score,
                 overrideScore: reg.organizer_override_score,

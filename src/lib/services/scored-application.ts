@@ -50,3 +50,16 @@ export function parsePeak(raw: string | null | undefined): PeakTier {
   if (raw === "master" || raw === "gm" || raw === "champion") return raw;
   return "none";
 }
+
+/**
+ * 第1・第2希望から第3希望（残り1ロール）を自動決定する純粋関数。
+ * OW は3ロール固定なので、第1・第2が異なれば第3は一意に定まる。
+ * first === second（不正）や該当なしのときは null。
+ */
+export function deriveThirdRole(
+  first: Role | null,
+  second: Role | null,
+): Role | null {
+  if (!first || !second || first === second) return null;
+  return ALL_ROLES.find((r) => r !== first && r !== second) ?? null;
+}

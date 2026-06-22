@@ -8,8 +8,8 @@ type GameOption = { id: string; name: string };
 /** 未認定補完方式の選択肢（表示ラベル付き）。 */
 const UNCERTIFIED_OPTIONS = [
   { value: "exclude", label: "計算に含めない（除外）" },
-  { value: "fill_by_season", label: "同ロールの他シーズン平均で補完（縦軸）" },
-  { value: "fill_by_role", label: "同シーズンの他ロール平均で補完（横軸）" },
+  { value: "fill_by_season", label: "同ロールの他シーズン平均で補完" },
+  { value: "fill_by_role", label: "同シーズンの他ロール平均で補完" },
 ] as const;
 
 /** 作成・編集で共有するフォーム状態（Server Action の戻り値）。 */

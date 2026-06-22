@@ -68,11 +68,24 @@ function scoredEvent(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** role_swap=false / declared_seasons=2 の dps グリッドを持つ FormData。 */
 function form(fields: Record<string, string>) {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
   return fd;
+}
+
+/** 希望ロール第1〜第3（第1=指定、残り2つを自動で埋める）。 */
+function withRoles(
+  first: "tank" | "dps" | "support",
+  extra: Record<string, string> = {},
+) {
+  const order = ["tank", "dps", "support"].filter((r) => r !== first);
+  return form({
+    preferredRole1: first,
+    preferredRole2: order[0],
+    preferredRole3: order[1],
+    ...extra,
+  });
 }
 
 function loginAs(id: string) {
@@ -96,7 +109,7 @@ describe("registerWithScore — 認可・前提", () => {
   it("主催者は応募不可", async () => {
     loginAs(ORGANIZER);
     mocks.findEventById.mockResolvedValue(scoredEvent());
-    const r = await registerWithScore(EVENT_ID, {}, form({ preferredRole: "dps" }));
+    const r = await registerWithScore(EVENT_ID, {}, withRoles("dps"));
     expect(r.error).toContain("主催者は");
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
@@ -104,7 +117,7 @@ describe("registerWithScore — 認可・前提", () => {
   it("require_score=false のイベントは弾く（即時応募ルート）", async () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(scoredEvent({ require_score: false }));
-    const r = await registerWithScore(EVENT_ID, {}, form({ preferredRole: "dps" }));
+    const r = await registerWithScore(EVENT_ID, {}, withRoles("dps"));
     expect(r.error).toContain("スコア入力なし");
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
@@ -113,7 +126,7 @@ describe("registerWithScore — 認可・前提", () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(scoredEvent());
     mocks.findRegistration.mockResolvedValue({ id: "reg-x", status: "pending" });
-    const r = await registerWithScore(EVENT_ID, {}, form({ preferredRole: "dps" }));
+    const r = await registerWithScore(EVENT_ID, {}, withRoles("dps"));
     expect(r.error).toContain("応募済み");
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
@@ -122,7 +135,7 @@ describe("registerWithScore — 認可・前提", () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(scoredEvent());
     const r = await registerWithScore(EVENT_ID, {}, form({}));
-    expect(r.fieldErrors?.preferredRole).toBeDefined();
+    expect(r.fieldErrors?.preferredRole1).toBeDefined();
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
 });
@@ -132,8 +145,7 @@ describe("registerWithScore — 算出とスナップショット", () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(scoredEvent());
     // dps シーズン2列: 30, 20 → 平均25
-    const fd = form({
-      preferredRole: "dps",
+    const fd = withRoles("dps", {
       rank_dps_0: "30",
       rank_dps_1: "20",
       // 攻撃者が user_id を捻じ込んでも無視される
@@ -144,7 +156,7 @@ describe("registerWithScore — 算出とスナップショット", () => {
     );
     const passed = mocks.insertRegistration.mock.calls[0][0];
     expect(passed.userId).toBe(APPLICANT);
-    expect(passed.preferredRole).toBe("dps");
+    expect(passed.preferredRole1).toBe("dps");
     expect(passed.individualScore).toBe(25);
     expect(passed.finalScore).toBe(25);
   });
@@ -155,8 +167,7 @@ describe("registerWithScore — 算出とスナップショット", () => {
       scoredEvent({ role_swap_allowed: true, declared_seasons: 1 }),
     );
     // tank30 / dps20 / sup10 → 平均20
-    const fd = form({
-      preferredRole: "tank",
+    const fd = withRoles("tank", {
       rank_tank_0: "30",
       rank_dps_0: "20",
       rank_support_0: "10",
@@ -173,8 +184,7 @@ describe("registerWithScore — 算出とスナップショット", () => {
     mocks.findEventById.mockResolvedValue(
       scoredEvent({ bonus_master: 5, declared_seasons: 1 }),
     );
-    const fd = form({
-      preferredRole: "dps",
+    const fd = withRoles("dps", {
       rank_dps_0: "20",
       peak: "master",
     });
@@ -189,8 +199,7 @@ describe("registerWithScore — 算出とスナップショット", () => {
   it("全未認定なら score=null で保存（応募は通る）", async () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(scoredEvent());
-    const fd = form({
-      preferredRole: "dps",
+    const fd = withRoles("dps", {
       rank_dps_0: "uncertified",
       rank_dps_1: "uncertified",
     });

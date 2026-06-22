@@ -463,9 +463,11 @@ export async function registerWithScore(
     return { error: "このイベントにはすでに応募済みです。" };
   }
 
-  // 7. 離散項目の検証（希望ロール・peak）。
+  // 7. 離散項目の検証（希望ロール第1〜第3・peak）。
   const parsed = scoredApplicationSchema.safeParse({
-    preferredRole: formData.get("preferredRole"),
+    preferredRole1: formData.get("preferredRole1"),
+    preferredRole2: formData.get("preferredRole2"),
+    preferredRole3: formData.get("preferredRole3"),
     peak: formData.get("peak") ?? "none",
   });
   if (!parsed.success) {
@@ -476,11 +478,12 @@ export async function registerWithScore(
     }
     return { error: "入力内容を確認してください。", fieldErrors };
   }
-  const { preferredRole, peak } = parsed.data;
+  const { preferredRole1, preferredRole2, preferredRole3, peak } = parsed.data;
 
   // 8. ランクグリッドを parse（対象ロール × declared_seasons）。
   // フォームのセル名は rank_<role>_<seasonIndex>。値は score 文字列 or "uncertified"。
-  const roles = rolesForEvent(event.role_swap_allowed, preferredRole as Role);
+  // role_swap=false のグリッド対象は第1希望ロール。
+  const roles = rolesForEvent(event.role_swap_allowed, preferredRole1 as Role);
   const cellsByRole: Record<string, (string | null)[]> = {};
   for (const role of roles) {
     const cells: (string | null)[] = [];
@@ -505,10 +508,14 @@ export async function registerWithScore(
   });
 
   // 10. スナップショット保存（user_id / status はサーバー固定）。
+  // preferred_role（旧・第1希望ミラー）も埋め、一覧の後方互換を保つ。
   const inserted = await insertRegistration({
     eventId,
     userId: user.id,
-    preferredRole: preferredRole as Role,
+    preferredRole: preferredRole1 as Role,
+    preferredRole1: preferredRole1 as Role,
+    preferredRole2: preferredRole2 as Role,
+    preferredRole3: preferredRole3 as Role,
     individualScore: result.individualScore,
     finalScore: result.finalScore,
     scoreBreakdown: { ...result.breakdown, grid: cellsByRole },
