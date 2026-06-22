@@ -7,6 +7,34 @@
 
 ---
 
+## 2026-06-22 — チーム編成 PR-1（organizer 振り分け＋D&D）
+
+応募フロー完成を受け、本命のチーム編成に着手。PR-1 は「運営が応募者をチームへ D&D で割り当てる」基盤。設計ドキュメント（要件 3.1.2 / DB設計 4.2-4.3）は確定済みで、テーブル・enum も 0001 で定義済みだったため、実装は UI とロジックが中心。
+
+### やったこと
+- **編成画面 `/events/[id]/teams`**（主催者専用。registrations ページと同型の認証ガード = 未ログインは /login、本人以外は 404）。
+- **D&D ボード**（`@dnd-kit` 導入）。左=未割当プール（approved の応募）／右=チーム群。**カード全体ドラッグ**（ハンドルなし。activation distance=6px で「その場クリック（✕・削除ボタン）」と両立）。楽観更新＋失敗時ロールバック。
+- **判断材料をカード表示**: 希望ロール（第1→2→3）・ランク帯（`scoreToRankLabel`）・実効スコア（override 優先）。
+- **チーム平均のリアルタイム表示**＋上限（team_score_cap）超過の色分け。
+- **require_score=false 出し分け**: スコア/ランク/平均を丸ごと非表示（registrations の showScore と同型）。
+- **Service**: `lib/services/team-score.ts` に `teamScore`/`effectiveScore`/`isOverCap`/`swapCandidates` を純粋関数で実装（prototype/data.ts のロジックを昇格・確定仕様に整合）。ユニットテスト +17。
+- **Repository** `lib/repositories/teams.ts`、**Server Action** `actions.ts`（createTeam/renameTeam/deleteTeam/assignMember/unassignMember）、**Zod** `schema.ts`。
+- **RLS `0010_teams_policies.sql`**（teams/team_members とも「対象イベント主催者のみ CRUD」。0006 と同じ EXISTS。team_members は teams 経由の2段）。**未適用 → Supabase SQL Editor で手動適用が必要**。
+- イベント詳細に「チーム編成」導線を追加。lint/typecheck/test（173 緑）/build すべて通過。
+
+### 決めたこと（なぜ）
+- **PR を3つに刻む**（スコアリングと同思想）。PR-1: organizer 振り分け＋D&D ／ PR-2: レギュラー/リザーブ＋cap判定＋交代シミュレーション ／ PR-3: self 応募の承認フロー。リザーブ枠は cap 判定と不可分なため PR-2 へ（PR-1 で2枠だけ作っても価値が出ない）。
+- **希望ロール逸れの警告は出さない**（あくまで希望、という運営判断）。
+- **チーム平均は保存せず常に算出**（DB設計 4.2。保存すると交代のたびに手更新が要る）。PR-1 は全所属者の平均を仮表示し、PR-2 で regular 限定へ厳密化。
+- **割当は insert→失敗時 move**（UNIQUE(registration_id) で1応募1チーム。別チームへのドラッグは team_id 更新）。
+
+### 次にやること
+- [ ] `0010_teams_policies.sql` を Supabase SQL Editor で適用
+- [ ] 実機で D&D 動作・チーム平均・require_score 出し分けを確認
+- [ ] PR-2: レギュラー/リザーブ 2枠 D&D ＋ team_score_cap 判定 ＋ 交代シミュレーション
+  - 保留メモ: prototype の `swapCandidates` は同ロール限定だが確定擬似コードは全レギュラー総当たり。PR-2 着手時にどちらが実運用に正しいか確認しドキュメント側を更新。
+- [ ] PR-3: self 応募の承認フロー（teams.status・代表・capacity 排他制御）
+
 ## 2026-06-22 — 実機確認の修正（応募者名の表示・モーダル文言）
 
 別アカウントでの応募フロー実機確認で見つかった2点を修正。
