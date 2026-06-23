@@ -22,5 +22,22 @@ export const addMatchSchema = z
     path: ["teamBId"],
   });
 
+/**
+ * 試合結果の入力（本戦 PR-3a）。スコアは取マップ数（非負整数・上限あり）。
+ * winner_team_id / reported_by は入力から取らずサーバーで固定（マスアサインメント対策）。
+ */
+const mapScore = z
+  .number()
+  .int("マップ数は整数で入力してください")
+  .min(0, "マップ数は0以上で入力してください")
+  .max(20, "マップ数が大きすぎます");
+
+export const reportResultSchema = z.object({
+  matchId: z.string().uuid("不正な試合IDです"),
+  teamAScore: mapScore,
+  teamBScore: mapScore,
+});
+
 export type GenerateMatchesInput = z.infer<typeof generateMatchesSchema>;
 export type AddMatchInput = z.infer<typeof addMatchSchema>;
+export type ReportResultInput = z.infer<typeof reportResultSchema>;

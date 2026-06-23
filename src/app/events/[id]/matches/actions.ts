@@ -10,17 +10,29 @@ import {
 import {
   listGroupMatches,
   findMatchById,
-  deleteGroupMatches,
   insertGroupMatches,
   insertGroupMatch,
   deleteMatch as deleteMatchRepo,
+  listGroupMatchesWithResult,
+  deleteMatchesByIds,
+  findMatchForReport,
 } from "@/lib/repositories/matches";
+import {
+  upsertMatchResult,
+  deleteMatchResult,
+} from "@/lib/repositories/match-results";
 import {
   roundRobinPairs,
   pairExists,
+  pairKey,
   type MatchPair,
 } from "@/lib/services/round-robin";
-import { generateMatchesSchema, addMatchSchema } from "./schema";
+import { decideWinner } from "@/lib/services/match-result";
+import {
+  generateMatchesSchema,
+  addMatchSchema,
+  reportResultSchema,
+} from "./schema";
 
 /**
  * 予選対戦カード（本戦 PR-2）の Server Action（Controller。薄く保つ）。
@@ -61,8 +73,11 @@ async function requireGroupOrganizer(groupId: string, userId: string) {
 }
 
 /**
- * 総当たり生成。指定ブロックの既存予選試合を全削除し、所属チームの全ペアを作り直す。
- * 結果保護は本戦-3 で追加（本 PR では全削除→作り直し＝壁打ち確定）。
+ * 総当たり生成（再生成・結果保護つき＝本戦-3a で更新）。
+ * 指定ブロックについて:
+ * - 結果が入っている試合は残す（誤って結果を消さない）。
+ * - 結果のない既存試合は削除し、所属チームの全ペアのうち「まだ存在しないペア」だけ追加する。
+ * これで再生成しても、入力済みの結果は保護される。
  */
 export async function generateMatches(input: {
   groupId: string;
@@ -79,14 +94,31 @@ export async function generateMatches(input: {
   if (!group) return { error: "このブロックを操作する権限がありません。" };
 
   const teamIds = await listGroupTeamIds(group.id);
-  const pairs = roundRobinPairs(teamIds);
+  const allPairs = roundRobinPairs(teamIds);
 
-  // 既存を全削除してから作り直す（同ブロックのみ）。
-  await deleteGroupMatches({ eventId: group.event_id, groupId: group.id });
+  // 既存試合（結果有無付き）を取得し、結果なしだけ削除。結果ありのペアは温存。
+  const existing = await listGroupMatchesWithResult({
+    eventId: group.event_id,
+    groupId: group.id,
+  });
+  const toDelete = existing.filter((m) => !m.hasResult).map((m) => m.id);
+  await deleteMatchesByIds(toDelete);
+
+  // 残った（=結果ありの）ペアのキー集合。これらは作り直さない。
+  const keptPairKeys = new Set(
+    existing
+      .filter((m) => m.hasResult && m.teamAId && m.teamBId)
+      .map((m) => pairKey(m.teamAId as string, m.teamBId as string)),
+  );
+
+  // 全ペアのうち、温存ペアに含まれないものだけ新規作成する。
+  const pairsToCreate = allPairs.filter(
+    (p) => !keptPairKeys.has(pairKey(p.teamAId, p.teamBId)),
+  );
   await insertGroupMatches({
     eventId: group.event_id,
     groupId: group.id,
-    pairs,
+    pairs: pairsToCreate,
   });
 
   revalidatePath(`/events/${group.event_id}/matches`);
@@ -169,5 +201,95 @@ export async function deleteMatch(matchId: string): Promise<MatchActionState> {
   }
 
   revalidatePath(`/events/${match.event_id}/matches`);
+  return {};
+}
+
+/* ========================================================================== *
+ * 試合結果（本戦 PR-3a）。スコア（取マップ数）入力 → 勝者を算出して保存・修正・取り消し。
+ * 入力できるのは「主催者（全試合）」または「対戦両チームの代表（自チームが絡む試合）」。
+ * winner_team_id / reported_by はサーバーが固定する（マスアサインメント対策）。
+ * ========================================================================== */
+
+/** 主催者 or 対戦両チーム代表かをアプリ層で確認する。OK なら試合情報を返す。 */
+async function requireReporter(matchId: string, userId: string) {
+  const match = await findMatchForReport(matchId);
+  if (!match) return null;
+  const allowed =
+    match.organizerId === userId || match.captainUserIds.includes(userId);
+  if (!allowed) return null;
+  return match;
+}
+
+/**
+ * 試合結果の保存（新規/修正）。
+ *
+ * 防御:
+ * 1. ログイン確認。
+ * 2. 入力検証（スコア＝非負整数・上限）。
+ * 3. 入力主体の確認（主催者 or 対戦両チーム代表）＋ RLS（0015）が最終防衛。
+ * 4. 両チームが確定していること（team_a/team_b が null の試合は勝者判定不能＝不可）。
+ * 5. winner はスコアからサーバーが算出して固定。reported_by も auth.uid() で固定。
+ */
+export async function reportResult(input: {
+  matchId: string;
+  teamAScore: number;
+  teamBScore: number;
+}): Promise<MatchActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const parsed = reportResultSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
+  }
+  const { matchId, teamAScore, teamBScore } = parsed.data;
+
+  const match = await requireReporter(matchId, userId);
+  if (!match) return { error: "この試合の結果を入力する権限がありません。" };
+
+  if (!match.teamAId || !match.teamBId) {
+    return {
+      error:
+        "対戦カードが未確定（チームが外れています）です。先に対戦表を再生成してください。",
+    };
+  }
+
+  // winner はスコアからサーバーが算出（マスアサインメント対策）。
+  const { winnerTeamId } = decideWinner({
+    teamAId: match.teamAId,
+    teamBId: match.teamBId,
+    teamAScore,
+    teamBScore,
+  });
+
+  const result = await upsertMatchResult({
+    matchId,
+    teamAScore,
+    teamBScore,
+    winnerTeamId,
+    reportedBy: userId,
+  });
+  if (!result.ok) {
+    return { error: "結果の保存に失敗しました。画面を更新してからお試しください。" };
+  }
+
+  revalidatePath(`/events/${match.eventId}/matches`);
+  return {};
+}
+
+/** 試合結果の取り消し（未入力に戻す）。主催者 or 対戦両チーム代表。 */
+export async function clearResult(matchId: string): Promise<MatchActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const match = await requireReporter(matchId, userId);
+  if (!match) return { error: "この試合の結果を操作する権限がありません。" };
+
+  const deleted = await deleteMatchResult(matchId);
+  if (!deleted) {
+    return { error: "取り消しに失敗しました。画面を更新してからお試しください。" };
+  }
+
+  revalidatePath(`/events/${match.eventId}/matches`);
   return {};
 }

@@ -566,6 +566,8 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
   - 実装状況: 0013 で設定（本戦フェーズ PR-1）。groups は SELECT=「主催者 or 同イベント参加者」、INSERT/UPDATE/DELETE=主催者のみ（events への EXISTS）。group_teams は groups を経由して events.organizer_id を確認する2段の EXISTS（SELECT は参加者にも開放、書き込みは主催者のみ）。閲覧開放の判定は 0011 の `is_event_participant` を再利用。振り分け対象は approved チームのみ（アプリ層で確認）。
 - matches: イベント主催者が編集（対戦カード）、参加者は閲覧。
   - 実装状況: 0014 で設定（本戦フェーズ PR-2）。SELECT=「主催者 or 同イベント参加者」、INSERT/UPDATE/DELETE=主催者のみ（events への EXISTS）。閲覧開放の判定は 0011 の `is_event_participant` を再利用。phase に依らずイベント単位で許可（tournament も同じ所有権判定）。本戦-2 は phase='group' の総当たり生成・追加・削除のみ扱う。重複カードはアプリ層で防止（DB制約なし）。
+- match_results: 参照は参加者まで公開、入力は主催者＋対戦両チーム代表。
+  - 実装状況: 0015 で設定（本戦フェーズ PR-3a）。SELECT=「主催者 or 同イベント参加者」（matches 経由で event 判定）。INSERT/UPDATE/DELETE=「主催者 or 対戦両チームの代表（captain）」。代表判定は match_results→matches→teams→registrations の多段になるため security definer 関数 `can_report_match(match_id, uid)` に切り出し（再帰評価回避）。winner_team_id / reported_by はアプリ層がスコアと auth.uid() から固定（マスアサインメント対策）。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
 - is_admin は全権限のエスケープハッチ。
