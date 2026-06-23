@@ -87,6 +87,42 @@ export const createDraftEventSchema = z
       (v) => (v == null || v === "" ? 0 : v),
       z.coerce.number().min(0).max(10),
     ),
+
+    // 順位設定（本戦-3b）。ranking_enabled が親トグル。OFF なら配下は使わない。
+    rankingEnabled: z.coerce.boolean().default(false),
+    // 勝点（0〜99 の整数。大小制約は課さない＝主催者の自由）。
+    pointsWin: z.preprocess(
+      (v) => (v == null || v === "" ? 3 : v),
+      z.coerce.number().int().min(0).max(99),
+    ),
+    pointsDraw: z.preprocess(
+      (v) => (v == null || v === "" ? 1 : v),
+      z.coerce.number().int().min(0).max(99),
+    ),
+    pointsLoss: z.preprocess(
+      (v) => (v == null || v === "" ? 0 : v),
+      z.coerce.number().int().min(0).max(99),
+    ),
+    // タイブレーク優先順位。フォームからはカンマ区切り文字列（D&D の順序）で来るので
+    // 配列に正規化し、許可値のみ・重複なしを検証する（先頭ほど優先）。
+    tiebreakers: z.preprocess(
+      (v) => {
+        if (Array.isArray(v)) return v;
+        if (typeof v === "string") {
+          return v
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+        }
+        return [];
+      },
+      z
+        .array(z.enum(["head_to_head", "map_diff", "potg"]))
+        .max(3, "タイブレーク基準が多すぎます")
+        .refine((arr) => new Set(arr).size === arr.length, {
+          message: "タイブレーク基準が重複しています",
+        }),
+    ),
   })
   // 下書きでも、開始・終了が両方あるときだけ期間の整合性を確認する。
   .refine(

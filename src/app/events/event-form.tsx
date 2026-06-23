@@ -1,6 +1,15 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { DateTimePicker } from "@/components/datetime-picker";
 
 type GameOption = { id: string; name: string };
@@ -34,7 +43,24 @@ export type EventFormDefaults = {
   bonusMaster?: number;
   bonusGm?: number;
   bonusChampion?: number;
+  rankingEnabled?: boolean;
+  pointsWin?: number;
+  pointsDraw?: number;
+  pointsLoss?: number;
+  /** タイブレーク優先順位（使う基準を優先順に。先頭ほど優先）。 */
+  tiebreakers?: TiebreakerKey[];
 };
+
+/** タイブレーク基準（優先順位を D&D で並べ替え）。 */
+export type TiebreakerKey = "head_to_head" | "map_diff" | "potg";
+
+const TIEBREAKER_LABEL: Record<TiebreakerKey, string> = {
+  head_to_head: "直接対決",
+  map_diff: "得失マップ差",
+  potg: "POTG取得数",
+};
+
+const ALL_TIEBREAKERS: TiebreakerKey[] = ["head_to_head", "map_diff", "potg"];
 
 type EventFormAction = (
   prev: EventFormState,
@@ -75,6 +101,8 @@ export function EventForm({
       (d.bonusGm ?? 0) > 0 ||
       (d.bonusChampion ?? 0) > 0,
   );
+  // 親トグル: 順位機能を使うか（OFF なら勝点・タイブレークを隠す）。
+  const [rankingEnabled, setRankingEnabled] = useState(d.rankingEnabled ?? false);
 
   return (
     <form action={formAction} className="mt-6 space-y-6">
@@ -256,6 +284,72 @@ export function EventForm({
         )}
       </fieldset>
 
+      {/* 順位設定（本戦-3b） */}
+      <fieldset className="rounded-xl border border-border bg-card p-4">
+        <legend className="px-1 text-sm font-semibold">順位設定</legend>
+
+        {/* 親トグル: 順位機能を使うか。OFF なら配下を隠す（順位を争わないイベント）。 */}
+        <label className="mt-2 flex items-center gap-2 text-sm">
+          <input
+            name="rankingEnabled"
+            type="checkbox"
+            checked={rankingEnabled}
+            onChange={(e) => setRankingEnabled(e.target.checked)}
+            className="size-4"
+          />
+          順位を集計する（勝点・タイブレークで順位を決める）
+        </label>
+
+        {rankingEnabled && (
+          <div className="mt-4 space-y-4 border-l-2 border-border pl-4">
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="勝ち点" error={fe.pointsWin}>
+                <input
+                  name="pointsWin"
+                  type="number"
+                  min={0}
+                  max={99}
+                  defaultValue={d.pointsWin ?? 3}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field label="引分点" error={fe.pointsDraw}>
+                <input
+                  name="pointsDraw"
+                  type="number"
+                  min={0}
+                  max={99}
+                  defaultValue={d.pointsDraw ?? 1}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field label="負け点" error={fe.pointsLoss}>
+                <input
+                  name="pointsLoss"
+                  type="number"
+                  min={0}
+                  max={99}
+                  defaultValue={d.pointsLoss ?? 0}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </Field>
+            </div>
+
+            <div>
+              <p className="mb-1 text-sm font-medium">同着のタイブレーク</p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                勝点が同じチームの順位を決める基準。「使う」側の上から順に優先されます。
+              </p>
+              <TiebreakerPicker
+                name="tiebreakers"
+                defaultValue={d.tiebreakers ?? []}
+                error={fe.tiebreakers}
+              />
+            </div>
+          </div>
+        )}
+      </fieldset>
+
       <button
         type="submit"
         disabled={pending}
@@ -264,6 +358,152 @@ export function EventForm({
         {pending ? pendingLabel : submitLabel}
       </button>
     </form>
+  );
+}
+
+/**
+ * タイブレーク優先順位の入力（「使う / 使わない」2エリアの D&D）。
+ * 使うエリア内の上から順が優先順位。送信は hidden input にカンマ区切り（DB の tiebreakers[] と対応）。
+ */
+function TiebreakerPicker({
+  name,
+  defaultValue,
+  error,
+}: {
+  name: string;
+  defaultValue: TiebreakerKey[];
+  error?: string;
+}) {
+  // 使う（順序保持）と使わない（残り）に分ける。
+  const [used, setUsed] = useState<TiebreakerKey[]>(defaultValue);
+  const unused = ALL_TIEBREAKERS.filter((k) => !used.includes(k));
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over) return;
+    const key = active.id as TiebreakerKey;
+    const dest = String(over.id); // "used:<key>" / "used-zone" / "unused-zone"
+
+    if (dest === "unused-zone") {
+      setUsed((cur) => cur.filter((k) => k !== key));
+      return;
+    }
+    // used ゾーン、または used 内の特定アイテムへドロップ＝使うに入れて並べ替え。
+    setUsed((cur) => {
+      const without = cur.filter((k) => k !== key);
+      if (dest === "used-zone") return [...without, key];
+      // "used:<targetKey>" の前に挿入。
+      const targetKey = dest.startsWith("used:")
+        ? (dest.slice("used:".length) as TiebreakerKey)
+        : null;
+      if (!targetKey || targetKey === key) return [...without, key];
+      const idx = without.indexOf(targetKey);
+      if (idx < 0) return [...without, key];
+      return [...without.slice(0, idx), key, ...without.slice(idx)];
+    });
+  }
+
+  return (
+    <DndContext
+      id="tiebreaker-dnd"
+      sensors={sensors}
+      onDragEnd={handleDragEnd}
+    >
+      <input type="hidden" name={name} value={used.join(",")} />
+      <div className="grid grid-cols-2 gap-3">
+        <TiebreakerZone
+          zoneId="used-zone"
+          title="使う（上ほど優先）"
+          items={used}
+          ordered
+        />
+        <TiebreakerZone
+          zoneId="unused-zone"
+          title="使わない"
+          items={unused}
+        />
+      </div>
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+    </DndContext>
+  );
+}
+
+/** タイブレークの1ゾーン（使う / 使わない）。droppable。 */
+function TiebreakerZone({
+  zoneId,
+  title,
+  items,
+  ordered = false,
+}: {
+  zoneId: string;
+  title: string;
+  items: TiebreakerKey[];
+  ordered?: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: zoneId });
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{title}</p>
+      <div
+        ref={setNodeRef}
+        className={`min-h-[5rem] space-y-2 rounded-md border p-2 ${
+          isOver ? "border-primary bg-primary/5" : "border-dashed border-border"
+        }`}
+      >
+        {items.length === 0 ? (
+          <p className="px-1 py-3 text-center text-xs text-muted-foreground">
+            ここにドラッグ
+          </p>
+        ) : (
+          items.map((key, i) => (
+            <TiebreakerCard
+              key={key}
+              itemKey={key}
+              label={`${ordered ? `${i + 1}. ` : ""}${TIEBREAKER_LABEL[key]}`}
+              dropId={ordered ? `used:${key}` : undefined}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** タイブレーク基準カード（draggable）。使う側は並べ替え用に droppable も兼ねる。 */
+function TiebreakerCard({
+  itemKey,
+  label,
+  dropId,
+}: {
+  itemKey: TiebreakerKey;
+  label: string;
+  dropId?: string;
+}) {
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } =
+    useDraggable({ id: itemKey });
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: dropId ?? `nodrop:${itemKey}`,
+    disabled: !dropId,
+  });
+
+  return (
+    <div
+      ref={(el) => {
+        setDragRef(el);
+        if (dropId) setDropRef(el);
+      }}
+      {...listeners}
+      {...attributes}
+      className={`cursor-grab rounded-md border border-border bg-muted/40 px-3 py-2 text-sm ${
+        isDragging ? "opacity-40" : ""
+      }`}
+    >
+      {label}
+    </div>
   );
 }
 
