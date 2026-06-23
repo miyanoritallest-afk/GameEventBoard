@@ -170,6 +170,17 @@ export async function listGroupsWithTeams(eventId: string) {
   return data;
 }
 
+/** 指定ブロックに割り当て済みのチーム id 一覧を返す（総当たり生成の入力）。 */
+export async function listGroupTeamIds(groupId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("group_teams")
+    .select("team_id")
+    .eq("group_id", groupId);
+  if (error) throw error;
+  return (data ?? []).map((r) => r.team_id);
+}
+
 /**
  * 未割当プール用。approved なチームのうち、まだどのブロックにも属さないものを返す。
  * group_teams（このイベントのブロック）に存在しない team を抽出する。

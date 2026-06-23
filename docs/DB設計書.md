@@ -564,6 +564,8 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
   - 0012（self応募 PR-3b）で teams / team_members に **self 応募者向けの INSERT/DELETE** を追加（主催者の 0010 と並存）。許可条件は「`team_formation='self'` のイベントの approved 応募者が、自分を代表（captain）とする `status='pending'` チームを作り、approved な同イベント応募をメンバーに追加する」こと。判定は security definer 関数 `can_self_captain` / `is_approved_registration` / `is_own_pending_self_team` に切り出し（再帰評価回避）。承認後（approved）の改変・current_count の改竄は不可（events 列は self の書き込みで触らない）。承認時の current_count 排他は主催者の `events` UPDATE（0004）で行う。
 - groups / group_teams: イベント主催者が編集（予選ブロック分け）、参加者は閲覧。
   - 実装状況: 0013 で設定（本戦フェーズ PR-1）。groups は SELECT=「主催者 or 同イベント参加者」、INSERT/UPDATE/DELETE=主催者のみ（events への EXISTS）。group_teams は groups を経由して events.organizer_id を確認する2段の EXISTS（SELECT は参加者にも開放、書き込みは主催者のみ）。閲覧開放の判定は 0011 の `is_event_participant` を再利用。振り分け対象は approved チームのみ（アプリ層で確認）。
+- matches: イベント主催者が編集（対戦カード）、参加者は閲覧。
+  - 実装状況: 0014 で設定（本戦フェーズ PR-2）。SELECT=「主催者 or 同イベント参加者」、INSERT/UPDATE/DELETE=主催者のみ（events への EXISTS）。閲覧開放の判定は 0011 の `is_event_participant` を再利用。phase に依らずイベント単位で許可（tournament も同じ所有権判定）。本戦-2 は phase='group' の総当たり生成・追加・削除のみ扱う。重複カードはアプリ層で防止（DB制約なし）。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
 - is_admin は全権限のエスケープハッチ。
