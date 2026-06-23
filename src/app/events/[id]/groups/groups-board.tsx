@@ -1,0 +1,453 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  createGroup,
+  renameGroup,
+  deleteGroup,
+  assignTeam,
+  unassignTeam,
+} from "./actions";
+
+/** ボード用のチーム表現（page.tsx で DB から整形して渡す）。 */
+export type BoardTeam = {
+  id: string;
+  name: string;
+  /** 出場メンバーのチーム平均（require_score=false や未算出は null）。 */
+  score: number | null;
+};
+
+export type BoardGroup = {
+  id: string;
+  name: string;
+  teams: BoardTeam[];
+};
+
+const POOL_ID = "pool"; // 未割当プールの droppable id
+
+/** droppable id を groupId に解決する。pool は null。 */
+function parseZone(id: string): string | null {
+  return id === POOL_ID ? null : id;
+}
+
+export function GroupsBoard({
+  eventId,
+  readOnly = false,
+  showScore,
+  initialGroups,
+  initialUnassigned,
+}: {
+  eventId: string;
+  /** 応募者の閲覧（read-only）。D&D・操作ボタンを無効化する。 */
+  readOnly?: boolean;
+  showScore: boolean;
+  initialGroups: BoardGroup[];
+  initialUnassigned: BoardTeam[];
+}) {
+  const [groups, setGroups] = useState<BoardGroup[]>(initialGroups);
+  const [unassigned, setUnassigned] = useState<BoardTeam[]>(initialUnassigned);
+  const [activeTeam, setActiveTeam] = useState<BoardTeam | null>(null);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [savedTick, setSavedTick] = useState(0);
+  const [isPending, startTransition] = useTransition();
+
+  function flashSaved() {
+    setSaved(true);
+    setSavedTick((n) => n + 1);
+  }
+
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 2000);
+    return () => clearTimeout(t);
+  }, [saved, savedTick]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  /** teamId からチームを全所在から探す。 */
+  function findTeam(teamId: string): BoardTeam | null {
+    const inPool = unassigned.find((t) => t.id === teamId);
+    if (inPool) return inPool;
+    for (const g of groups) {
+      const t = g.teams.find((x) => x.id === teamId);
+      if (t) return t;
+    }
+    return null;
+  }
+
+  /** teamId が今どのブロックに属すか（プールなら null）。 */
+  function findOwningGroupId(teamId: string): string | null {
+    return groups.find((g) => g.teams.some((t) => t.id === teamId))?.id ?? null;
+  }
+
+  /** 楽観更新の共通ロールバック。 */
+  function rollback(
+    prevGroups: BoardGroup[],
+    prevUnassigned: BoardTeam[],
+    msg: string,
+  ) {
+    setGroups(prevGroups);
+    setUnassigned(prevUnassigned);
+    setError(msg);
+  }
+
+  function handleDragStart(e: DragStartEvent) {
+    setActiveTeam(findTeam(String(e.active.id)));
+  }
+
+  /**
+   * ドラッグ完了。ドロップ先（プール / ブロック）に応じて楽観更新し Server Action を呼ぶ。
+   * 移動モデル: 別ブロックへ移すと元から消える（1チーム1ブロック）。失敗時はロールバック。
+   */
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveTeam(null);
+    if (readOnly) return;
+    const { active, over } = e;
+    if (!over) return;
+
+    const teamId = String(active.id);
+    const team = findTeam(teamId);
+    if (!team) return;
+
+    const fromGroupId = findOwningGroupId(teamId);
+    const toGroupId = parseZone(String(over.id)); // null=プール
+
+    // 変化なし（同じブロック、またはプール→プール）なら何もしない。
+    if (fromGroupId === toGroupId) return;
+
+    const prevGroups = groups;
+    const prevUnassigned = unassigned;
+    setError(null);
+
+    // 全所在から外す（楽観）。
+    const detachedGroups = groups.map((g) => ({
+      ...g,
+      teams: g.teams.filter((t) => t.id !== teamId),
+    }));
+    const detachedPool = unassigned.filter((t) => t.id !== teamId);
+
+    // --- プールへ戻す ---
+    if (toGroupId === null) {
+      setGroups(detachedGroups);
+      setUnassigned([...detachedPool, team]);
+      startTransition(async () => {
+        const r = await unassignTeam(teamId);
+        if (r.error) rollback(prevGroups, prevUnassigned, r.error);
+        else flashSaved();
+      });
+      return;
+    }
+
+    // --- ブロックへ割当（プール/別ブロック → ブロック）---
+    setUnassigned(detachedPool);
+    setGroups(
+      detachedGroups.map((g) =>
+        g.id === toGroupId ? { ...g, teams: [...g.teams, team] } : g,
+      ),
+    );
+    startTransition(async () => {
+      const r = await assignTeam({ groupId: toGroupId, teamId });
+      if (r.error) rollback(prevGroups, prevUnassigned, r.error);
+      else flashSaved();
+    });
+  }
+
+  function handleCreateGroup() {
+    const name = newGroupName.trim();
+    if (!name) return;
+    setError(null);
+    startTransition(async () => {
+      const r = await createGroup(eventId, name);
+      if (r.error || !r.groupId) {
+        setError(r.error ?? "ブロックの作成に失敗しました。");
+        return;
+      }
+      setGroups((prev) => [...prev, { id: r.groupId as string, name, teams: [] }]);
+      setNewGroupName("");
+      flashSaved();
+    });
+  }
+
+  function handleRenameGroup(groupId: string, current: string) {
+    const next = window.prompt("ブロック名を入力してください", current);
+    if (next === null) return;
+    const name = next.trim();
+    if (!name || name === current) return;
+    setError(null);
+    const prevGroups = groups;
+    setGroups(groups.map((g) => (g.id === groupId ? { ...g, name } : g)));
+    startTransition(async () => {
+      const r = await renameGroup(groupId, name);
+      if (r.error) {
+        setGroups(prevGroups);
+        setError(r.error);
+      } else flashSaved();
+    });
+  }
+
+  function handleDeleteGroup(groupId: string) {
+    const target = groups.find((g) => g.id === groupId);
+    if (!target) return;
+    setError(null);
+    const prevGroups = groups;
+    const prevUnassigned = unassigned;
+    // 中のチームはプールへ戻す（cascade と同じ結果を楽観反映）。
+    setGroups(groups.filter((g) => g.id !== groupId));
+    setUnassigned([...unassigned, ...target.teams]);
+    startTransition(async () => {
+      const r = await deleteGroup(groupId);
+      if (r.error) rollback(prevGroups, prevUnassigned, r.error);
+      else flashSaved();
+    });
+  }
+
+  return (
+    <DndContext
+      id="groups-board-dnd"
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      {error && (
+        <p className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      {saved && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-md border border-primary/50 bg-primary/10 px-4 py-2 text-sm text-primary shadow-lg">
+          ✓ 保存しました
+        </div>
+      )}
+
+      {readOnly && (
+        <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          参加者として閲覧しています。ブロックの編集は主催者のみ可能です。
+        </p>
+      )}
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
+        {/* 左: 未割当プール（承認済みチーム） */}
+        <Pool teams={unassigned} showScore={showScore} readOnly={readOnly} />
+
+        {/* 右: ブロック群 */}
+        <div className="space-y-4">
+          {!readOnly && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newGroupName}
+                maxLength={50}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="ブロック名（例: Aブロック）"
+                className="w-56 rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={handleCreateGroup}
+                disabled={isPending || newGroupName.trim() === ""}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                + ブロックを追加
+              </button>
+            </div>
+          )}
+
+          {groups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {readOnly
+                ? "まだブロックがありません。"
+                : "ブロックがまだありません。「+ ブロックを追加」で作成してください。"}
+            </p>
+          ) : (
+            <div className="grid gap-4 2xl:grid-cols-2">
+              {groups.map((group) => (
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  readOnly={readOnly}
+                  showScore={showScore}
+                  onRename={() => handleRenameGroup(group.id, group.name)}
+                  onDelete={() => handleDeleteGroup(group.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <DragOverlay>
+        {activeTeam ? (
+          <TeamCard team={activeTeam} showScore={showScore} overlay />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+/** 未割当プール（droppable）。承認済みで未割当のチーム。 */
+function Pool({
+  teams,
+  showScore,
+  readOnly,
+}: {
+  teams: BoardTeam[];
+  showScore: boolean;
+  readOnly: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: POOL_ID });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border p-4 ${
+        isOver && !readOnly ? "border-primary bg-primary/5" : "border-border bg-card"
+      }`}
+    >
+      <h2 className="text-sm font-semibold text-muted-foreground">
+        未割当のチーム ({teams.length})
+      </h2>
+      <div className="mt-3 space-y-2">
+        {teams.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            未割当の承認済みチームはありません。
+          </p>
+        ) : (
+          teams.map((t) => (
+            <TeamCard
+              key={t.id}
+              team={t}
+              showScore={showScore}
+              draggable={!readOnly}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 1ブロック（droppable）。所属チームを並べる。 */
+function GroupCard({
+  group,
+  readOnly,
+  showScore,
+  onRename,
+  onDelete,
+}: {
+  group: BoardGroup;
+  readOnly: boolean;
+  showScore: boolean;
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: group.id });
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-semibold">
+          {group.name}{" "}
+          <span className="text-xs font-normal text-muted-foreground">
+            ({group.teams.length})
+          </span>
+        </h3>
+        {!readOnly && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onRename}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              改名
+            </button>
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onDelete}
+              className="text-xs text-muted-foreground hover:text-destructive"
+            >
+              ブロック削除
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={setNodeRef}
+        className={`mt-3 space-y-2 rounded-md border p-2 ${
+          isOver && !readOnly
+            ? "border-primary bg-primary/5"
+            : "border-dashed border-border"
+        }`}
+      >
+        {group.teams.length === 0 ? (
+          <p className="px-1 py-3 text-center text-xs text-muted-foreground">
+            ＋ チームをここにドラッグ
+          </p>
+        ) : (
+          group.teams.map((t) => (
+            <TeamCard
+              key={t.id}
+              team={t}
+              showScore={showScore}
+              draggable={!readOnly}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** チームカード（draggable）。カード全体がドラッグ対象。 */
+function TeamCard({
+  team,
+  showScore,
+  overlay = false,
+  draggable = true,
+}: {
+  team: BoardTeam;
+  showScore: boolean;
+  overlay?: boolean;
+  draggable?: boolean;
+}) {
+  const drag = useDraggable({ id: team.id, disabled: !draggable || overlay });
+  const { attributes, listeners, setNodeRef, isDragging } = drag;
+
+  return (
+    <div
+      ref={overlay ? undefined : setNodeRef}
+      {...(overlay || !draggable ? {} : listeners)}
+      {...(overlay || !draggable ? {} : attributes)}
+      className={`rounded-lg border px-3 py-2 ${
+        draggable ? "cursor-grab" : ""
+      } border-border bg-muted/40 ${isDragging ? "opacity-40" : ""} ${
+        overlay ? "shadow-lg" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{team.name}</span>
+        {showScore && (
+          <span className="text-sm font-semibold tabular-nums">
+            {team.score === null ? "—" : Math.round(team.score * 10) / 10}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}

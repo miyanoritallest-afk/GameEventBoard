@@ -107,12 +107,22 @@ export default async function EventTeamsPage({
       <div className="mx-auto max-w-[1600px] px-6 py-10">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">チーム編成</h1>
-          <Link
-            href={`/events/${event.slug ?? event.id}`}
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← イベントに戻る
-          </Link>
+          <div className="flex items-center gap-4">
+            {isOrganizer && (
+              <Link
+                href={`/events/${event.id}/groups`}
+                className="text-sm text-primary hover:underline"
+              >
+                予選ブロック分けへ →
+              </Link>
+            )}
+            <Link
+              href={`/events/${event.slug ?? event.id}`}
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              ← イベントに戻る
+            </Link>
+          </div>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
 
