@@ -37,20 +37,102 @@ export async function findMatchById(matchId: string) {
 }
 
 /**
- * 指定ブロックの予選試合を全削除する（再生成の前処理）。
- * 結果保護は本戦-3 で追加（本 PR では phase='group' の当該ブロックを全消去）。
+ * 結果入力の認可確認用に、試合＋イベント主催者＋両チームの代表（captain）の user_id を取得する。
+ * 「主催者 or 対戦両チームの代表」をアプリ層で判定するために使う（RLS 0015 が最終防衛）。
+ *
+ * 2つの FK（team_a / team_b）がともに teams を指すため埋め込みが曖昧になるのを避け、
+ * matches は素直に取り、両チームの captain の user_id は別クエリで引いて返す。
+ * 無ければ null。
  */
-export async function deleteGroupMatches(params: {
+export async function findMatchForReport(matchId: string): Promise<{
+  id: string;
+  eventId: string;
+  teamAId: string | null;
+  teamBId: string | null;
+  organizerId: string;
+  captainUserIds: string[];
+} | null> {
+  const supabase = await createClient();
+  const { data: m, error } = await supabase
+    .from("matches")
+    .select("id, event_id, team_a_id, team_b_id, events(organizer_id)")
+    .eq("id", matchId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!m) return null;
+
+  const organizerId = (m.events as { organizer_id: string } | null)
+    ?.organizer_id;
+  if (!organizerId) return null;
+
+  // 両チームの代表（captain）の user_id を引く。
+  const teamIds = [m.team_a_id, m.team_b_id].filter(
+    (id): id is string => !!id,
+  );
+  let captainUserIds: string[] = [];
+  if (teamIds.length > 0) {
+    const { data: teams, error: tErr } = await supabase
+      .from("teams")
+      .select("captain_registration_id, registrations(user_id)")
+      .in("id", teamIds);
+    if (tErr) throw tErr;
+    captainUserIds = (teams ?? [])
+      .map(
+        (t) =>
+          (t.registrations as { user_id: string } | null)?.user_id ?? null,
+      )
+      .filter((uid): uid is string => !!uid);
+  }
+
+  return {
+    id: m.id,
+    eventId: m.event_id,
+    teamAId: m.team_a_id,
+    teamBId: m.team_b_id,
+    organizerId,
+    captainUserIds,
+  };
+}
+
+/**
+ * 指定ブロックの予選試合を、結果の有無付きで取得する（再生成の保護判定用）。
+ * match_results を left join し、結果が入っているかを hasResult で返す。
+ */
+export async function listGroupMatchesWithResult(params: {
   eventId: string;
   groupId: string;
-}): Promise<void> {
+}): Promise<
+  {
+    id: string;
+    teamAId: string | null;
+    teamBId: string | null;
+    hasResult: boolean;
+  }[]
+> {
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("matches")
-    .delete()
+    .select("id, team_a_id, team_b_id, match_results(match_id)")
     .eq("event_id", params.eventId)
     .eq("phase", "group")
     .eq("group_id", params.groupId);
+  if (error) throw error;
+  return (data ?? []).map((m) => {
+    const results = m.match_results as { match_id: string }[] | null;
+    return {
+      id: m.id,
+      teamAId: m.team_a_id,
+      teamBId: m.team_b_id,
+      hasResult: Array.isArray(results) && results.length > 0,
+    };
+  });
+}
+
+/** 指定 id の試合をまとめて削除する（再生成で結果なし試合だけ消すのに使う）。 */
+export async function deleteMatchesByIds(matchIds: string[]): Promise<void> {
+  if (matchIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase.from("matches").delete().in("id", matchIds);
   if (error) throw error;
 }
 

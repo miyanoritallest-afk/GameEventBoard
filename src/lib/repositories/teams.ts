@@ -414,6 +414,24 @@ export async function incrementEventCount(params: {
   return data ? { ok: true } : { ok: false };
 }
 
+/**
+ * 指定 registration が代表（captain）であるチームの id 一覧を返す（同イベント内）。
+ * 結果入力の権限（自チームが絡む試合か）を画面で出し分けるために使う。
+ */
+export async function listCaptainTeamIds(params: {
+  eventId: string;
+  registrationId: string;
+}): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .select("id")
+    .eq("event_id", params.eventId)
+    .eq("captain_registration_id", params.registrationId);
+  if (error) throw error;
+  return (data ?? []).map((t) => t.id);
+}
+
 /** id でイベントの capacity/current_count/version を取得する（承認時の排他判定用）。 */
 export async function findEventCapacity(eventId: string) {
   const supabase = await createClient();

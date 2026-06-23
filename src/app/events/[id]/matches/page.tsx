@@ -5,6 +5,8 @@ import { findEventById } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
 import { listGroupsWithTeams } from "@/lib/repositories/groups";
 import { listGroupMatches } from "@/lib/repositories/matches";
+import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
+import { listCaptainTeamIds } from "@/lib/repositories/teams";
 import {
   MatchesBoard,
   type BoardGroup,
@@ -47,10 +49,31 @@ export default async function EventMatchesPage({
     notFound();
   }
 
-  const [groupsRaw, matchesRaw] = await Promise.all([
+  const [groupsRaw, matchesRaw, resultsRaw, captainTeamIds] = await Promise.all([
     listGroupsWithTeams(event.id),
     listGroupMatches(event.id),
+    listMatchResultsByEvent(event.id),
+    // 結果入力の出し分け用: 閲覧者が代表のチーム id（主催者は空でよい）。
+    myRegistration
+      ? listCaptainTeamIds({
+          eventId: event.id,
+          registrationId: myRegistration.id,
+        })
+      : Promise.resolve<string[]>([]),
   ]);
+
+  // 試合 id → 結果（スコア・勝者）。
+  type ResultRow = {
+    match_id: string;
+    team_a_score: number;
+    team_b_score: number;
+    winner_team_id: string | null;
+  };
+  const resultByMatch = new Map<string, ResultRow>();
+  for (const r of (resultsRaw ?? []) as unknown as ResultRow[]) {
+    resultByMatch.set(r.match_id, r);
+  }
+  const captainTeamIdSet = new Set(captainTeamIds);
 
   // ブロックの所属チーム（id→name）を引けるようにする。
   type GroupTeamJoin = {
@@ -75,12 +98,23 @@ export default async function EventMatchesPage({
   for (const m of matchesRaw ?? []) {
     if (!m.group_id) continue;
     const arr = matchesByGroup.get(m.group_id) ?? [];
+    const result = resultByMatch.get(m.id) ?? null;
+    // 結果入力できるのは「主催者 or この試合のどちらかのチームの代表」。
+    const canReport =
+      isOrganizer ||
+      (m.team_a_id != null && captainTeamIdSet.has(m.team_a_id)) ||
+      (m.team_b_id != null && captainTeamIdSet.has(m.team_b_id));
     arr.push({
       id: m.id,
       teamAId: m.team_a_id,
       teamBId: m.team_b_id,
       teamAName: m.team_a_id ? teamNameById.get(m.team_a_id) ?? null : null,
       teamBName: m.team_b_id ? teamNameById.get(m.team_b_id) ?? null : null,
+      teamAScore: result?.team_a_score ?? null,
+      teamBScore: result?.team_b_score ?? null,
+      winnerTeamId: result?.winner_team_id ?? null,
+      hasResult: result !== null,
+      canReport,
     });
     matchesByGroup.set(m.group_id, arr);
   }

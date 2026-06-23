@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { generateMatches, addMatch, deleteMatch } from "./actions";
+import {
+  generateMatches,
+  addMatch,
+  deleteMatch,
+  reportResult,
+  clearResult,
+} from "./actions";
 
 /** ブロック所属チーム（プルダウン用）。 */
 export type BoardTeam = { id: string; name: string };
@@ -13,6 +19,13 @@ export type BoardMatch = {
   teamBId: string | null;
   teamAName: string | null;
   teamBName: string | null;
+  /** 結果（取マップ数）。未入力は null。 */
+  teamAScore: number | null;
+  teamBScore: number | null;
+  winnerTeamId: string | null;
+  hasResult: boolean;
+  /** この閲覧者がこの試合の結果を入力できるか（主催者 or 対戦両チーム代表）。 */
+  canReport: boolean;
 };
 
 export type BoardGroup = {
@@ -115,6 +128,10 @@ export function MatchesBoard({
                 run(() => addMatch({ groupId: group.id, teamAId, teamBId }))
               }
               onDelete={(matchId) => run(() => deleteMatch(matchId))}
+              onReport={(matchId, teamAScore, teamBScore) =>
+                run(() => reportResult({ matchId, teamAScore, teamBScore }))
+              }
+              onClear={(matchId) => run(() => clearResult(matchId))}
             />
           ))}
         </div>
@@ -131,6 +148,8 @@ function GroupMatches({
   onGenerate,
   onAdd,
   onDelete,
+  onReport,
+  onClear,
 }: {
   group: BoardGroup;
   readOnly: boolean;
@@ -138,6 +157,8 @@ function GroupMatches({
   onGenerate: () => void;
   onAdd: (teamAId: string, teamBId: string) => void;
   onDelete: (matchId: string) => void;
+  onReport: (matchId: string, teamAScore: number, teamBScore: number) => void;
+  onClear: (matchId: string) => void;
 }) {
   const [teamAId, setTeamAId] = useState("");
   const [teamBId, setTeamBId] = useState("");
@@ -184,34 +205,16 @@ function GroupMatches({
           </p>
         ) : (
           group.matches.map((m, i) => (
-            <div
+            <MatchCard
               key={m.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2"
-            >
-              <span className="text-sm">
-                <span className="mr-2 text-xs text-muted-foreground tabular-nums">
-                  {i + 1}.
-                </span>
-                <span className={m.teamAName ? "" : "text-destructive"}>
-                  {m.teamAName ?? "未定/削除済み"}
-                </span>
-                <span className="mx-2 text-muted-foreground">vs</span>
-                <span className={m.teamBName ? "" : "text-destructive"}>
-                  {m.teamBName ?? "未定/削除済み"}
-                </span>
-              </span>
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(m.id)}
-                  disabled={isPending}
-                  className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-60"
-                  aria-label="この対戦を削除"
-                >
-                  削除
-                </button>
-              )}
-            </div>
+              match={m}
+              index={i}
+              readOnly={readOnly}
+              isPending={isPending}
+              onDelete={() => onDelete(m.id)}
+              onReport={(a, b) => onReport(m.id, a, b)}
+              onClear={() => onClear(m.id)}
+            />
           ))
         )}
       </div>
@@ -244,6 +247,177 @@ function GroupMatches({
           >
             + 対戦を追加
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 1試合の対戦カード。対戦名＋結果（スコア）表示と、権限があれば結果入力フォーム・削除。
+ * 結果入力は「主催者 or 対戦両チーム代表（canReport）」かつ両チーム確定時のみ。
+ */
+function MatchCard({
+  match,
+  index,
+  readOnly,
+  isPending,
+  onDelete,
+  onReport,
+  onClear,
+}: {
+  match: BoardMatch;
+  index: number;
+  readOnly: boolean;
+  isPending: boolean;
+  onDelete: () => void;
+  onReport: (teamAScore: number, teamBScore: number) => void;
+  onClear: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [scoreA, setScoreA] = useState(
+    match.teamAScore !== null ? String(match.teamAScore) : "",
+  );
+  const [scoreB, setScoreB] = useState(
+    match.teamBScore !== null ? String(match.teamBScore) : "",
+  );
+
+  const bothTeams = match.teamAId != null && match.teamBId != null;
+  // 結果入力できる: 編集権あり・両チーム確定・主催者/代表。
+  const canInput = !readOnly && match.canReport && bothTeams;
+
+  function handleSave() {
+    const a = Number(scoreA);
+    const b = Number(scoreB);
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return;
+    onReport(a, b);
+    setEditing(false);
+  }
+
+  const winA = match.winnerTeamId !== null && match.winnerTeamId === match.teamAId;
+  const winB = match.winnerTeamId !== null && match.winnerTeamId === match.teamBId;
+  const isDraw = match.hasResult && match.winnerTeamId === null;
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm">
+          <span className="mr-2 text-xs text-muted-foreground tabular-nums">
+            {index + 1}.
+          </span>
+          <span
+            className={
+              match.teamAName
+                ? winA
+                  ? "font-semibold text-primary"
+                  : ""
+                : "text-destructive"
+            }
+          >
+            {match.teamAName ?? "未定/削除済み"}
+          </span>
+          {match.hasResult ? (
+            <span className="mx-2 font-semibold tabular-nums">
+              {match.teamAScore} - {match.teamBScore}
+            </span>
+          ) : (
+            <span className="mx-2 text-muted-foreground">vs</span>
+          )}
+          <span
+            className={
+              match.teamBName
+                ? winB
+                  ? "font-semibold text-primary"
+                  : ""
+                : "text-destructive"
+            }
+          >
+            {match.teamBName ?? "未定/削除済み"}
+          </span>
+          {isDraw && (
+            <span className="ml-2 text-xs text-muted-foreground">引分</span>
+          )}
+        </span>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {canInput && !editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              disabled={isPending}
+              className="text-xs text-primary hover:underline disabled:opacity-60"
+            >
+              {match.hasResult ? "結果を修正" : "結果を入力"}
+            </button>
+          )}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={isPending}
+              className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-60"
+              aria-label="この対戦を削除"
+            >
+              削除
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 結果入力フォーム（取マップ数）。 */}
+      {canInput && editing && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-2">
+          <span className="text-xs text-muted-foreground">
+            {match.teamAName}
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={20}
+            value={scoreA}
+            onChange={(e) => setScoreA(e.target.value)}
+            className="w-14 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums"
+          />
+          <span className="text-xs text-muted-foreground">-</span>
+          <input
+            type="number"
+            min={0}
+            max={20}
+            value={scoreB}
+            onChange={(e) => setScoreB(e.target.value)}
+            className="w-14 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums"
+          />
+          <span className="text-xs text-muted-foreground">
+            {match.teamBName}
+          </span>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending || scoreA === "" || scoreB === ""}
+            className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            キャンセル
+          </button>
+          {match.hasResult && (
+            <button
+              type="button"
+              onClick={() => {
+                onClear();
+                setEditing(false);
+              }}
+              disabled={isPending}
+              className="ml-auto text-xs text-muted-foreground hover:text-destructive disabled:opacity-60"
+            >
+              結果を取り消し
+            </button>
+          )}
         </div>
       )}
     </div>
