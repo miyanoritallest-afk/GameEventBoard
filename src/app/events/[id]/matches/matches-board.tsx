@@ -26,6 +26,8 @@ export type BoardMatch = {
   /** POTG 取得数（potg 不使用イベントは 0）。 */
   potgA: number;
   potgB: number;
+  /** この試合の BO（最大マップ数）。スコア入力上限に使う。 */
+  bestOf: number;
   hasResult: boolean;
   /** この閲覧者がこの試合の結果を入力できるか（主催者 or 対戦両チーム代表）。 */
   canReport: boolean;
@@ -342,6 +344,8 @@ function MatchCard({
     const a = Number(scoreA);
     const b = Number(scoreB);
     if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return;
+    // スコア上限は BO に連動（各チーム 0〜best_of）。
+    if (a > match.bestOf || b > match.bestOf) return;
     // POTG は使うイベントのみ。未使用は 0 を送る。
     const pa = usePotg ? Number(potgA) || 0 : 0;
     const pb = usePotg ? Number(potgB) || 0 : 0;
@@ -359,6 +363,9 @@ function MatchCard({
         <span className="text-sm">
           <span className="mr-2 text-xs text-muted-foreground tabular-nums">
             {index + 1}.
+          </span>
+          <span className="mr-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            BO{match.bestOf}
           </span>
           <span
             className={
@@ -428,7 +435,7 @@ function MatchCard({
           <input
             type="number"
             min={0}
-            max={20}
+            max={match.bestOf}
             value={scoreA}
             onChange={(e) => setScoreA(e.target.value)}
             className="w-14 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums"
@@ -437,7 +444,7 @@ function MatchCard({
           <input
             type="number"
             min={0}
-            max={20}
+            max={match.bestOf}
             value={scoreB}
             onChange={(e) => setScoreB(e.target.value)}
             className="w-14 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums"

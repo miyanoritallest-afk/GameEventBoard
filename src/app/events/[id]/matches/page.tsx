@@ -143,6 +143,7 @@ export default async function EventMatchesPage({
       winnerTeamId: result?.winner_team_id ?? null,
       potgA: result?.potg_a ?? 0,
       potgB: result?.potg_b ?? 0,
+      bestOf: (m as { best_of?: number }).best_of ?? 3,
       hasResult: result !== null,
       canReport,
     });

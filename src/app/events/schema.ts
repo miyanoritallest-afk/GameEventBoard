@@ -103,6 +103,16 @@ export const createDraftEventSchema = z
       (v) => (v == null || v === "" ? 0 : v),
       z.coerce.number().int().min(0).max(99),
     ),
+    // 予選BO（本戦-3d）。総当たり生成時に全試合の best_of へ一括セットする。
+    // best_of=N は最大Nマップ（奇数=過半数先取で引分なし、偶数=引分あり）。1〜15。
+    groupBestOf: z.preprocess(
+      (v) => (v == null || v === "" ? 3 : v),
+      z.coerce
+        .number()
+        .int()
+        .min(1, "BOは1以上で入力してください")
+        .max(15, "BOは15以下で入力してください"),
+    ),
     // タイブレーク優先順位。フォームからはカンマ区切り文字列（D&D の順序）で来るので
     // 配列に正規化し、許可値のみ・重複なしを検証する（先頭ほど優先）。
     tiebreakers: z.preprocess(

@@ -308,3 +308,33 @@ describe("createDraftEventSchema — 順位設定（本戦-3b）", () => {
     expect(issue?.message).toBe("タイブレーク基準が重複しています");
   });
 });
+
+describe("createDraftEventSchema — 予選BO（本戦-3d）", () => {
+  it("groupBestOf は未指定なら 3 に既定化される", () => {
+    const result = createDraftEventSchema.safeParse(baseInput());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.groupBestOf).toBe(3);
+  });
+
+  it("groupBestOf は文字列の数値を受理する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ groupBestOf: "5" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.groupBestOf).toBe(5);
+  });
+
+  it("groupBestOf が範囲外（16）は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ groupBestOf: "16" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("groupBestOf が0以下は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ groupBestOf: "0" }),
+    );
+    expect(result.success).toBe(false);
+  });
+});

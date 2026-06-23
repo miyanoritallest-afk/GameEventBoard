@@ -93,6 +93,10 @@ export async function generateMatches(input: {
   const group = await requireGroupOrganizer(parsed.data.groupId, userId);
   if (!group) return { error: "このブロックを操作する権限がありません。" };
 
+  // 予選デフォルト BO（生成時に全試合へ一括セット）。
+  const event = await findEventById(group.event_id);
+  const bestOf = event?.group_best_of ?? 3;
+
   const teamIds = await listGroupTeamIds(group.id);
   const allPairs = roundRobinPairs(teamIds);
 
@@ -118,6 +122,7 @@ export async function generateMatches(input: {
   await insertGroupMatches({
     eventId: group.event_id,
     groupId: group.id,
+    bestOf,
     pairs: pairsToCreate,
   });
 
@@ -170,11 +175,14 @@ export async function addMatch(input: {
     return { error: "同じ対戦カードがこのブロックに既に存在します。" };
   }
 
+  // 手動追加も予選デフォルト BO を載せる（生成と同じ）。
+  const event = await findEventById(group.event_id);
   const result = await insertGroupMatch({
     eventId: group.event_id,
     groupId: group.id,
     teamAId,
     teamBId,
+    bestOf: event?.group_best_of ?? 3,
   });
   if (!result.ok) {
     return { error: "対戦カードの追加に失敗しました。画面を更新してからお試しください。" };
@@ -253,6 +261,13 @@ export async function reportResult(input: {
     return {
       error:
         "対戦カードが未確定（チームが外れています）です。先に対戦表を再生成してください。",
+    };
+  }
+
+  // スコア上限を BO に連動（各チーム 0〜best_of。緩め＝合計・過半数までは強制しない）。
+  if (teamAScore > match.bestOf || teamBScore > match.bestOf) {
+    return {
+      error: `スコアはBO${match.bestOf}の上限（各チーム最大${match.bestOf}）を超えています。`,
     };
   }
 

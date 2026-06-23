@@ -223,6 +223,8 @@ owner/admin の2段階権限。検索招待 → 本人承認のフローを stat
 | **— チーム構成・上限設定 —** | | | (3.1.2) |
 | reserve_slots | int | NOT NULL DEFAULT 0 | リザーブ上限（OSL=2、なし=0）。チーム最大人数 = games.team_size + reserve_slots |
 | team_score_cap | numeric | | チームスコア上限。**出場メンバーの final_score 平均**で判定（旧 team_avg_cap） |
+| **— 本戦設定 —** | | | |
+| group_best_of | int | NOT NULL DEFAULT 3 | 予選デフォルトBO（1試合のマップ数）。総当たり生成時に全試合の matches.best_of へ一括セット。CHECK 1〜15。0018で追加 |
 | **— 順位設定（本戦・3.4.1） —** | | | 0016で追加 |
 | ranking_enabled | boolean | NOT NULL DEFAULT false | 順位を集計するか（親トグル）。falseなら順位を出さない |
 | points_win | int | NOT NULL DEFAULT 3 | 勝ち点（CHECK 0〜99） |
@@ -339,6 +341,7 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | id | uuid | PK | |
 | event_id | uuid | FK→events, NOT NULL | |
 | phase | match_phase | NOT NULL | group / tournament |
+| best_of | int | NOT NULL DEFAULT 3 | この試合のBO（最大マップ数）。奇数=過半数先取で引分なし、偶数=引分あり。予選は生成時に events.group_best_of を一括セット、決勝Tは試合ごと（本戦-5）。スコア入力上限に連動。CHECK 1〜15。0018で追加 |
 | group_id | uuid | FK→groups | 予選時のグループ |
 | round | int | | トーナメントのラウンド |
 | bracket_position | int | | トーナメント表上の位置 |
