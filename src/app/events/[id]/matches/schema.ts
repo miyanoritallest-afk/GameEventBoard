@@ -32,10 +32,20 @@ const mapScore = z
   .min(0, "マップ数は0以上で入力してください")
   .max(20, "マップ数が大きすぎます");
 
+/** POTG 取得数（0〜99 の整数。tiebreakers に potg が無いイベントは 0 のまま）。 */
+const potgCount = z
+  .number()
+  .int("POTG数は整数で入力してください")
+  .min(0, "POTG数は0以上で入力してください")
+  .max(99, "POTG数が大きすぎます")
+  .default(0);
+
 export const reportResultSchema = z.object({
   matchId: z.string().uuid("不正な試合IDです"),
   teamAScore: mapScore,
   teamBScore: mapScore,
+  potgA: potgCount,
+  potgB: potgCount,
 });
 
 export type GenerateMatchesInput = z.infer<typeof generateMatchesSchema>;

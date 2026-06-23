@@ -234,6 +234,8 @@ export async function reportResult(input: {
   matchId: string;
   teamAScore: number;
   teamBScore: number;
+  potgA?: number;
+  potgB?: number;
 }): Promise<MatchActionState> {
   const userId = await currentUserId();
   if (!userId) return { error: "ログインが必要です。" };
@@ -242,7 +244,7 @@ export async function reportResult(input: {
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
   }
-  const { matchId, teamAScore, teamBScore } = parsed.data;
+  const { matchId, teamAScore, teamBScore, potgA, potgB } = parsed.data;
 
   const match = await requireReporter(matchId, userId);
   if (!match) return { error: "この試合の結果を入力する権限がありません。" };
@@ -268,6 +270,8 @@ export async function reportResult(input: {
     teamBScore,
     winnerTeamId,
     reportedBy: userId,
+    potgA,
+    potgB,
   });
   if (!result.ok) {
     return { error: "結果の保存に失敗しました。画面を更新してからお試しください。" };

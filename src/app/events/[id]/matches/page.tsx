@@ -7,10 +7,12 @@ import { listGroupsWithTeams } from "@/lib/repositories/groups";
 import { listGroupMatches } from "@/lib/repositories/matches";
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { listCaptainTeamIds } from "@/lib/repositories/teams";
+import { computeStandings } from "@/lib/services/standings";
 import {
   MatchesBoard,
   type BoardGroup,
   type BoardMatch,
+  type BoardStanding,
 } from "./matches-board";
 
 export const dynamic = "force-dynamic";
@@ -62,18 +64,34 @@ export default async function EventMatchesPage({
       : Promise.resolve<string[]>([]),
   ]);
 
-  // 試合 id → 結果（スコア・勝者）。
+  // 試合 id → 結果（スコア・勝者・POTG）。
   type ResultRow = {
     match_id: string;
     team_a_score: number;
     team_b_score: number;
     winner_team_id: string | null;
+    potg_a: number;
+    potg_b: number;
   };
+  const resultRows = (resultsRaw ?? []) as unknown as ResultRow[];
   const resultByMatch = new Map<string, ResultRow>();
-  for (const r of (resultsRaw ?? []) as unknown as ResultRow[]) {
+  for (const r of resultRows) {
     resultByMatch.set(r.match_id, r);
   }
   const captainTeamIdSet = new Set(captainTeamIds);
+
+  // 順位設定（events 由来）。potg 入力欄の出し分け・順位表の表示に使う。
+  const rankingConfig = {
+    pointsWin: event.points_win,
+    pointsDraw: event.points_draw,
+    pointsLoss: event.points_loss,
+    tiebreakers: (event.tiebreakers ?? []) as (
+      | "head_to_head"
+      | "map_diff"
+      | "potg"
+    )[],
+  };
+  const usePotg = rankingConfig.tiebreakers.includes("potg");
 
   // ブロックの所属チーム（id→name）を引けるようにする。
   type GroupTeamJoin = {
@@ -92,6 +110,16 @@ export default async function EventMatchesPage({
       if (gt.teams) teamNameById.set(gt.teams.id, gt.teams.name);
     }
   }
+
+  // match_id → 試合行（順位集計で結果と対戦カードを突き合わせるため）。
+  type MatchRow = {
+    id: string;
+    group_id: string | null;
+    team_a_id: string | null;
+    team_b_id: string | null;
+  };
+  const matchById = new Map<string, MatchRow>();
+  for (const m of (matchesRaw ?? []) as MatchRow[]) matchById.set(m.id, m);
 
   // ブロックごとに試合を束ねる。
   const matchesByGroup = new Map<string, BoardMatch[]>();
@@ -113,6 +141,8 @@ export default async function EventMatchesPage({
       teamAScore: result?.team_a_score ?? null,
       teamBScore: result?.team_b_score ?? null,
       winnerTeamId: result?.winner_team_id ?? null,
+      potgA: result?.potg_a ?? 0,
+      potgB: result?.potg_b ?? 0,
       hasResult: result !== null,
       canReport,
     });
@@ -120,17 +150,55 @@ export default async function EventMatchesPage({
   }
 
   const groups: BoardGroup[] = ((groupsRaw ?? []) as unknown as GroupJoin[]).map(
-    (g) => ({
-      id: g.id,
-      name: g.name,
-      teams: (g.group_teams ?? [])
+    (g) => {
+      const teams = (g.group_teams ?? [])
         .filter((gt) => gt.teams)
-        .map((gt) => ({
-          id: gt.teams!.id,
-          name: gt.teams!.name,
-        })),
-      matches: matchesByGroup.get(g.id) ?? [],
-    }),
+        .map((gt) => ({ id: gt.teams!.id, name: gt.teams!.name }));
+
+      // 順位表（順位機能 ON のときだけ計算）。ブロック内の結果ありの試合で集計。
+      let standings: BoardStanding[] = [];
+      if (event.ranking_enabled) {
+        const teamIds = teams.map((t) => t.id);
+        const teamIdSet = new Set(teamIds);
+        const groupResults = resultRows
+          .map((res) => {
+            const m = matchById.get(res.match_id);
+            return m ? { m, res } : null;
+          })
+          .filter(
+            (x): x is { m: MatchRow; res: ResultRow } =>
+              x !== null &&
+              x.m.team_a_id != null &&
+              x.m.team_b_id != null &&
+              teamIdSet.has(x.m.team_a_id) &&
+              teamIdSet.has(x.m.team_b_id),
+          )
+          .map(({ m, res }) => ({
+            teamAId: m.team_a_id as string,
+            teamBId: m.team_b_id as string,
+            teamAScore: res.team_a_score,
+            teamBScore: res.team_b_score,
+            potgA: res.potg_a,
+            potgB: res.potg_b,
+          }));
+        standings = computeStandings({
+          teamIds,
+          results: groupResults,
+          config: rankingConfig,
+        }).map((row) => ({
+          ...row,
+          teamName: teamNameById.get(row.teamId) ?? "-",
+        }));
+      }
+
+      return {
+        id: g.id,
+        name: g.name,
+        teams,
+        matches: matchesByGroup.get(g.id) ?? [],
+        standings,
+      };
+    },
   );
 
   return (
@@ -157,7 +225,12 @@ export default async function EventMatchesPage({
         </div>
         <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
 
-        <MatchesBoard readOnly={!isOrganizer} initialGroups={groups} />
+        <MatchesBoard
+          readOnly={!isOrganizer}
+          rankingEnabled={event.ranking_enabled}
+          usePotg={usePotg}
+          initialGroups={groups}
+        />
       </div>
     </div>
   );
