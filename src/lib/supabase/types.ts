@@ -427,6 +427,8 @@ export type Database = {
         Row: {
           created_at: string
           match_id: string
+          potg_a: number
+          potg_b: number
           reported_by: string | null
           team_a_score: number
           team_b_score: number
@@ -436,6 +438,8 @@ export type Database = {
         Insert: {
           created_at?: string
           match_id: string
+          potg_a?: number
+          potg_b?: number
           reported_by?: string | null
           team_a_score: number
           team_b_score: number
@@ -445,6 +449,8 @@ export type Database = {
         Update: {
           created_at?: string
           match_id?: string
+          potg_a?: number
+          potg_b?: number
           reported_by?: string | null
           team_a_score?: number
           team_b_score?: number

@@ -16,7 +16,7 @@ export async function listMatchResultsByEvent(eventId: string) {
   const { data, error } = await supabase
     .from("match_results")
     .select(
-      "match_id, team_a_score, team_b_score, winner_team_id, matches!inner(event_id)",
+      "match_id, team_a_score, team_b_score, winner_team_id, potg_a, potg_b, matches!inner(event_id)",
     )
     .eq("matches.event_id", eventId);
 
@@ -34,6 +34,8 @@ export async function upsertMatchResult(params: {
   teamBScore: number;
   winnerTeamId: string | null;
   reportedBy: string;
+  potgA: number;
+  potgB: number;
 }): Promise<{ ok: true } | { ok: false }> {
   const supabase = await createClient();
   const { error } = await supabase.from("match_results").upsert(
@@ -43,6 +45,8 @@ export async function upsertMatchResult(params: {
       team_b_score: params.teamBScore,
       winner_team_id: params.winnerTeamId,
       reported_by: params.reportedBy,
+      potg_a: params.potgA,
+      potg_b: params.potgB,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "match_id" },
