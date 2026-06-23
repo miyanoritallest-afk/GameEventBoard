@@ -21,6 +21,11 @@ type EventEditableColumns = Pick<
   | "bonus_master"
   | "bonus_gm"
   | "bonus_champion"
+  | "ranking_enabled"
+  | "points_win"
+  | "points_draw"
+  | "points_loss"
+  | "tiebreakers"
 >;
 
 /**

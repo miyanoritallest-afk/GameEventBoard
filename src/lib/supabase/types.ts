@@ -141,6 +141,10 @@ export type Database = {
           game_id: string
           id: string
           organizer_id: string
+          points_draw: number
+          points_loss: number
+          points_win: number
+          ranking_enabled: boolean
           recruit_deadline: string | null
           require_battle_tag: boolean
           require_role: boolean
@@ -153,6 +157,7 @@ export type Database = {
           status: Database["public"]["Enums"]["event_status"]
           team_formation: Database["public"]["Enums"]["team_formation"]
           team_score_cap: number | null
+          tiebreakers: string[]
           title: string
           uncertified_handling: Database["public"]["Enums"]["uncertified_handling"]
           updated_at: string
@@ -175,6 +180,10 @@ export type Database = {
           game_id: string
           id?: string
           organizer_id: string
+          points_draw?: number
+          points_loss?: number
+          points_win?: number
+          ranking_enabled?: boolean
           recruit_deadline?: string | null
           require_battle_tag?: boolean
           require_role?: boolean
@@ -187,6 +196,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["event_status"]
           team_formation?: Database["public"]["Enums"]["team_formation"]
           team_score_cap?: number | null
+          tiebreakers?: string[]
           title: string
           uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string
@@ -209,6 +219,10 @@ export type Database = {
           game_id?: string
           id?: string
           organizer_id?: string
+          points_draw?: number
+          points_loss?: number
+          points_win?: number
+          ranking_enabled?: boolean
           recruit_deadline?: string | null
           require_battle_tag?: boolean
           require_role?: boolean
@@ -221,6 +235,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["event_status"]
           team_formation?: Database["public"]["Enums"]["team_formation"]
           team_score_cap?: number | null
+          tiebreakers?: string[]
           title?: string
           uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string

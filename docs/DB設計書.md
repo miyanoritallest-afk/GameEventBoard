@@ -223,6 +223,12 @@ owner/admin の2段階権限。検索招待 → 本人承認のフローを stat
 | **— チーム構成・上限設定 —** | | | (3.1.2) |
 | reserve_slots | int | NOT NULL DEFAULT 0 | リザーブ上限（OSL=2、なし=0）。チーム最大人数 = games.team_size + reserve_slots |
 | team_score_cap | numeric | | チームスコア上限。**出場メンバーの final_score 平均**で判定（旧 team_avg_cap） |
+| **— 順位設定（本戦・3.4.1） —** | | | 0016で追加 |
+| ranking_enabled | boolean | NOT NULL DEFAULT false | 順位を集計するか（親トグル）。falseなら順位を出さない |
+| points_win | int | NOT NULL DEFAULT 3 | 勝ち点（CHECK 0〜99） |
+| points_draw | int | NOT NULL DEFAULT 1 | 引分点（CHECK 0〜99） |
+| points_loss | int | NOT NULL DEFAULT 0 | 負け点（CHECK 0〜99） |
+| tiebreakers | text[] | NOT NULL DEFAULT '{}' | 同着の優先順位（先頭ほど優先）。値は head_to_head/map_diff/potg（CHECK で許可値のみ）。集計・表示はPR-3c |
 | **— Discord連携（全体告知 3.5.2） —** | | | |
 | discord_webhook_url | text | | 告知チャンネル。未設定なら series 側を使う |
 | auto_announce | boolean | NOT NULL DEFAULT true | 公開/更新時に告知チャンネルへ自動投稿するか |

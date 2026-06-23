@@ -63,6 +63,15 @@ export default async function EditEventPage({
     bonusMaster: event.bonus_master,
     bonusGm: event.bonus_gm,
     bonusChampion: event.bonus_champion,
+    rankingEnabled: event.ranking_enabled,
+    pointsWin: event.points_win,
+    pointsDraw: event.points_draw,
+    pointsLoss: event.points_loss,
+    tiebreakers: (event.tiebreakers ?? []) as (
+      | "head_to_head"
+      | "map_diff"
+      | "potg"
+    )[],
   };
 
   return (

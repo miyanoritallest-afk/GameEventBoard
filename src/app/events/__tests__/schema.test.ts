@@ -232,3 +232,79 @@ describe("createDraftEventSchema — 期間・締切の整合（両方そろっ�
     expect(result.success).toBe(true);
   });
 });
+
+describe("createDraftEventSchema — 順位設定（本戦-3b）", () => {
+  it("順位設定は未指定なら既定値（無効・勝3分1負0・空）になる", () => {
+    const result = createDraftEventSchema.safeParse(baseInput());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.rankingEnabled).toBe(false);
+      expect(result.data.pointsWin).toBe(3);
+      expect(result.data.pointsDraw).toBe(1);
+      expect(result.data.pointsLoss).toBe(0);
+      expect(result.data.tiebreakers).toEqual([]);
+    }
+  });
+
+  it("勝点は文字列の数値を受理する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ rankingEnabled: true, pointsWin: "2", pointsDraw: "1", pointsLoss: "0" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.pointsWin).toBe(2);
+  });
+
+  it("勝点が範囲外（100）は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ pointsWin: "100" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("勝点が負数は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ pointsLoss: "-1" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("tiebreakers はカンマ区切り文字列を順序付き配列に正規化する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ tiebreakers: "head_to_head,map_diff,potg" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tiebreakers).toEqual([
+        "head_to_head",
+        "map_diff",
+        "potg",
+      ]);
+    }
+  });
+
+  it("tiebreakers の空文字は空配列になる", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ tiebreakers: "" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tiebreakers).toEqual([]);
+  });
+
+  it("tiebreakers に不正値が混ざると失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ tiebreakers: "head_to_head,invalid" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("tiebreakers の重複は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ tiebreakers: "map_diff,map_diff" }),
+    );
+    expect(result.success).toBe(false);
+    const issue = result.success
+      ? undefined
+      : result.error.issues.find((i) => i.path[0] === "tiebreakers");
+    expect(issue?.message).toBe("タイブレーク基準が重複しています");
+  });
+});

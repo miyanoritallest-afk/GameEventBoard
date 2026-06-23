@@ -7,6 +7,30 @@
 
 ---
 
+## 2026-06-23 — 本戦フェーズ PR-3b（順位設定：events拡張＋フォーム対応）
+
+結果入力の基盤（PR-3a）に続き、順位を出すための**イベントごとの順位設定**を追加。順位の集計・表示は PR-3c。
+
+### やったこと
+- **マイグレーション 0016**: events に順位設定5列を追加。`ranking_enabled`（順位ON/OFF）/ `points_win`/`points_draw`/`points_loss`（勝点・0〜99のCHECK）/ `tiebreakers text[]`（タイブレーク優先順位・許可値CHECK）。**未適用 → Supabase SQL Editor で手動適用が必要**。
+- **schema.ts 拡張**: 順位設定のZod検証を追加。勝点は0〜99の整数（大小制約なし）。tiebreakers はフォームのカンマ区切り文字列を順序付き配列に正規化し、許可値（head_to_head/map_diff/potg）のみ・重複なしを検証。
+- **型定義**: types.ts（Row/Insert/Update）/ events.ts（EventEditableColumns）/ actions.ts（EventEditableValues・parseEventFormData）に5列を反映。新規・編集は parseEventFormData を**共有**するため両方に自動で効く（保存漏れなし）。
+- **フォームUI**: event-form.tsx に「順位設定」fieldset を新設。`ranking_enabled` 親トグルで配下を出し分け（requireScoreと同型）。勝点3欄＋**タイブレークは「使う/使わない」2エリアのD&D**（dnd-kit）。使うエリアの上から順＝優先順位を hidden input のカンマ区切りで送信（DBの tiebreakers[] と直接対応）。編集ページの defaults にも5列を反映。
+- **テスト**: schema.test.ts に順位設定8件追加（既定値・勝点範囲・tiebreakers正規化/重複/不正値）。
+- lint/typecheck/test（194緑）/build 通過。
+
+### 決めたこと（なぜ・壁打ち）
+- **順位設定だけ独立セクションで追加**（進行形式 entry_type/team_formation のフォーム化は別PR）。順位設定は進行形式の一部だが、進行形式フォームごと作ると肥大化するため切り離した。
+- **tiebreakers は text[] 配列で優先順位を表現**（先頭ほど優先）。順序変更が配列の並べ替えで済み、集計も順に評価すればよい。
+- **タイブレークUIは「使う/使わない」2エリアのD&D**。所属エリア＝使う/使わない、使うエリア内の順＝優先順位が視覚的に明確で、配列と素直に対応（groups の D&D 資産を流用）。
+- **勝点は0〜99の整数・大小制約なし**（柔軟性優先。変な設定は主催者の自己責任、過大入力だけ防ぐ）。
+- 順位設定は下書き/公開とも任意（順位を使わないイベントもあるため公開時必須化しない）。
+
+### 次にやること
+- [ ] `0016_event_ranking_settings.sql` を Supabase SQL Editor で適用
+- [ ] 本戦-3c: 順位集計（カスタム勝点＋多段タイブレーク）＋順位表表示。POTG取得チーム等の追加入力列も match_results に追加
+- [ ] 実機確認（3c まで揃ったら：チーム→承認→ブロック→対戦→結果→順位 を通しで）
+
 ## 2026-06-23 — 本戦フェーズ PR-3a（試合結果入力の基盤）
 
 予選対戦表（PR-2）に続き、各試合にスコア（取マップ数）を入力して勝者を記録する基盤を実装。順位機能は設定依存が大きいと判明したため本戦-3 を 3分割（3a結果基盤 / 3b順位設定 / 3c順位集計・表示）し、本PRは 3a。

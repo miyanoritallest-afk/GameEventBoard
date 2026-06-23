@@ -89,6 +89,12 @@ function parseEventFormData(
     bonusMaster: formData.get("bonusMaster"),
     bonusGm: formData.get("bonusGm"),
     bonusChampion: formData.get("bonusChampion"),
+    // 順位設定（本戦-3b）。tiebreakers は D&D 順を hidden input のカンマ区切りで受ける。
+    rankingEnabled: formData.get("rankingEnabled") === "on",
+    pointsWin: formData.get("pointsWin"),
+    pointsDraw: formData.get("pointsDraw"),
+    pointsLoss: formData.get("pointsLoss"),
+    tiebreakers: formData.get("tiebreakers"),
   });
 
   if (!parsed.success) {
@@ -121,6 +127,11 @@ function parseEventFormData(
       bonus_master: v.bonusMaster,
       bonus_gm: v.bonusGm,
       bonus_champion: v.bonusChampion,
+      ranking_enabled: v.rankingEnabled,
+      points_win: v.pointsWin,
+      points_draw: v.pointsDraw,
+      points_loss: v.pointsLoss,
+      tiebreakers: v.tiebreakers,
     },
   };
 }
@@ -141,6 +152,11 @@ type EventEditableValues = {
   bonus_master: number;
   bonus_gm: number;
   bonus_champion: number;
+  ranking_enabled: boolean;
+  points_win: number;
+  points_draw: number;
+  points_loss: number;
+  tiebreakers: ("head_to_head" | "map_diff" | "potg")[];
 };
 
 export async function createEvent(
