@@ -95,6 +95,7 @@ function parseEventFormData(
     pointsDraw: formData.get("pointsDraw"),
     pointsLoss: formData.get("pointsLoss"),
     tiebreakers: formData.get("tiebreakers"),
+    groupBestOf: formData.get("groupBestOf"),
   });
 
   if (!parsed.success) {
@@ -132,6 +133,7 @@ function parseEventFormData(
       points_draw: v.pointsDraw,
       points_loss: v.pointsLoss,
       tiebreakers: v.tiebreakers,
+      group_best_of: v.groupBestOf,
     },
   };
 }
@@ -157,6 +159,7 @@ type EventEditableValues = {
   points_draw: number;
   points_loss: number;
   tiebreakers: ("head_to_head" | "map_diff" | "potg")[];
+  group_best_of: number;
 };
 
 export async function createEvent(

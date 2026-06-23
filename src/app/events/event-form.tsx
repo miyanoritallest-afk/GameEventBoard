@@ -49,6 +49,8 @@ export type EventFormDefaults = {
   pointsLoss?: number;
   /** タイブレーク優先順位（使う基準を優先順に。先頭ほど優先）。 */
   tiebreakers?: TiebreakerKey[];
+  /** 予選BO（総当たり1試合のマップ数。生成時に全試合へ一括セット）。 */
+  groupBestOf?: number;
 };
 
 /** タイブレーク基準（優先順位を D&D で並べ替え）。 */
@@ -282,6 +284,25 @@ export function EventForm({
             )}
           </div>
         )}
+      </fieldset>
+
+      {/* 本戦設定（予選BO・本戦-3d） */}
+      <fieldset className="rounded-xl border border-border bg-card p-4">
+        <legend className="px-1 text-sm font-semibold">本戦設定</legend>
+        <Field label="予選BO（1試合のマップ数）" error={fe.groupBestOf}>
+          <input
+            name="groupBestOf"
+            type="number"
+            min={1}
+            max={15}
+            defaultValue={d.groupBestOf ?? 3}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。
+            対戦表を生成すると全試合に反映されます。偶数は引分けあり。
+          </p>
+        </Field>
       </fieldset>
 
       {/* 順位設定（本戦-3b） */}

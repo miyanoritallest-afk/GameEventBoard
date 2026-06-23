@@ -72,6 +72,7 @@ export default async function EditEventPage({
       | "map_diff"
       | "potg"
     )[],
+    groupBestOf: event.group_best_of,
   };
 
   return (

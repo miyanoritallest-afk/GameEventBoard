@@ -26,6 +26,7 @@ type EventEditableColumns = Pick<
   | "points_draw"
   | "points_loss"
   | "tiebreakers"
+  | "group_best_of"
 >;
 
 /**

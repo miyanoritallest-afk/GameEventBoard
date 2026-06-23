@@ -14,7 +14,7 @@ export async function listGroupMatches(eventId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("matches")
-    .select("id, group_id, team_a_id, team_b_id, created_at")
+    .select("id, group_id, team_a_id, team_b_id, best_of, created_at")
     .eq("event_id", eventId)
     .eq("phase", "group")
     .order("created_at", { ascending: true });
@@ -49,13 +49,14 @@ export async function findMatchForReport(matchId: string): Promise<{
   eventId: string;
   teamAId: string | null;
   teamBId: string | null;
+  bestOf: number;
   organizerId: string;
   captainUserIds: string[];
 } | null> {
   const supabase = await createClient();
   const { data: m, error } = await supabase
     .from("matches")
-    .select("id, event_id, team_a_id, team_b_id, events(organizer_id)")
+    .select("id, event_id, team_a_id, team_b_id, best_of, events(organizer_id)")
     .eq("id", matchId)
     .maybeSingle();
   if (error) throw error;
@@ -89,6 +90,7 @@ export async function findMatchForReport(matchId: string): Promise<{
     eventId: m.event_id,
     teamAId: m.team_a_id,
     teamBId: m.team_b_id,
+    bestOf: m.best_of,
     organizerId,
     captainUserIds,
   };
@@ -136,10 +138,14 @@ export async function deleteMatchesByIds(matchIds: string[]): Promise<void> {
   if (error) throw error;
 }
 
-/** 試合カードをまとめて作成する（総当たり生成）。phase は 'group' 固定。 */
+/**
+ * 試合カードをまとめて作成する（総当たり生成）。phase は 'group' 固定。
+ * best_of は予選デフォルト BO（events.group_best_of）を全試合へ一括セットする（本戦-3d）。
+ */
 export async function insertGroupMatches(params: {
   eventId: string;
   groupId: string;
+  bestOf: number;
   pairs: { teamAId: string; teamBId: string }[];
 }): Promise<void> {
   if (params.pairs.length === 0) return;
@@ -150,17 +156,19 @@ export async function insertGroupMatches(params: {
     phase: "group" as const,
     team_a_id: p.teamAId,
     team_b_id: p.teamBId,
+    best_of: params.bestOf,
   }));
   const { error } = await supabase.from("matches").insert(rows);
   if (error) throw error;
 }
 
-/** 試合カードを1件作成する（手動追加）。phase は 'group' 固定。 */
+/** 試合カードを1件作成する（手動追加）。phase は 'group' 固定。best_of は予選デフォルト。 */
 export async function insertGroupMatch(params: {
   eventId: string;
   groupId: string;
   teamAId: string;
   teamBId: string;
+  bestOf: number;
 }): Promise<{ ok: true; id: string } | { ok: false }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -171,6 +179,7 @@ export async function insertGroupMatch(params: {
       phase: "group",
       team_a_id: params.teamAId,
       team_b_id: params.teamBId,
+      best_of: params.bestOf,
     })
     .select("id")
     .single();

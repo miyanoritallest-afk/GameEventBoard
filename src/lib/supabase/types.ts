@@ -139,6 +139,7 @@ export type Database = {
           ends_at: string | null
           entry_type: Database["public"]["Enums"]["entry_type"]
           game_id: string
+          group_best_of: number
           id: string
           organizer_id: string
           points_draw: number
@@ -178,6 +179,7 @@ export type Database = {
           ends_at?: string | null
           entry_type?: Database["public"]["Enums"]["entry_type"]
           game_id: string
+          group_best_of?: number
           id?: string
           organizer_id: string
           points_draw?: number
@@ -217,6 +219,7 @@ export type Database = {
           ends_at?: string | null
           entry_type?: Database["public"]["Enums"]["entry_type"]
           game_id?: string
+          group_best_of?: number
           id?: string
           organizer_id?: string
           points_draw?: number
@@ -483,6 +486,7 @@ export type Database = {
       }
       matches: {
         Row: {
+          best_of: number
           bracket_position: number | null
           created_at: string
           event_id: string
@@ -499,6 +503,7 @@ export type Database = {
           team_b_id: string | null
         }
         Insert: {
+          best_of?: number
           bracket_position?: number | null
           created_at?: string
           event_id: string
@@ -515,6 +520,7 @@ export type Database = {
           team_b_id?: string | null
         }
         Update: {
+          best_of?: number
           bracket_position?: number | null
           created_at?: string
           event_id?: string
