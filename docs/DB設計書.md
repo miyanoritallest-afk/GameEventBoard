@@ -562,6 +562,8 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
   - 実装状況: 0010 で設定（チーム編成 PR-1）。teams は SELECT/INSERT/UPDATE/DELETE すべて「対象イベントの主催者のみ」（events への EXISTS）。team_members は teams を経由して events.organizer_id を確認する2段の EXISTS。PR-1 は organizer 振り分けのみで、SELECT も主催者限定（参加チーム一覧の一般公開は本戦機能で緩和）。self 応募（応募者がチームを作る）のポリシーは PR-3 で追加。
   - 0011（self応募 PR-3a）で SELECT を緩和: registrations / teams / team_members とも「本人/主催者＋**同イベントの参加者（応募者）**」が閲覧可。判定は `is_event_participant(event_id, uid)`（security definer 関数。RLS 内の自己参照による再帰評価を避けるため）。公開範囲は壁打ちで「算出根拠含め全公開・全イベント」と確定（OSL は Google フォーム提出物を全共有していた運用に倣う）。
   - 0012（self応募 PR-3b）で teams / team_members に **self 応募者向けの INSERT/DELETE** を追加（主催者の 0010 と並存）。許可条件は「`team_formation='self'` のイベントの approved 応募者が、自分を代表（captain）とする `status='pending'` チームを作り、approved な同イベント応募をメンバーに追加する」こと。判定は security definer 関数 `can_self_captain` / `is_approved_registration` / `is_own_pending_self_team` に切り出し（再帰評価回避）。承認後（approved）の改変・current_count の改竄は不可（events 列は self の書き込みで触らない）。承認時の current_count 排他は主催者の `events` UPDATE（0004）で行う。
+- groups / group_teams: イベント主催者が編集（予選ブロック分け）、参加者は閲覧。
+  - 実装状況: 0013 で設定（本戦フェーズ PR-1）。groups は SELECT=「主催者 or 同イベント参加者」、INSERT/UPDATE/DELETE=主催者のみ（events への EXISTS）。group_teams は groups を経由して events.organizer_id を確認する2段の EXISTS（SELECT は参加者にも開放、書き込みは主催者のみ）。閲覧開放の判定は 0011 の `is_event_participant` を再利用。振り分け対象は approved チームのみ（アプリ層で確認）。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
 - is_admin は全権限のエスケープハッチ。
