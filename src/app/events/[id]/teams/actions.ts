@@ -8,6 +8,8 @@ import {
   insertTeam,
   findTeamById,
   renameTeam as renameTeamRepo,
+  setTeamCaptain as setTeamCaptainRepo,
+  isTeamMember,
   deleteTeam as deleteTeamRepo,
   insertTeamMember,
   moveTeamMember,
@@ -144,6 +146,53 @@ export async function renameTeam(
     if (result.duplicate) {
       return { error: "同じ名前のチームがすでに存在します。" };
     }
+    return {
+      error: "更新に失敗しました。画面を更新してからもう一度お試しください。",
+    };
+  }
+
+  revalidatePath(`/events/${event.id}/teams`);
+  return {};
+}
+
+/**
+ * チームの代表（captain）を指名/変更する。所属イベント主催者のみ。
+ *
+ * 背景（実機FB）: 主催者が編成したチームは captain が無く、結果入力が主催者しか
+ * できなかった。主催者が後から代表を指名できるようにし、その代表は自チームの
+ * 試合結果を入力できる（reportResult の captainUserIds 判定に乗る）。
+ *
+ * 防御:
+ * 1. ログイン確認。
+ * 2. チーム取得＋所有者確認（IDOR。存在しない/他人は同一の権限なし応答）。
+ * 3. 指名対象がそのチームの所属メンバーであることを確認（無関係な応募を代表にしない）。
+ * 4. 楽観ロック付きで captain を更新（is_representative も同期）。RLS（0010）が最終防衛。
+ */
+export async function setTeamCaptain(
+  teamId: string,
+  registrationId: string,
+): Promise<TeamActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const team = await findTeamById(teamId);
+  if (!team) return { error: "このチームを操作する権限がありません。" };
+
+  const event = await requireOrganizer(team.event_id, userId);
+  if (!event) return { error: "このチームを操作する権限がありません。" };
+
+  // 指名対象がそのチームのメンバーか（別チーム/未割当の応募を代表にしない）。
+  const member = await isTeamMember({ teamId, registrationId });
+  if (!member) {
+    return { error: "このメンバーはチームに所属していません。" };
+  }
+
+  const result = await setTeamCaptainRepo({
+    teamId,
+    registrationId,
+    expectedVersion: team.version,
+  });
+  if (!result.ok) {
     return {
       error: "更新に失敗しました。画面を更新してからもう一度お試しください。",
     };

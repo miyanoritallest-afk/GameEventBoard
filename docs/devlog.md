@@ -7,6 +7,27 @@
 
 ---
 
+## 2026-06-25 — C-6: 主催者がチーム代表を指名できる（実機確認の追加フィードバック）
+
+実機確認で「応募者（代表）が結果入力できない」と判明。DB を確認したところ、原因は**主催者編成チームには代表（captain）がいない**こと（self 確定チームだけ captain_registration_id が入る）。代表がいないチームは reportResult の captainUserIds 判定に誰も乗らず、主催者しか結果入力できなかった。
+
+### やったこと
+- **Repository**: `setTeamCaptain`（teams.captain_registration_id を楽観ロックで更新＋team_members.is_representative を同チーム内で1人だけ true に同期）と `isTeamMember`（指名対象が所属メンバーかの事前検証）を追加。
+- **Server Action**: `setTeamCaptain(teamId, registrationId)`。ログイン→所有者確認（requireOrganizer）→所属メンバー検証→楽観ロック更新。RLS（0010）が最終防衛。
+- **UI**: チーム編成画面（主催者・実チームのみ）で各メンバーに「代表にする」ボタンと、代表に「★代表」バッジを表示。楽観更新で captainRegistrationId を差し替え。
+- これにより指名された代表は自チームの試合結果を入力できる（`findMatchForReport` が captain_registration_id→registrations.user_id を辿るため、捕捉は自動）。
+- マイグレーション不要（既存カラム・RLS で主催者の teams/team_members 更新は許可済み）。lint/typecheck/test(230緑)/build 通過。
+
+### 決めたこと（なぜ・壁打ち済み）
+- **「主催者が代表を指名できる」案を採用**（メンバー全員に許可ではなく）。代表を1人に定めることで「誰が入力したか」の責任が明確。self 確定チームは従来どおり確定時の代表のまま。
+- **captain_registration_id と is_representative を両方更新**。前者が正（reportの認可に使う）だが、後者も表示・整合のため1人 true に揃える。
+- **代表は1チーム1人**（指名で他は false に落ちる）。
+
+### 次にやること
+- [ ] 実機確認の残り（②応募者の試算モードでの実チーム固定は未確認）。フィードバック対応は概ね完了。
+
+---
+
 ## 2026-06-24 — C-5: D&D のドロップ判定を浅い位置で受け付ける（実機確認の追加フィードバック）
 
 実機確認で「リザーブ→未割当プールへ D&D するとき、応募者カードが横長のせいか領域へ深く押し込まないとドロップを受け付けない」と判明。
