@@ -115,7 +115,7 @@ export default async function EventTeamsPage({
                 href={`/events/${event.id}/groups`}
                 className="text-sm text-primary hover:underline"
               >
-                予選ブロック分けへ →
+                ブロック分けへ →
               </Link>
             )}
             <Link

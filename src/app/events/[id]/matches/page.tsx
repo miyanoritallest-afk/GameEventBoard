@@ -206,7 +206,7 @@ export default async function EventMatchesPage({
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1200px] px-6 py-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">予選対戦表</h1>
+          <h1 className="text-2xl font-bold">対戦表・順位表</h1>
           <div className="flex items-center gap-4">
             {isOrganizer && (
               <Link

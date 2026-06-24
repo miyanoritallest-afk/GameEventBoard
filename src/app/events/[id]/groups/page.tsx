@@ -104,14 +104,14 @@ export default async function EventGroupsPage({
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1600px] px-6 py-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">予選ブロック分け</h1>
+          <h1 className="text-2xl font-bold">ブロック分け</h1>
           <div className="flex items-center gap-4">
             {isOrganizer && (
               <Link
                 href={`/events/${event.id}/matches`}
                 className="text-sm text-primary hover:underline"
               >
-                予選対戦表へ →
+                対戦表・順位表へ →
               </Link>
             )}
             <Link
