@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { decideWinner, validateBoScore, validatePotg } from "../match-result";
+import {
+  decideWinner,
+  validateBoScore,
+  validatePotg,
+  describeBestOf,
+} from "../match-result";
 
 /**
  * 勝者判定ロジックの単体テスト（純粋関数なので網羅できる）。
@@ -107,5 +112,19 @@ describe("validatePotg", () => {
     expect(ok(3, 1, 0, 0)).toBe(false); // 0-0 は総4と不一致
     expect(ok(3, 0, 2, 0)).toBe(false); // 総3に対し2
     expect(ok(3, 2, 3, 3)).toBe(false); // 総5に対し6
+  });
+});
+
+/** BO の説明文（UI ツールチップ用・④）。 */
+describe("describeBestOf", () => {
+  it("奇数BOは過半数先取の表記", () => {
+    expect(describeBestOf(3)).toBe("3マップ中2本先取");
+    expect(describeBestOf(5)).toBe("5マップ中3本先取");
+    expect(describeBestOf(1)).toBe("1マップ中1本先取");
+  });
+
+  it("偶数BOは全マップ消化・引分ありの表記", () => {
+    expect(describeBestOf(2)).toBe("全2マップ・引分あり");
+    expect(describeBestOf(4)).toBe("全4マップ・引分あり");
   });
 });

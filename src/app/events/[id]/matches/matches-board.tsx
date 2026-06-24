@@ -8,7 +8,11 @@ import {
   reportResult,
   clearResult,
 } from "./actions";
-import { validateBoScore, validatePotg } from "@/lib/services/match-result";
+import {
+  validateBoScore,
+  validatePotg,
+  describeBestOf,
+} from "@/lib/services/match-result";
 
 /** ブロック所属チーム（プルダウン用）。 */
 export type BoardTeam = { id: string; name: string };
@@ -328,11 +332,12 @@ function MatchCard({
   onClear: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  // 未入力時の初期値は 0（空欄だと先頭にカーソルを置いて消す手間がある・⑪）。
   const [scoreA, setScoreA] = useState(
-    match.teamAScore !== null ? String(match.teamAScore) : "",
+    match.teamAScore !== null ? String(match.teamAScore) : "0",
   );
   const [scoreB, setScoreB] = useState(
-    match.teamBScore !== null ? String(match.teamBScore) : "",
+    match.teamBScore !== null ? String(match.teamBScore) : "0",
   );
   const [potgA, setPotgA] = useState(String(match.potgA));
   const [potgB, setPotgB] = useState(String(match.potgB));
@@ -391,23 +396,35 @@ function MatchCard({
           <span className="mr-2 text-xs text-muted-foreground tabular-nums">
             {index + 1}.
           </span>
-          <span className="mr-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span
+            title={`BO${match.bestOf}（${describeBestOf(match.bestOf)}）`}
+            className="mr-2 cursor-help rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+          >
             BO{match.bestOf}
           </span>
           <span
             className={
               match.teamAName
                 ? winA
-                  ? "font-semibold text-primary"
+                  ? "rounded bg-primary/15 px-1.5 py-0.5 font-bold text-primary"
+                  : match.hasResult
+                  ? "text-muted-foreground"
                   : ""
                 : "text-destructive"
             }
           >
+            {winA && "🏆 "}
             {match.teamAName ?? "未定/削除済み"}
           </span>
           {match.hasResult ? (
-            <span className="mx-2 font-semibold tabular-nums">
-              {match.teamAScore} - {match.teamBScore}
+            <span className="mx-2 tabular-nums">
+              <span className={winA ? "font-bold text-primary" : "font-semibold"}>
+                {match.teamAScore}
+              </span>
+              {" - "}
+              <span className={winB ? "font-bold text-primary" : "font-semibold"}>
+                {match.teamBScore}
+              </span>
             </span>
           ) : (
             <span className="mx-2 text-muted-foreground">vs</span>
@@ -416,15 +433,20 @@ function MatchCard({
             className={
               match.teamBName
                 ? winB
-                  ? "font-semibold text-primary"
+                  ? "rounded bg-primary/15 px-1.5 py-0.5 font-bold text-primary"
+                  : match.hasResult
+                  ? "text-muted-foreground"
                   : ""
                 : "text-destructive"
             }
           >
+            {winB && "🏆 "}
             {match.teamBName ?? "未定/削除済み"}
           </span>
           {isDraw && (
-            <span className="ml-2 text-xs text-muted-foreground">引分</span>
+            <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+              引分
+            </span>
           )}
         </span>
 
