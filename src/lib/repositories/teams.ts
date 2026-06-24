@@ -73,6 +73,70 @@ export async function renameTeam(params: {
   return { ok: true };
 }
 
+/** 指定 registration がそのチームの所属メンバーかを返す（代表指名の事前検証用）。 */
+export async function isTeamMember(params: {
+  teamId: string;
+  registrationId: string;
+}): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("team_members")
+    .select("id")
+    .eq("team_id", params.teamId)
+    .eq("registration_id", params.registrationId)
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
+ * チームの代表（captain）を指名/変更する（主催者編成チームに代表を後付けする・実機FB）。
+ * teams.captain_registration_id を更新（楽観ロック）し、team_members.is_representative を
+ * 「指名された1人だけ true、同チームの他は false」に揃える。
+ *
+ * registrationId は呼び出し側で「そのチームの所属メンバーであること」を検証済みの前提。
+ * 競合（版ずれ・横取り）なら conflict。
+ */
+export async function setTeamCaptain(params: {
+  teamId: string;
+  registrationId: string;
+  expectedVersion: number;
+}): Promise<{ ok: true } | { ok: false; conflict?: true }> {
+  const supabase = await createClient();
+
+  // 代表を立てる（楽観ロック）。条件に合致しなければ null＝競合。
+  const { data, error } = await supabase
+    .from("teams")
+    .update({
+      captain_registration_id: params.registrationId,
+      version: params.expectedVersion + 1,
+    })
+    .eq("id", params.teamId)
+    .eq("version", params.expectedVersion)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return { ok: false, conflict: true };
+
+  // is_representative を同チーム内で1人だけ true に揃える。
+  // まず全員 false にし、指名者だけ true に（2クエリ。RLS 0010 が主催者を担保）。
+  const { error: clearErr } = await supabase
+    .from("team_members")
+    .update({ is_representative: false })
+    .eq("team_id", params.teamId);
+  if (clearErr) throw clearErr;
+
+  const { error: setErr } = await supabase
+    .from("team_members")
+    .update({ is_representative: true })
+    .eq("team_id", params.teamId)
+    .eq("registration_id", params.registrationId);
+  if (setErr) throw setErr;
+
+  return { ok: true };
+}
+
 /** チームを削除する。team_members は FK の on delete cascade で連動削除。 */
 export async function deleteTeam(teamId: string) {
   const supabase = await createClient();

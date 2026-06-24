@@ -32,6 +32,7 @@ import {
   cancelSelfTeam,
   approveTeam,
   rejectTeam,
+  setTeamCaptain,
 } from "./actions";
 
 /** OW2 のロール順（ロール行の並び）。 */
@@ -557,6 +558,29 @@ export function TeamsBoard({
   }
 
   /**
+   * 代表（captain）を指名する（主催者のみ・実機FB）。
+   * 指名すると、そのメンバーは自チームの試合結果を入力できるようになる。
+   * 楽観更新でチームの captainRegistrationId を差し替え、失敗時はロールバック。
+   */
+  function handleSetCaptain(teamId: string, registrationId: string) {
+    setError(null);
+    const prevTeams = teams;
+    const prevUnassigned = unassigned;
+    setTeams(
+      teams.map((t) =>
+        t.id === teamId
+          ? { ...t, captainRegistrationId: registrationId }
+          : t,
+      ),
+    );
+    startTransition(async () => {
+      const r = await setTeamCaptain(teamId, registrationId);
+      if (r.error) rollback(prevTeams, prevUnassigned, r.error);
+      else flashSaved();
+    });
+  }
+
+  /**
    * self 確定（試算モード）。シミュレーション枠 sim-1 の中身をサーバーへ送って確定する。
    * 成功したらページが revalidate され、確定チームが pending として表示される。
    */
@@ -840,6 +864,12 @@ export function TeamsBoard({
                       roleSwapAllowed={roleSwapAllowed}
                       teamSize={teamSize}
                       teamScoreCap={teamScoreCap}
+                      // 代表指名は主催者・実チームのみ（SIM/試算では出さない）。
+                      onSetCaptain={
+                        isOrganizer && !isSim
+                          ? (rid) => handleSetCaptain(team.id, rid)
+                          : undefined
+                      }
                       onDelete={() => handleDeleteTeam(team.id)}
                       onUnassign={handleUnassign}
                       onSwap={handleSwap}
@@ -1015,6 +1045,7 @@ function TeamCard({
   roleSwapAllowed,
   teamSize,
   teamScoreCap,
+  onSetCaptain,
   onDelete,
   onUnassign,
   onSwap,
@@ -1029,6 +1060,8 @@ function TeamCard({
   roleSwapAllowed: boolean;
   teamSize: number;
   teamScoreCap: number | null;
+  /** 代表を指名する（主催者・実チームのみ。未指定なら代表操作を出さない）。 */
+  onSetCaptain?: (registrationId: string) => void;
   onDelete: () => void;
   onUnassign: (registrationId: string) => void;
   onSwap: (teamId: string, outId: string, inId: string) => void;
@@ -1121,6 +1154,8 @@ function TeamCard({
             membersDraggable={membersDraggable}
             showScore={showScore}
             onUnassign={onUnassign}
+            captainRegistrationId={team.captainRegistrationId}
+            onSetCaptain={onSetCaptain}
           />
         ) : (
           // ロールスワップ不可: タンク/DPS/サポートのロール行に分け、担当を明示。
@@ -1140,6 +1175,8 @@ function TeamCard({
                 membersDraggable={membersDraggable}
                 showScore={showScore}
                 onUnassign={onUnassign}
+                captainRegistrationId={team.captainRegistrationId}
+                onSetCaptain={onSetCaptain}
                 compact
               />
             ))}
@@ -1157,6 +1194,8 @@ function TeamCard({
         membersDraggable={membersDraggable}
         showScore={showScore}
         onUnassign={onUnassign}
+        captainRegistrationId={team.captainRegistrationId}
+        onSetCaptain={onSetCaptain}
         selectableReserve={showScore}
         selectedReserveId={selectedReserveId}
         onSelectReserve={(rid) =>
@@ -1252,6 +1291,8 @@ function Zone({
   membersDraggable = true,
   showScore,
   onUnassign,
+  captainRegistrationId = null,
+  onSetCaptain,
   compact = false,
   selectableReserve = false,
   selectedReserveId = null,
@@ -1267,6 +1308,10 @@ function Zone({
   membersDraggable?: boolean;
   showScore: boolean;
   onUnassign: (registrationId: string) => void;
+  /** このチームの代表の応募 id（代表バッジ表示用）。 */
+  captainRegistrationId?: string | null;
+  /** 代表を指名する（主催者・実チームのみ。未指定なら代表操作を出さない）。 */
+  onSetCaptain?: (registrationId: string) => void;
   compact?: boolean;
   selectableReserve?: boolean;
   selectedReserveId?: string | null;
@@ -1297,6 +1342,10 @@ function Zone({
               member={m}
               showScore={showScore}
               draggable={membersDraggable}
+              isCaptain={captainRegistrationId === m.registrationId}
+              onSetCaptain={
+                onSetCaptain ? () => onSetCaptain(m.registrationId) : undefined
+              }
               onUnassign={
                 readOnly ? undefined : () => onUnassign(m.registrationId)
               }
@@ -1331,6 +1380,8 @@ function MemberCard({
   draggable: canDrag = true,
   assignTargets = [],
   onAssign,
+  isCaptain = false,
+  onSetCaptain,
 }: {
   member: BoardMember;
   showScore: boolean;
@@ -1343,6 +1394,10 @@ function MemberCard({
   /** 「チームへ送る」先（プールのカードのみ。空なら出さない・⑫）。 */
   assignTargets?: { id: string; name: string }[];
   onAssign?: (teamId: string) => void;
+  /** このメンバーが代表（captain）か。代表バッジ表示用。 */
+  isCaptain?: boolean;
+  /** 代表に指名する（主催者・実チームのみ。未指定なら代表操作を出さない）。 */
+  onSetCaptain?: () => void;
 }) {
   // overlay（DragOverlay 内の表示）と固定カードは draggable にしない。
   const draggable = useDraggable({
@@ -1372,7 +1427,17 @@ function MemberCard({
       } ${isDragging ? "opacity-40" : ""} ${overlay ? "shadow-lg" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">{member.discordName}</span>
+        <span className="text-sm font-medium">
+          {member.discordName}
+          {isCaptain && (
+            <span
+              title="代表（試合結果を入力できます）"
+              className="ml-1.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary align-middle"
+            >
+              ★代表
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-2">
           {showScore && (
             <span className="text-sm font-semibold tabular-nums">
@@ -1399,6 +1464,22 @@ function MemberCard({
         <div className="mt-0.5 text-xs text-muted-foreground">
           希望 {roles.map((r) => ROLE_LABEL[r] ?? r).join("→")}
         </div>
+      )}
+
+      {/* 代表指名（主催者・実チームのみ）。既に代表の人には出さない。
+          代表は自チームの試合結果を入力できる（実機FB）。 */}
+      {!overlay && onSetCaptain && !isCaptain && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSetCaptain();
+          }}
+          className="mt-1.5 text-xs text-primary hover:underline"
+        >
+          代表にする
+        </button>
       )}
 
       {/* 「チームへ送る」セレクト（プールのカードのみ）。クリック割当で D&D を不要にする（⑫）。
