@@ -91,6 +91,8 @@ export default async function EventTeamsPage({
     captainRegistrationId:
       (t as { captain_registration_id?: string | null })
         .captain_registration_id ?? null,
+    createdAt:
+      (t as { created_at?: string | null }).created_at ?? null,
     members: (t.team_members ?? []).map((tm) => {
       const reg = tm.registrations as unknown as RegJoin;
       return toBoardMember(reg, { role: tm.role, position: tm.position });

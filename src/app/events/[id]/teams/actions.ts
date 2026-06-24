@@ -67,7 +67,12 @@ export type CreateTeamState = { error?: string; teamId?: string };
 
 /**
  * チーム作成。イベント主催者のみ。名前を Zod 検証し、event_id はサーバー固定。
+ * 主催者編成チームは作成と同時に approved 成立＝**capacity（チーム数）を排他カウント**する。
+ * 満員なら作成を弾く（フィードバック③: 主催者が定員超過のチームを作れていた不具合の修正）。
  * 成功時は作成チームの id を返す（クライアントが即座に楽観追加できるようにする）。
+ *
+ * 順序: 先に capacity を排他 +1 → 成功時のみ teams を insert。
+ * insert が失敗（同名等）したらカウントを戻す（補償）。approveTeam と対称。
  */
 export async function createTeam(
   eventId: string,
@@ -84,8 +89,24 @@ export async function createTeam(
     return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
   }
 
+  // capacity を排他 +1。満員/競合なら弾く（capacity が null なら無制限で常に通る）。
+  const ev = await findEventCapacity(eventId);
+  if (!ev) return { error: "イベントが見つかりません。" };
+  const counted = await incrementEventCount({
+    eventId,
+    expectedVersion: ev.version,
+  });
+  if (!counted.ok) {
+    return {
+      error:
+        "定員に達しているか、他の操作と競合しました。画面を更新して確認してください。",
+    };
+  }
+
   const result = await insertTeam({ eventId, name: parsed.data.name });
   if (!result.ok) {
+    // 補償: +1 したカウントを戻す（同名で作れなかった等）。
+    await decrementEventCountCompensate(eventId);
     return { error: "同じ名前のチームがすでに存在します。" };
   }
 
@@ -134,12 +155,14 @@ export async function renameTeam(
 
 /**
  * チーム削除。所属イベント主催者のみ。メンバーは FK cascade で連動削除。
+ * 削除したチームが approved（成立済み＝capacity をカウント済み）なら current_count を -1 戻す
+ * （フィードバック③: カウント整合。pending/rejected は元々未カウントなので触らない）。
  */
 export async function deleteTeam(teamId: string): Promise<TeamActionState> {
   const userId = await currentUserId();
   if (!userId) return { error: "ログインが必要です。" };
 
-  const team = await findTeamById(teamId);
+  const team = await findTeamWithStatus(teamId);
   if (!team) return { error: "このチームを操作する権限がありません。" };
 
   const event = await requireOrganizer(team.event_id, userId);
@@ -148,6 +171,11 @@ export async function deleteTeam(teamId: string): Promise<TeamActionState> {
   const deleted = await deleteTeamRepo(teamId);
   if (!deleted) {
     return { error: "削除に失敗しました。画面を更新してからお試しください。" };
+  }
+
+  // approved だったチームのみ、成立数カウントを 1 戻す（pending/rejected は未カウント）。
+  if (team.status === "approved") {
+    await decrementEventCountCompensate(team.event_id);
   }
 
   revalidatePath(`/events/${event.id}/teams`);
@@ -496,7 +524,7 @@ export async function approveTeam(teamId: string): Promise<TeamActionState> {
 }
 
 /**
- * 承認の補償用に current_count を 1 戻す（status 更新失敗時のみ呼ぶ）。
+ * current_count を 1 戻す。承認/作成の補償（後続失敗時）と、approved チーム削除時に呼ぶ。
  * 競合に強くするため最新 version を読んでから戻す。失敗しても致命ではない（次回再集計可）。
  */
 async function decrementEventCountCompensate(eventId: string): Promise<void> {

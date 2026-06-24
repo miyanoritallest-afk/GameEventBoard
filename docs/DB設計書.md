@@ -541,6 +541,15 @@ WHERE id = :event_id
 ```
 - 最終防衛として CHECK(current_count <= capacity) と registrations の UNIQUE(event_id,user_id)。
 
+### 5.1 current_count（成立チーム数）の増減経路（A-3で整合）
+`current_count` は **approved（成立）チーム数**を表す。増減する経路は以下のみ：
+- **+1**: `createTeam`（主催者編成＝即 approved 成立）／`approveTeam`（self の pending→approved 承認）。
+  ともに上記の version 条件付き UPDATE で排他し、満員なら弾く。
+- **−1**: approved チームの `deleteTeam`（成立を取り消す）。承認/作成の後続処理が失敗した場合の補償でも −1。
+- **触らない**: self の `submitSelfTeam`（pending 作成）／`rejectTeam`／`cancelSelfTeam`（pending の取り下げ）。
+  pending は枠を食わず、承認時にカウントするため（先着順で承認・残りは却下）。
+- ※ 以前は createTeam がカウント漏れで定員超過のチームを作れた（フィードバック③）。修正済み。
+
 ---
 
 ## 5.1 通知の生成（重複排除）方針
