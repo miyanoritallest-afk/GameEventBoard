@@ -112,6 +112,53 @@ function toMemberScore(m: BoardMember): MemberScore {
 /** ローカル試算チームの id プレフィックス（DB 保存しない）。 */
 const SIM_TEAM_ID = "sim-1";
 
+/** 未割当プールの並び替えキー（⑫）。応募者が多いとき探しやすくする。 */
+type PoolSort =
+  | "applied" // 全体（応募順＝初期配列の順）
+  | "score" // 全体（スコア順・降順）
+  | "role_tank" // 第1希望タンクのみ（スコア順）
+  | "role_dps" // 第1希望DPSのみ（スコア順）
+  | "role_support"; // 第1希望サポートのみ（スコア順）
+
+const POOL_SORT_OPTIONS: { value: PoolSort; label: string }[] = [
+  { value: "applied", label: "全体（応募順）" },
+  { value: "score", label: "全体（スコア順）" },
+  { value: "role_tank", label: "第1希望: タンク（スコア順）" },
+  { value: "role_dps", label: "第1希望: DPS（スコア順）" },
+  { value: "role_support", label: "第1希望: サポート（スコア順）" },
+];
+
+/** PoolSort のロール系キー → 第1希望ロール値。 */
+const POOL_SORT_ROLE: Partial<Record<PoolSort, RoleKey>> = {
+  role_tank: "tank",
+  role_dps: "dps",
+  role_support: "support",
+};
+
+/**
+ * 未割当プールを並び替え/絞り込みする（表示用の派生・純粋）。
+ * - applied: 元の順序を保つ（応募順）。
+ * - score: 実効スコア降順（null は末尾）。
+ * - role_*: 第1希望が該当ロールの人だけに絞り、スコア降順。
+ * 元配列は破壊しない（応募順を失わないため）。
+ */
+function sortPool(members: BoardMember[], sort: PoolSort): BoardMember[] {
+  const byScoreDesc = (a: BoardMember, b: BoardMember) => {
+    const sa = effective(a);
+    const sb = effective(b);
+    if (sa === null && sb === null) return 0;
+    if (sa === null) return 1; // null は末尾
+    if (sb === null) return -1;
+    return sb - sa;
+  };
+  if (sort === "applied") return members;
+  if (sort === "score") return [...members].sort(byScoreDesc);
+  const role = POOL_SORT_ROLE[sort];
+  return members
+    .filter((m) => (m.preferredRoles[0] ?? null) === role)
+    .sort(byScoreDesc);
+}
+
 /** 確定日時を JST の「MM/DD HH:mm」で表示する（承認待ちの応募順表示用）。 */
 function formatSubmittedAt(iso: string): string {
   const d = new Date(iso);
@@ -173,6 +220,8 @@ export function TeamsBoard({
       : initialTeams,
   );
   const [unassigned, setUnassigned] = useState<BoardMember[]>(initialUnassigned);
+  // 未割当プールの並び替え（⑫・表示のみ。元の応募順は state 側で保持）。
+  const [poolSort, setPoolSort] = useState<PoolSort>("applied");
   const [activeMember, setActiveMember] = useState<BoardMember | null>(null);
   const [newTeamName, setNewTeamName] = useState("");
   // self 確定（試算モード）のチーム名入力。
@@ -425,6 +474,43 @@ export function TeamsBoard({
     });
   }
 
+  /**
+   * 「チームへ送る」ボタン（⑫）。D&D の代わりにクリックで割当する。
+   * 割当先ロールは出場ゾーン基準＝メンバーの第1希望（DnD の既定と同じ）。
+   * 試算モードは SIM 枠への追加のみ（保存しない）。実モードは assignMember を呼ぶ。
+   */
+  function handleAssignToTeam(registrationId: string, teamId: string) {
+    const member = findMember(registrationId);
+    if (!member) return;
+    const role = member.preferredRoles[0] ?? member.role ?? "tank";
+    setError(null);
+    const prevTeams = teams;
+    const prevUnassigned = unassigned;
+
+    // 全所在から外して対象チームの出場へ入れる（楽観）。
+    const detachedTeams = teams.map((t) => ({
+      ...t,
+      members: t.members.filter((m) => m.registrationId !== registrationId),
+    }));
+    setUnassigned(unassigned.filter((m) => m.registrationId !== registrationId));
+    setTeams(
+      detachedTeams.map((t) =>
+        t.id === teamId
+          ? {
+              ...t,
+              members: [...t.members, { ...member, role, position: "regular" }],
+            }
+          : t,
+      ),
+    );
+    if (readOnly) return; // 試算モードは保存しない（SIM 枠への追加のみ）。
+    startTransition(async () => {
+      const r = await assignMember({ registrationId, teamId, role });
+      if (r.error) rollback(prevTeams, prevUnassigned, r.error);
+      else flashSaved();
+    });
+  }
+
   /** 交代実行: out（レギュラー）と in（リザーブ）の position を入れ替える。 */
   function handleSwap(teamId: string, outId: string, inId: string) {
     setError(null);
@@ -557,6 +643,9 @@ export function TeamsBoard({
     <DndContext
       id="teams-board-dnd"
       sensors={sensors}
+      // 応募者が多いと未割当プールが縦に長くなるため、ドラッグ中の端で
+      // 自動スクロールを効かせる（⑫。チームへ運ぶ移動距離を緩和）。
+      autoScroll={{ threshold: { x: 0, y: 0.2 } }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -667,7 +756,18 @@ export function TeamsBoard({
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
         {/* 左: 未割当プール */}
-        <Pool members={unassigned} showScore={showScore} />
+        <Pool
+          members={sortPool(unassigned, poolSort)}
+          totalCount={unassigned.length}
+          showScore={showScore}
+          sort={poolSort}
+          onSortChange={setPoolSort}
+          // 「チームへ送る」先候補。試算モードは SIM 枠のみ・実モードは全チーム。
+          assignTargets={teams
+            .filter((t) => (readOnly ? t.id === SIM_TEAM_ID : true))
+            .map((t) => ({ id: t.id, name: t.name }))}
+          onAssign={handleAssignToTeam}
+        />
 
         {/* 右: チーム群 */}
         <div className="space-y-4">
@@ -808,15 +908,32 @@ function StatusBadge({ status }: { status: TeamStatus }) {
   );
 }
 
-/** 未割当プール（droppable）。 */
+/**
+ * 未割当プール（droppable）。
+ * 応募者が多いと縦に長くなるため、並び替え（⑫）と「チームへ送る」ボタンで
+ * 探す/割り当てる負担を下げる。members は表示用に整形済み（応募順 or 絞込/ソート後）。
+ */
 function Pool({
   members,
+  totalCount,
   showScore,
+  sort,
+  onSortChange,
+  assignTargets,
+  onAssign,
 }: {
   members: BoardMember[];
+  /** 絞り込み前の未割当総数（見出し表示用）。 */
+  totalCount: number;
   showScore: boolean;
+  sort: PoolSort;
+  onSortChange: (s: PoolSort) => void;
+  /** 「チームへ送る」先候補（空なら送るボタンを出さない）。 */
+  assignTargets: { id: string; name: string }[];
+  onAssign: (registrationId: string, teamId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: POOL_ID });
+  const filtered = members.length !== totalCount;
   return (
     <div
       ref={setNodeRef}
@@ -825,12 +942,31 @@ function Pool({
       }`}
     >
       <h2 className="text-sm font-semibold text-muted-foreground">
-        未割当の応募者 ({members.length})
+        未割当の応募者 ({filtered ? `${members.length} / ${totalCount}` : totalCount})
       </h2>
+
+      {/* 並び替え/絞り込み（応募順・スコア順・第1希望ロール別）。 */}
+      <label className="mt-2 block">
+        <span className="sr-only">並び替え</span>
+        <select
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as PoolSort)}
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+        >
+          {POOL_SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div className="mt-3 space-y-2">
         {members.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            未割当の参加確定者はいません。
+            {filtered
+              ? "この条件に合う未割当の応募者はいません。"
+              : "未割当の参加確定者はいません。"}
           </p>
         ) : (
           members.map((m) => (
@@ -838,6 +974,8 @@ function Pool({
               key={m.registrationId}
               member={m}
               showScore={showScore}
+              assignTargets={assignTargets}
+              onAssign={(teamId) => onAssign(m.registrationId, teamId)}
             />
           ))
         )}
@@ -1173,6 +1311,8 @@ function MemberCard({
   selected = false,
   onSelect,
   draggable: canDrag = true,
+  assignTargets = [],
+  onAssign,
 }: {
   member: BoardMember;
   showScore: boolean;
@@ -1182,6 +1322,9 @@ function MemberCard({
   onSelect?: () => void;
   /** ドラッグ可能か。試算モードの他人の実チームは false（カード固定）。 */
   draggable?: boolean;
+  /** 「チームへ送る」先（プールのカードのみ。空なら出さない・⑫）。 */
+  assignTargets?: { id: string; name: string }[];
+  onAssign?: (teamId: string) => void;
 }) {
   // overlay（DragOverlay 内の表示）と固定カードは draggable にしない。
   const draggable = useDraggable({
@@ -1238,6 +1381,30 @@ function MemberCard({
         <div className="mt-0.5 text-xs text-muted-foreground">
           希望 {roles.map((r) => ROLE_LABEL[r] ?? r).join("→")}
         </div>
+      )}
+
+      {/* 「チームへ送る」セレクト（プールのカードのみ）。クリック割当で D&D を不要にする（⑫）。
+          pointer-down 伝播を止めて誤ドラッグを防ぐ。選ぶと割当して選択をリセット。 */}
+      {!overlay && onAssign && assignTargets.length > 0 && (
+        <select
+          value=""
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            const teamId = e.target.value;
+            if (teamId) onAssign(teamId);
+            e.currentTarget.value = "";
+          }}
+          aria-label={`${member.discordName} をチームへ送る`}
+          className="mt-1.5 w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
+        >
+          <option value="">▾ チームへ送る…</option>
+          {assignTargets.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
       )}
     </div>
   );
