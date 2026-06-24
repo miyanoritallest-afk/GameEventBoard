@@ -17,6 +17,7 @@
   - `createTeam`: capacity を排他 +1（`incrementEventCount` を再利用。満員/競合なら作成を弾く）。insert 失敗時はカウントを補償で戻す。`approveTeam` と対称。
   - `deleteTeam`: 削除対象が **approved なら −1** 戻す（pending/rejected は未カウントなので触らない）。`findTeamWithStatus` で status を見て分岐。
   - 承認待ちセクションに **申請が早い順（#1…）＋確定日時（JST）** を表示（追加要望）。先着順で承認・残りを却下する判断のため。
+  - **承認/却下/取り下げの楽観更新**を追加（実機確認で発覚）。従来は承認しても画面の status が更新されず、承認待ちセクションに残り続けていた（再度押すと「承認待ちのチームのみ」警告で承認済みと分かる状態）。approve→approved・reject→rejected・cancel→除外を即時反映、失敗時はロールバック。
 - DB設計書 5.1 に「current_count の増減経路」を整理して追記。lint/typecheck/test(218緑)/build。
 
 ### 決めたこと（なぜ・壁打ち）
