@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildOverwatchRankDefinitions,
   scoreToRankLabel,
+  scoreToRankAbbrev,
   OVERWATCH_TIERS,
 } from "../overwatch-ranks";
 
@@ -73,5 +74,24 @@ describe("scoreToRankLabel — スコア→ランク名の逆引き", () => {
   it("補完で生じた中間値は『相当』表記（最も近い段階）", () => {
     // 22.5 は最も近い 22 or 23 のラベル＋相当。
     expect(scoreToRankLabel(22.5)).toContain("相当");
+  });
+});
+
+describe("scoreToRankAbbrev — スコア→ランク略称（上限ガイド用）", () => {
+  it("帯の略称＋ディビジョンを返す", () => {
+    expect(scoreToRankAbbrev(1)).toBe("B5"); // ブロンズ5
+    expect(scoreToRankAbbrev(23)).toBe("D3"); // ダイヤ3
+    expect(scoreToRankAbbrev(40)).toBe("C1"); // チャンピオン1
+    expect(scoreToRankAbbrev(21)).toBe("D5"); // ダイヤ5
+  });
+
+  it("グランドマスターは2文字略称（GM）", () => {
+    // GM は ord6: 5→31 … 1→35。
+    expect(scoreToRankAbbrev(31)).toBe("GM5");
+    expect(scoreToRankAbbrev(35)).toBe("GM1");
+  });
+
+  it("null は未認定", () => {
+    expect(scoreToRankAbbrev(null)).toBe("未認定");
   });
 });

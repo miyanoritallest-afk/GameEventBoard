@@ -89,6 +89,7 @@ function parseEventFormData(
     bonusMaster: formData.get("bonusMaster"),
     bonusGm: formData.get("bonusGm"),
     bonusChampion: formData.get("bonusChampion"),
+    teamScoreCap: formData.get("teamScoreCap"),
     // 順位設定（本戦-3b）。tiebreakers は D&D 順を hidden input のカンマ区切りで受ける。
     rankingEnabled: formData.get("rankingEnabled") === "on",
     pointsWin: formData.get("pointsWin"),
@@ -128,6 +129,8 @@ function parseEventFormData(
       bonus_master: v.bonusMaster,
       bonus_gm: v.bonusGm,
       bonus_champion: v.bonusChampion,
+      // 空文字＝上限なし → null で保存。
+      team_score_cap: typeof v.teamScoreCap === "number" ? v.teamScoreCap : null,
       ranking_enabled: v.rankingEnabled,
       points_win: v.pointsWin,
       points_draw: v.pointsDraw,
@@ -154,6 +157,7 @@ type EventEditableValues = {
   bonus_master: number;
   bonus_gm: number;
   bonus_champion: number;
+  team_score_cap: number | null;
   ranking_enabled: boolean;
   points_win: number;
   points_draw: number;

@@ -87,6 +87,19 @@ export const createDraftEventSchema = z
       (v) => (v == null || v === "" ? 0 : v),
       z.coerce.number().min(0).max(10),
     ),
+    // チームスコア上限（B-1）。チームの出場メンバー final_score「平均」の上限。
+    // 任意・空可（空文字＝上限なし）。値があるなら 1〜40 の整数（ランクのスコアレンジ）。
+    teamScoreCap: z.preprocess(
+      (v) => (v == null || v === "" ? "" : v),
+      z.union([
+        z.coerce
+          .number()
+          .int()
+          .min(1, "チームスコア上限は1以上で入力してください")
+          .max(40, "チームスコア上限は40以下で入力してください"),
+        z.literal(""),
+      ]),
+    ),
 
     // 順位設定（本戦-3b）。ranking_enabled が親トグル。OFF なら配下は使わない。
     rankingEnabled: z.coerce.boolean().default(false),

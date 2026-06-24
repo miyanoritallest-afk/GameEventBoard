@@ -11,6 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { DateTimePicker } from "@/components/datetime-picker";
+import { scoreToRankAbbrev } from "@/lib/services/overwatch-ranks";
 
 type GameOption = { id: string; name: string };
 
@@ -43,6 +44,8 @@ export type EventFormDefaults = {
   bonusMaster?: number;
   bonusGm?: number;
   bonusChampion?: number;
+  /** チームスコア上限（メンバー final_score 平均の上限）。null/未設定＝上限なし。 */
+  teamScoreCap?: number;
   rankingEnabled?: boolean;
   pointsWin?: number;
   pointsDraw?: number;
@@ -102,6 +105,12 @@ export function EventForm({
     (d.bonusMaster ?? 0) > 0 ||
       (d.bonusGm ?? 0) > 0 ||
       (d.bonusChampion ?? 0) > 0,
+  );
+  // 子: チームスコアに上限を設けるか（cap が設定済みなら ON＝復元）。既定は上限なし。
+  const [useScoreCap, setUseScoreCap] = useState(d.teamScoreCap != null);
+  // ランク換算ガイド（例 "23 (D3)"）の表示用に入力値を state で持つ。
+  const [scoreCap, setScoreCap] = useState<number | "">(
+    d.teamScoreCap ?? "",
   );
   // 親トグル: 順位機能を使うか（OFF なら勝点・タイブレークを隠す）。
   const [rankingEnabled, setRankingEnabled] = useState(d.rankingEnabled ?? false);
@@ -281,6 +290,51 @@ export function EventForm({
                   />
                 </Field>
               </div>
+            )}
+
+            {/* 孫トグル: チームスコア上限を設けるか（B-1）。OFF＝上限なし。 */}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useScoreCap}
+                onChange={(e) => setUseScoreCap(e.target.checked)}
+                className="size-4"
+              />
+              チームスコアに上限を設ける（出場メンバー平均スコアの上限）
+            </label>
+
+            {/* OFF のときは空文字を送って null 保存（上限なし）にする。 */}
+            {!useScoreCap && (
+              <input type="hidden" name="teamScoreCap" value="" />
+            )}
+
+            {useScoreCap ? (
+              <Field label="チームスコア上限" error={fe.teamScoreCap}>
+                <input
+                  name="teamScoreCap"
+                  type="number"
+                  min={1}
+                  max={40}
+                  value={scoreCap}
+                  onChange={(e) =>
+                    setScoreCap(
+                      e.target.value === "" ? "" : Number(e.target.value),
+                    )
+                  }
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {scoreCap === ""
+                    ? "1〜40 で入力（チームの出場メンバー平均スコアの上限）。"
+                    : `ランク換算の目安: ${scoreCap} (${scoreToRankAbbrev(
+                        scoreCap,
+                      )})`}
+                </p>
+              </Field>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                ※ 上限なし（チーム編成時にスコアの上限チェックを行いません）。
+              </p>
             )}
           </div>
         )}
