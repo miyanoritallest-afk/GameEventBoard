@@ -343,7 +343,7 @@ export function EventForm({
       {/* 本戦設定（予選BO・本戦-3d） */}
       <fieldset className="rounded-xl border border-border bg-card p-4">
         <legend className="px-1 text-sm font-semibold">本戦設定</legend>
-        <Field label="予選BO（1試合のマップ数）" error={fe.groupBestOf}>
+        <Field label="BO（1試合のマップ数）" error={fe.groupBestOf}>
           <input
             name="groupBestOf"
             type="number"

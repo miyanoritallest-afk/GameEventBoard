@@ -175,7 +175,7 @@ export default async function EventDetailPage({
           <section className="mt-6 rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold">本戦</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              予選ブロックの組み分けと、対戦表・順位表を確認できます。
+              ブロックの組み分けと、対戦表・順位表を確認できます。
               {!isOrganizer && "（閲覧のみ）"}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
