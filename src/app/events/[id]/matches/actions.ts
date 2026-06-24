@@ -27,7 +27,11 @@ import {
   pairKey,
   type MatchPair,
 } from "@/lib/services/round-robin";
-import { decideWinner } from "@/lib/services/match-result";
+import {
+  decideWinner,
+  validateBoScore,
+  validatePotg,
+} from "@/lib/services/match-result";
 import {
   generateMatchesSchema,
   addMatchSchema,
@@ -264,11 +268,27 @@ export async function reportResult(input: {
     };
   }
 
-  // スコア上限を BO に連動（各チーム 0〜best_of。緩め＝合計・過半数までは強制しない）。
-  if (teamAScore > match.bestOf || teamBScore > match.bestOf) {
-    return {
-      error: `スコアはBO${match.bestOf}の上限（各チーム最大${match.bestOf}）を超えています。`,
-    };
+  // スコアが BO の組み合わせとして妥当か厳格に検証（過半数ちょうどで即終了。
+  // 奇数BOは引分なし・偶数BOは引分を許可）。あり得ない入力（BO5の2-1/0-0/4-1等）を弾く。
+  const boCheck = validateBoScore({
+    bestOf: match.bestOf,
+    teamAScore,
+    teamBScore,
+  });
+  if (!boCheck.ok) return { error: boCheck.message };
+
+  // POTG を使うイベント（tiebreakers に potg）だけ、POTG 合計＝総マップ数を検証する。
+  // POTG 欄を出さないイベントは potgA/B が 0 のままなので検証しない。
+  const event = await findEventById(match.eventId);
+  const usesPotg = (event?.tiebreakers ?? []).includes("potg");
+  if (usesPotg) {
+    const potgCheck = validatePotg({
+      teamAScore,
+      teamBScore,
+      potgA: potgA ?? 0,
+      potgB: potgB ?? 0,
+    });
+    if (!potgCheck.ok) return { error: potgCheck.message };
   }
 
   // winner はスコアからサーバーが算出（マスアサインメント対策）。

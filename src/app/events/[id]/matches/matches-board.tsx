@@ -8,6 +8,7 @@ import {
   reportResult,
   clearResult,
 } from "./actions";
+import { validateBoScore, validatePotg } from "@/lib/services/match-result";
 
 /** ブロック所属チーム（プルダウン用）。 */
 export type BoardTeam = { id: string; name: string };
@@ -335,6 +336,8 @@ function MatchCard({
   );
   const [potgA, setPotgA] = useState(String(match.potgA));
   const [potgB, setPotgB] = useState(String(match.potgB));
+  // 入力が BO/POTG ルールに反するときの説明（保存前にその場で示す）。
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const bothTeams = match.teamAId != null && match.teamBId != null;
   // 結果入力できる: 編集権あり・両チーム確定・主催者/代表。
@@ -343,12 +346,36 @@ function MatchCard({
   function handleSave() {
     const a = Number(scoreA);
     const b = Number(scoreB);
-    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return;
-    // スコア上限は BO に連動（各チーム 0〜best_of）。
-    if (a > match.bestOf || b > match.bestOf) return;
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) {
+      setValidationError("マップ数は0以上の整数で入力してください。");
+      return;
+    }
+    // スコアが BO の組み合わせとして妥当か（サーバーと同じ純粋関数で先に弾く）。
+    const boCheck = validateBoScore({
+      bestOf: match.bestOf,
+      teamAScore: a,
+      teamBScore: b,
+    });
+    if (!boCheck.ok) {
+      setValidationError(boCheck.message);
+      return;
+    }
     // POTG は使うイベントのみ。未使用は 0 を送る。
     const pa = usePotg ? Number(potgA) || 0 : 0;
     const pb = usePotg ? Number(potgB) || 0 : 0;
+    if (usePotg) {
+      const potgCheck = validatePotg({
+        teamAScore: a,
+        teamBScore: b,
+        potgA: pa,
+        potgB: pb,
+      });
+      if (!potgCheck.ok) {
+        setValidationError(potgCheck.message);
+        return;
+      }
+    }
+    setValidationError(null);
     onReport(a, b, pa, pb);
     setEditing(false);
   }
@@ -506,6 +533,9 @@ function MatchCard({
             >
               結果を取り消し
             </button>
+          )}
+          {validationError && (
+            <p className="w-full text-xs text-destructive">{validationError}</p>
           )}
         </div>
       )}
