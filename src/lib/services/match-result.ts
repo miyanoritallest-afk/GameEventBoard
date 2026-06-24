@@ -115,3 +115,17 @@ export function validatePotg(params: {
   }
   return { ok: true };
 }
+
+/**
+ * BO の意味を日本語で説明する（UI のツールチップ・補足表示用・⑦/④）。
+ * 「BO3」だけでは初見で伝わらないため、勝敗ルールを文章で添える。
+ * - 奇数BO: 過半数先取で決着（引分なし）。例 BO3 → 「3マップ中2本先取」。
+ * - 偶数BO: 全マップ消化（引分あり）。例 BO4 → 「全4マップ・引分あり」。
+ */
+export function describeBestOf(bestOf: number): string {
+  if (bestOf % 2 === 0) {
+    return `全${bestOf}マップ・引分あり`;
+  }
+  const winScore = (bestOf + 1) / 2;
+  return `${bestOf}マップ中${winScore}本先取`;
+}
