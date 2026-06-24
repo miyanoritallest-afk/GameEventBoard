@@ -11,6 +11,10 @@
  *   - map_diff: 全試合合計の得失マップ差（降順）。
  *   - potg: 全試合合計の POTG 数（降順）。
  * - 全タイブレークを使っても決着しなければ同順位（rank を共有。次は人数分飛ばす）。
+ *   3すくみ（A>B,B>C,C>A の循環）のように同着グループ全体のミニリーグで全員同点になり、
+ *   かつ後続の基準（map_diff/potg）でも差がつかない場合は**グループまるごと同順位**。
+ *   ※ 順位の確定と同順位判定は「並べ替えに使った塊の分割」だけを根拠にする
+ *     （隣接2チームの再判定はしない＝3すくみで矛盾しない。フィードバック⑨の修正）。
  *
  * DB に依存しないよう、入力は最小限（チーム一覧・試合結果・順位設定）で受ける。
  */
@@ -141,9 +145,16 @@ function tiebreakComparator(
 }
 
 /**
- * 同着グループ（同勝点）の中を tiebreakers の順で再帰的に並べ替える。
- * 1 基準で差がつくサブグループに分割し、まだ同着のサブグループは次の基準で並べる。
- * 全基準を使い切っても残った同着はそのまま（順序不定でも rank を共有させる）。
+ * 同着グループ（同勝点）の中を tiebreakers の順で並べ、「これ以上分けられない塊」の
+ * 列に分割して返す（各塊＝同順位を共有するチーム群）。
+ *
+ * 返り値は順位順のサブグループ列。例 [["a"],["b","c"]] なら a が1位、b・c が2位同着。
+ *
+ * 重要（フィードバック⑨の修正）: 3すくみ（循環）のように「グループ全体のミニリーグでは
+ * 全員同点（差がつかない）」場合は、その塊を**まるごと同順位**にする。
+ * 旧実装は rank 付与時に「隣接2チームだけのミニリーグ」で再判定していたため、
+ * 3すくみで a-b だけ見ると a>b となり同順位にならないバグがあった。
+ * 「並べ替えに使った基準＝塊の分割」を唯一の真実とすることで、順序と同順位判定を一致させる。
  */
 function orderTied(
   tiedTeamIds: string[],
@@ -151,45 +162,30 @@ function orderTied(
   results: ResultInput[],
   cfg: RankingConfig,
   fullAgg: Map<string, Agg>,
-): string[] {
-  if (tiedTeamIds.length <= 1 || tiebreakers.length === 0) {
-    return tiedTeamIds;
-  }
+): string[][] {
+  // 1 チーム以下、または基準を使い切ったら、これ以上分けられない＝1つの同順位塊。
+  if (tiedTeamIds.length <= 1) return [tiedTeamIds];
+  if (tiebreakers.length === 0) return [tiedTeamIds];
+
   const [key, ...rest] = tiebreakers;
   const cmp = tiebreakComparator(key, tiedTeamIds, results, cfg, fullAgg);
   const sorted = [...tiedTeamIds].sort(cmp);
 
-  // この基準で値が等しいものをサブグループにまとめ、残りの基準で再帰的に並べる。
-  const out: string[] = [];
+  // この基準で値が等しいものをサブグループにまとめ、残りの基準で再帰的に分割する。
+  const groups: string[][] = [];
   let i = 0;
   while (i < sorted.length) {
     let j = i + 1;
     while (j < sorted.length && cmp(sorted[i], sorted[j]) === 0) j++;
     const sub = sorted.slice(i, j);
-    out.push(...(sub.length > 1 ? orderTied(sub, rest, results, cfg, fullAgg) : sub));
+    if (sub.length > 1) {
+      groups.push(...orderTied(sub, rest, results, cfg, fullAgg));
+    } else {
+      groups.push(sub);
+    }
     i = j;
   }
-  return out;
-}
-
-/** 同順位判定: 2チームが「勝点も全タイブレークも差がつかない」か。 */
-function fullyTied(
-  a: string,
-  b: string,
-  tiebreakers: TiebreakerKey[],
-  results: ResultInput[],
-  cfg: RankingConfig,
-  fullAgg: Map<string, Agg>,
-): boolean {
-  if (points(fullAgg.get(a)!, cfg) !== points(fullAgg.get(b)!, cfg)) {
-    return false;
-  }
-  for (const key of tiebreakers) {
-    // head_to_head はこの 2 チーム間のミニリーグで比較する。
-    const cmp = tiebreakComparator(key, [a, b], results, cfg, fullAgg);
-    if (cmp(a, b) !== 0) return false;
-  }
-  return true;
+  return groups;
 }
 
 /**
@@ -209,7 +205,9 @@ export function computeStandings(params: {
     (a, b) => points(fullAgg.get(b)!, config) - points(fullAgg.get(a)!, config),
   );
 
-  const ordered: string[] = [];
+  // 各同勝点グループを「同順位を共有する塊」の列に分解する。
+  // tiebreakers で差がついた所で塊が分かれ、最後まで差がつかない塊は同順位。
+  const subgroups: string[][] = [];
   let i = 0;
   while (i < byPoints.length) {
     let j = i + 1;
@@ -221,39 +219,37 @@ export function computeStandings(params: {
       j++;
     }
     const group = byPoints.slice(i, j);
-    ordered.push(
-      ...(group.length > 1
-        ? orderTied(group, config.tiebreakers, results, config, fullAgg)
-        : group),
-    );
+    if (group.length > 1) {
+      subgroups.push(
+        ...orderTied(group, config.tiebreakers, results, config, fullAgg),
+      );
+    } else {
+      subgroups.push(group);
+    }
     i = j;
   }
 
-  // 2. rank を付与（隣と完全同着なら前と同じ rank、そうでなければ通し番号）。
+  // 2. rank を付与。1 つの塊（subgroup）内は同順位を共有し、次の塊は
+  //    そこまでの人数分だけ飛ばす（1,1,3 のように）。これにより 3すくみ等の
+  //    「差がつかない塊」がまるごと同順位になる（フィードバック⑨）。
   const rows: StandingRow[] = [];
-  let currentRank = 0;
-  for (let k = 0; k < ordered.length; k++) {
-    const id = ordered[k];
-    const a = fullAgg.get(id)!;
-    const prev = k > 0 ? ordered[k - 1] : null;
-    if (
-      prev &&
-      fullyTied(prev, id, config.tiebreakers, results, config, fullAgg)
-    ) {
-      // 前と同順位（rank を据え置き）。
-    } else {
-      currentRank = k + 1; // 同着で飛んだぶんを反映（1,1,3 のように）。
+  let placed = 0;
+  for (const sub of subgroups) {
+    const rank = placed + 1;
+    for (const id of sub) {
+      const a = fullAgg.get(id)!;
+      rows.push({
+        teamId: id,
+        wins: a.wins,
+        losses: a.losses,
+        draws: a.draws,
+        points: points(a, config),
+        mapDiff: a.mapDiff,
+        potg: a.potg,
+        rank,
+      });
     }
-    rows.push({
-      teamId: id,
-      wins: a.wins,
-      losses: a.losses,
-      draws: a.draws,
-      points: points(a, config),
-      mapDiff: a.mapDiff,
-      potg: a.potg,
-      rank: currentRank,
-    });
+    placed += sub.length;
   }
   return rows;
 }

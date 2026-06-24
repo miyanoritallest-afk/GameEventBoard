@@ -189,3 +189,45 @@ describe("computeStandings — タイブレーク: 多段＋potg", () => {
     expect(m.get("c")?.rank).toBe(3);
   });
 });
+
+describe("computeStandings — 3すくみ（循環）の同順位（フィードバック⑨）", () => {
+  it("head_to_head: A>B,B>C,C>A の3すくみは全員同順位（1,1,1）", () => {
+    const cfg = { ...CFG, tiebreakers: ["head_to_head" as const] };
+    // 完全な3すくみ。全員1勝1敗・勝点同着。得失も全試合2-1で全員 0。
+    // 直接対決ミニリーグも全員1勝1敗で決着つかず → 全員同順位になるべき。
+    const rows = computeStandings({
+      teamIds: ["a", "b", "c"],
+      results: [
+        r("a", "b", 2, 1), // a>b
+        r("b", "c", 2, 1), // b>c
+        r("c", "a", 2, 1), // c>a
+      ],
+      config: cfg,
+    });
+    const m = byTeam(rows);
+    expect(m.get("a")?.rank).toBe(1);
+    expect(m.get("b")?.rank).toBe(1);
+    expect(m.get("c")?.rank).toBe(1);
+  });
+
+  it("head_to_head→map_diff→potg 全基準同値の3すくみも全員同順位", () => {
+    const cfg = {
+      ...CFG,
+      tiebreakers: ["head_to_head" as const, "map_diff" as const, "potg" as const],
+    };
+    // 全試合 2-1・POTG も対称（各試合 potg 2-1）→ 全チーム map_diff 0・potg 同数。
+    const rows = computeStandings({
+      teamIds: ["a", "b", "c"],
+      results: [
+        r("a", "b", 2, 1, 2, 1),
+        r("b", "c", 2, 1, 2, 1),
+        r("c", "a", 2, 1, 2, 1),
+      ],
+      config: cfg,
+    });
+    const m = byTeam(rows);
+    expect(m.get("a")?.rank).toBe(1);
+    expect(m.get("b")?.rank).toBe(1);
+    expect(m.get("c")?.rank).toBe(1);
+  });
+});
