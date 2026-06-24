@@ -223,22 +223,62 @@ function GroupMatches({
             （{group.teams.length}チーム / {group.matches.length}試合）
           </span>
         </h2>
-        {!readOnly && (
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={isPending || group.teams.length < 2}
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-          >
-            対戦表を生成
-          </button>
-        )}
       </div>
 
       {group.teams.length < 2 && (
         <p className="mt-2 text-xs text-muted-foreground">
           振り分け済みのチームが2つ以上必要です（現在 {group.teams.length}）。
         </p>
+      )}
+
+      {/* 操作エリア（生成＋手動追加）。両操作を近くにまとめる（⑩）。
+          まず総当たりを生成し、足りなければ手動で1試合ずつ追加する流れ。 */}
+      {!readOnly && group.teams.length >= 2 && (
+        <div className="mt-3 space-y-2 rounded-md border border-border bg-muted/30 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              総当たりを一括生成
+            </span>
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={isPending}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              対戦表を生成
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              個別に追加
+            </span>
+            <TeamSelect
+              value={teamAId}
+              onChange={setTeamAId}
+              teams={group.teams}
+              exclude={teamBId}
+              placeholder="チームA"
+            />
+            <span className="text-xs text-muted-foreground">vs</span>
+            <TeamSelect
+              value={teamBId}
+              onChange={setTeamBId}
+              teams={group.teams}
+              exclude={teamAId}
+              placeholder="チームB"
+            />
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={
+                isPending || !teamAId || !teamBId || teamAId === teamBId
+              }
+              className="rounded-md border border-primary/50 px-3 py-1.5 text-xs text-primary hover:bg-primary/10 disabled:opacity-60"
+            >
+              + 対戦を追加
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 順位表（順位機能 ON のとき）。 */}
@@ -268,37 +308,6 @@ function GroupMatches({
           ))
         )}
       </div>
-
-      {/* 手動追加フォーム（同ブロックのチームから選択）。 */}
-      {!readOnly && group.teams.length >= 2 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-          <TeamSelect
-            value={teamAId}
-            onChange={setTeamAId}
-            teams={group.teams}
-            exclude={teamBId}
-            placeholder="チームA"
-          />
-          <span className="text-xs text-muted-foreground">vs</span>
-          <TeamSelect
-            value={teamBId}
-            onChange={setTeamBId}
-            teams={group.teams}
-            exclude={teamAId}
-            placeholder="チームB"
-          />
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={
-              isPending || !teamAId || !teamBId || teamAId === teamBId
-            }
-            className="rounded-md border border-primary/50 px-3 py-1.5 text-xs text-primary hover:bg-primary/10 disabled:opacity-60"
-          >
-            + 対戦を追加
-          </button>
-        </div>
-      )}
     </div>
   );
 }
