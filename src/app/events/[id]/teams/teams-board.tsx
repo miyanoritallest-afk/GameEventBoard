@@ -488,33 +488,52 @@ export function TeamsBoard({
     });
   }
 
-  /** self 確定チームの取り下げ（代表本人・pending のみ）。 */
+  /** self 確定チームの取り下げ（代表本人・pending のみ）。楽観的にリストから外す。 */
   function handleCancelSelfTeam(teamId: string) {
     setError(null);
+    const prevTeams = teams;
+    setTeams((cur) => cur.filter((t) => t.id !== teamId));
     startTransition(async () => {
       const r = await cancelSelfTeam(teamId);
-      if (r.error) setError(r.error);
-      else flashSaved();
+      if (r.error) {
+        setTeams(prevTeams);
+        setError(r.error);
+      } else flashSaved();
     });
   }
 
-  /** 主催者: self チームの承認。 */
+  /**
+   * 主催者: self チームの承認。楽観的に status を approved へ更新する
+   * （承認待ちセクションから消え、成立チームとして表示される）。失敗時はロールバック。
+   */
   function handleApproveTeam(teamId: string) {
     setError(null);
+    const prevTeams = teams;
+    setTeams((cur) =>
+      cur.map((t) => (t.id === teamId ? { ...t, status: "approved" } : t)),
+    );
     startTransition(async () => {
       const r = await approveTeam(teamId);
-      if (r.error) setError(r.error);
-      else flashSaved();
+      if (r.error) {
+        setTeams(prevTeams);
+        setError(r.error);
+      } else flashSaved();
     });
   }
 
-  /** 主催者: self チームの却下。 */
+  /** 主催者: self チームの却下。楽観的に status を rejected へ更新する。失敗時はロールバック。 */
   function handleRejectTeam(teamId: string) {
     setError(null);
+    const prevTeams = teams;
+    setTeams((cur) =>
+      cur.map((t) => (t.id === teamId ? { ...t, status: "rejected" } : t)),
+    );
     startTransition(async () => {
       const r = await rejectTeam(teamId);
-      if (r.error) setError(r.error);
-      else flashSaved();
+      if (r.error) {
+        setTeams(prevTeams);
+        setError(r.error);
+      } else flashSaved();
     });
   }
 
