@@ -248,6 +248,10 @@ export function TeamsBoard({
     const fromTeamId = findOwningTeamId(registrationId);
     const dest = parseZone(String(over.id)); // null=プール
     const toTeamId = dest?.teamId ?? null;
+
+    // 試算モードでは自分のシミュレーション枠以外の実チームへは入れない（②の保険）。
+    // ドラッグ元を固定しているので通常ここには来ないが、念のため弾く。
+    if (readOnly && toTeamId !== null && toTeamId !== SIM_TEAM_ID) return;
     const toPosition = dest?.position ?? "regular";
     // 出場ロール行へのドロップなら role 確定。無ければ既存/第1希望を維持。
     const toRole = dest?.role ?? member.preferredRoles[0] ?? member.role ?? "tank";
@@ -710,6 +714,9 @@ export function TeamsBoard({
                     <TeamCard
                       team={team}
                       readOnly={readOnly}
+                      // 試算モードでは自分のシミュレーション枠だけ操作可。
+                      // 他人の実チームはカードを固定して動かせなくする（②）。
+                      membersDraggable={!readOnly || isSim}
                       showStatus={!isSim}
                       showScore={showScore}
                       roleSwapAllowed={roleSwapAllowed}
@@ -846,6 +853,7 @@ function Pool({
 function TeamCard({
   team,
   readOnly = false,
+  membersDraggable = true,
   showStatus = false,
   showScore,
   roleSwapAllowed,
@@ -857,6 +865,8 @@ function TeamCard({
 }: {
   team: BoardTeam;
   readOnly?: boolean;
+  /** メンバーをドラッグできるか（試算モードの他人の実チームは false＝カード固定）。 */
+  membersDraggable?: boolean;
   /** 承認状態バッジを出すか（シミュレーション枠は出さない）。 */
   showStatus?: boolean;
   showScore: boolean;
@@ -952,6 +962,7 @@ function TeamCard({
             position="regular"
             members={regulars}
             readOnly={readOnly}
+            membersDraggable={membersDraggable}
             showScore={showScore}
             onUnassign={onUnassign}
           />
@@ -970,6 +981,7 @@ function TeamCard({
                 }
                 members={regulars.filter((m) => m.role === role)}
                 readOnly={readOnly}
+                membersDraggable={membersDraggable}
                 showScore={showScore}
                 onUnassign={onUnassign}
                 compact
@@ -986,6 +998,7 @@ function TeamCard({
         title={<span className="text-muted-foreground">リザーブ（控え）</span>}
         members={reserves}
         readOnly={readOnly}
+        membersDraggable={membersDraggable}
         showScore={showScore}
         onUnassign={onUnassign}
         selectableReserve={showScore}
@@ -1080,6 +1093,7 @@ function Zone({
   title,
   members,
   readOnly = false,
+  membersDraggable = true,
   showScore,
   onUnassign,
   compact = false,
@@ -1093,6 +1107,8 @@ function Zone({
   title?: React.ReactNode;
   members: BoardMember[];
   readOnly?: boolean;
+  /** ゾーン内メンバーをドラッグできるか（試算モードの他人の実チームは false）。 */
+  membersDraggable?: boolean;
   showScore: boolean;
   onUnassign: (registrationId: string) => void;
   compact?: boolean;
@@ -1124,6 +1140,7 @@ function Zone({
               key={m.registrationId}
               member={m}
               showScore={showScore}
+              draggable={membersDraggable}
               onUnassign={
                 readOnly ? undefined : () => onUnassign(m.registrationId)
               }
@@ -1155,6 +1172,7 @@ function MemberCard({
   overlay = false,
   selected = false,
   onSelect,
+  draggable: canDrag = true,
 }: {
   member: BoardMember;
   showScore: boolean;
@@ -1162,23 +1180,31 @@ function MemberCard({
   overlay?: boolean;
   selected?: boolean;
   onSelect?: () => void;
+  /** ドラッグ可能か。試算モードの他人の実チームは false（カード固定）。 */
+  draggable?: boolean;
 }) {
-  // overlay（DragOverlay 内の表示）は draggable にしない。
-  const draggable = useDraggable({ id: member.registrationId });
-  const { attributes, listeners, setNodeRef, isDragging } = overlay
-    ? ({} as ReturnType<typeof useDraggable>)
-    : draggable;
+  // overlay（DragOverlay 内の表示）と固定カードは draggable にしない。
+  const draggable = useDraggable({
+    id: member.registrationId,
+    disabled: overlay || !canDrag,
+  });
+  const { attributes, listeners, setNodeRef, isDragging } =
+    overlay || !canDrag
+      ? ({} as ReturnType<typeof useDraggable>)
+      : draggable;
 
   const roles = member.preferredRoles.filter((r): r is string => !!r);
   const score = effective(member);
 
   return (
     <div
-      ref={overlay ? undefined : setNodeRef}
-      {...(overlay ? {} : listeners)}
-      {...(overlay ? {} : attributes)}
+      ref={overlay || !canDrag ? undefined : setNodeRef}
+      {...(overlay || !canDrag ? {} : listeners)}
+      {...(overlay || !canDrag ? {} : attributes)}
       onClick={onSelect}
-      className={`cursor-grab rounded-lg border px-3 py-2 ${
+      className={`rounded-lg border px-3 py-2 ${
+        canDrag && !overlay ? "cursor-grab" : ""
+      } ${
         selected
           ? "border-primary bg-primary/15"
           : "border-border bg-muted/40"

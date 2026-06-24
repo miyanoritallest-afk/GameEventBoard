@@ -7,6 +7,7 @@ import {
   listGroupsWithTeams,
   listUnassignedApprovedTeams,
 } from "@/lib/repositories/groups";
+import { listGroupMatches } from "@/lib/repositories/matches";
 import { teamScore, type MemberScore } from "@/lib/services/team-score";
 import { GroupsBoard, type BoardGroup, type BoardTeam } from "./groups-board";
 
@@ -47,10 +48,15 @@ export default async function EventGroupsPage({
     notFound();
   }
 
-  const [groupsRaw, unassignedRaw] = await Promise.all([
+  const [groupsRaw, unassignedRaw, matchesRaw] = await Promise.all([
     listGroupsWithTeams(event.id),
     listUnassignedApprovedTeams(event.id),
+    listGroupMatches(event.id),
   ]);
+
+  // 対戦表が1件でも生成済みなら、ブロックの組み替えは事故るのでロックする（⑬）。
+  // 生成後に移動すると対戦カードと所属ブロックがズレるため。
+  const matchesGenerated = (matchesRaw ?? []).length > 0;
 
   // DB の戻りをボード用の素直な型へ整形する。チーム平均は出場メンバーのみで算出。
   type TeamJoin = {
@@ -121,6 +127,7 @@ export default async function EventGroupsPage({
         <GroupsBoard
           eventId={event.id}
           readOnly={!isOrganizer}
+          locked={matchesGenerated}
           showScore={event.require_score}
           initialGroups={groups}
           initialUnassigned={unassigned}

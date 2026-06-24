@@ -44,6 +44,7 @@ function parseZone(id: string): string | null {
 export function GroupsBoard({
   eventId,
   readOnly = false,
+  locked = false,
   showScore,
   initialGroups,
   initialUnassigned,
@@ -51,10 +52,17 @@ export function GroupsBoard({
   eventId: string;
   /** 応募者の閲覧（read-only）。D&D・操作ボタンを無効化する。 */
   readOnly?: boolean;
+  /**
+   * 対戦表が生成済みのためロックするか（⑬）。主催者でも D&D・ブロック削除を無効化する。
+   * 生成後にブロックを動かすと対戦カードと所属ブロックがズレて事故るため。
+   */
+  locked?: boolean;
   showScore: boolean;
   initialGroups: BoardGroup[];
   initialUnassigned: BoardTeam[];
 }) {
+  // 編集可否: 応募者の閲覧（readOnly）か、対戦表生成済み（locked）なら不可。
+  const editable = !readOnly && !locked;
   const [groups, setGroups] = useState<BoardGroup[]>(initialGroups);
   const [unassigned, setUnassigned] = useState<BoardTeam[]>(initialUnassigned);
   const [activeTeam, setActiveTeam] = useState<BoardTeam | null>(null);
@@ -116,7 +124,7 @@ export function GroupsBoard({
    */
   function handleDragEnd(e: DragEndEvent) {
     setActiveTeam(null);
-    if (readOnly) return;
+    if (!editable) return;
     const { active, over } = e;
     if (!over) return;
 
@@ -241,13 +249,20 @@ export function GroupsBoard({
         </p>
       )}
 
+      {/* 対戦表生成済みのロック告知（主催者向け・⑬）。 */}
+      {!readOnly && locked && (
+        <p className="mt-4 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+          対戦表が生成済みのため、ブロックの組み替え・削除はできません。組み替えると対戦表とブロックがずれて事故ります。変更したい場合は対戦表側で対象の試合を削除してから戻ってください。
+        </p>
+      )}
+
       <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
         {/* 左: 未割当プール（承認済みチーム） */}
-        <Pool teams={unassigned} showScore={showScore} readOnly={readOnly} />
+        <Pool teams={unassigned} showScore={showScore} draggable={editable} />
 
         {/* 右: ブロック群 */}
         <div className="space-y-4">
-          {!readOnly && (
+          {editable && (
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -281,6 +296,7 @@ export function GroupsBoard({
                   key={group.id}
                   group={group}
                   readOnly={readOnly}
+                  editable={editable}
                   showScore={showScore}
                   onRename={() => handleRenameGroup(group.id, group.name)}
                   onDelete={() => handleDeleteGroup(group.id)}
@@ -304,18 +320,19 @@ export function GroupsBoard({
 function Pool({
   teams,
   showScore,
-  readOnly,
+  draggable,
 }: {
   teams: BoardTeam[];
   showScore: boolean;
-  readOnly: boolean;
+  /** チームカードをドラッグできるか（閲覧者・ロック時は false）。 */
+  draggable: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: POOL_ID });
   return (
     <div
       ref={setNodeRef}
       className={`rounded-xl border p-4 ${
-        isOver && !readOnly ? "border-primary bg-primary/5" : "border-border bg-card"
+        isOver && draggable ? "border-primary bg-primary/5" : "border-border bg-card"
       }`}
     >
       <h2 className="text-sm font-semibold text-muted-foreground">
@@ -332,7 +349,7 @@ function Pool({
               key={t.id}
               team={t}
               showScore={showScore}
-              draggable={!readOnly}
+              draggable={draggable}
             />
           ))
         )}
@@ -345,12 +362,15 @@ function Pool({
 function GroupCard({
   group,
   readOnly,
+  editable,
   showScore,
   onRename,
   onDelete,
 }: {
   group: BoardGroup;
   readOnly: boolean;
+  /** D&D・ブロック削除が可能か（閲覧者・ロック時は false）。 */
+  editable: boolean;
   showScore: boolean;
   onRename: () => void;
   onDelete: () => void;
@@ -367,6 +387,7 @@ function GroupCard({
         </h3>
         {!readOnly && (
           <div className="flex items-center gap-2">
+            {/* 改名はロック中も可（対戦表と整合性に影響しない）。 */}
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
@@ -375,14 +396,17 @@ function GroupCard({
             >
               改名
             </button>
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={onDelete}
-              className="text-xs text-muted-foreground hover:text-destructive"
-            >
-              ブロック削除
-            </button>
+            {/* 削除はロック中は不可（中のチームがプールへ戻り対戦表とずれる）。 */}
+            {editable && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={onDelete}
+                className="text-xs text-muted-foreground hover:text-destructive"
+              >
+                ブロック削除
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -390,14 +414,14 @@ function GroupCard({
       <div
         ref={setNodeRef}
         className={`mt-3 space-y-2 rounded-md border p-2 ${
-          isOver && !readOnly
+          isOver && editable
             ? "border-primary bg-primary/5"
             : "border-dashed border-border"
         }`}
       >
         {group.teams.length === 0 ? (
           <p className="px-1 py-3 text-center text-xs text-muted-foreground">
-            ＋ チームをここにドラッグ
+            {editable ? "＋ チームをここにドラッグ" : "チームなし"}
           </p>
         ) : (
           group.teams.map((t) => (
@@ -405,7 +429,7 @@ function GroupCard({
               key={t.id}
               team={t}
               showScore={showScore}
-              draggable={!readOnly}
+              draggable={editable}
             />
           ))
         )}
