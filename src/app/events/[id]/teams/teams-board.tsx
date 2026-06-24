@@ -56,6 +56,8 @@ export type BoardTeam = {
   status: TeamStatus;
   /** self 確定時の代表（応募 id）。organizer 振り分けは null。 */
   captainRegistrationId: string | null;
+  /** 確定（作成）日時の ISO 文字列。承認待ちの応募順（先着）表示に使う。 */
+  createdAt: string | null;
   members: BoardMember[];
 };
 
@@ -110,6 +112,19 @@ function toMemberScore(m: BoardMember): MemberScore {
 /** ローカル試算チームの id プレフィックス（DB 保存しない）。 */
 const SIM_TEAM_ID = "sim-1";
 
+/** 確定日時を JST の「MM/DD HH:mm」で表示する（承認待ちの応募順表示用）。 */
+function formatSubmittedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Tokyo",
+  }).format(d);
+}
+
 export function TeamsBoard({
   eventId,
   readOnly = false,
@@ -150,6 +165,7 @@ export function TeamsBoard({
             name: "シミュレーション",
             status: "pending",
             captainRegistrationId: null,
+            createdAt: null,
             members: [],
           },
           ...initialTeams,
@@ -357,6 +373,7 @@ export function TeamsBoard({
           name,
           status: "approved",
           captainRegistrationId: null,
+          createdAt: new Date().toISOString(),
           members: [],
         },
       ]);
@@ -501,9 +518,15 @@ export function TeamsBoard({
     });
   }
 
-  // 主催者の承認待ち（pending）チーム。編成画面上部にセクションで出す。
+  // 主催者の承認待ち（pending）チーム。確定が早い順（先着）に並べる。
+  // 先に申請したチームを承認・後を却下する判断のため、応募順を可視化する。
   const pendingTeams = useMemo(
-    () => (isOrganizer ? teams.filter((t) => t.status === "pending") : []),
+    () =>
+      isOrganizer
+        ? teams
+            .filter((t) => t.status === "pending")
+            .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))
+        : [],
     [isOrganizer, teams],
   );
 
@@ -546,9 +569,10 @@ export function TeamsBoard({
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
             応募者が確定したチームです。承認すると参加チームとして成立し、定員にカウントされます。
+            定員が埋まる場合は<span className="font-medium">申請が早い順（#1から）</span>に承認してください。
           </p>
           <div className="mt-3 space-y-2">
-            {pendingTeams.map((team) => {
+            {pendingTeams.map((team, pIndex) => {
               const score = teamScore(
                 team.members
                   .filter((m) => m.position !== "reserve")
@@ -562,7 +586,17 @@ export function TeamsBoard({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold">{team.name}</p>
+                      <p className="text-sm font-semibold">
+                        <span className="mr-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                          #{pIndex + 1}
+                        </span>
+                        {team.name}
+                        {team.createdAt && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">
+                            {formatSubmittedAt(team.createdAt)} 確定
+                          </span>
+                        )}
+                      </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {team.members.map((m) => m.discordName).join("、")}
                       </p>
