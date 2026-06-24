@@ -1,0 +1,149 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - heading "対戦表・順位表" [level=1] [ref=e5]
+      - generic [ref=e6]:
+        - link "← ブロック分けへ" [ref=e7] [cursor=pointer]:
+          - /url: /events/fc8a8b72-dbd1-43bf-b860-fed82df94b5c/groups
+        - link "イベントに戻る" [ref=e8] [cursor=pointer]:
+          - /url: /events/event-b3vrkk
+    - paragraph [ref=e9]: のり検証1
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - heading "Aブロック （2チーム / 3試合）" [level=2] [ref=e14]:
+          - text: Aブロック
+          - generic [ref=e15]: （2チーム / 3試合）
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: 総当たりを一括生成
+            - button "対戦表を生成" [ref=e19]
+          - generic [ref=e20]:
+            - generic [ref=e21]: 個別に追加
+            - combobox [ref=e22]:
+              - option "チームA" [selected]
+              - option "山本チーム"
+              - option "松本チーム"
+            - generic [ref=e23]: vs
+            - combobox [ref=e24]:
+              - option "チームB" [selected]
+              - option "山本チーム"
+              - option "松本チーム"
+            - button "+ 対戦を追加" [disabled] [ref=e25]
+        - table [ref=e27]:
+          - rowgroup [ref=e28]:
+            - row "順位 チーム 勝 分 敗 勝点 得失 POTG" [ref=e29]:
+              - columnheader "順位" [ref=e30]
+              - columnheader "チーム" [ref=e31]
+              - columnheader "勝" [ref=e32]
+              - columnheader "分" [ref=e33]
+              - columnheader "敗" [ref=e34]
+              - columnheader "勝点" [ref=e35]
+              - columnheader "得失" [ref=e36]
+              - columnheader "POTG" [ref=e37]
+          - rowgroup [ref=e38]:
+            - row "1 山本チーム 1 0 0 3 +3 3" [ref=e39]:
+              - cell "1" [ref=e40]
+              - cell "山本チーム" [ref=e41]
+              - cell "1" [ref=e42]
+              - cell "0" [ref=e43]
+              - cell "0" [ref=e44]
+              - cell "3" [ref=e45]
+              - cell "+3" [ref=e46]
+              - cell "3" [ref=e47]
+            - row "2 松本チーム 0 0 1 0 -3 0" [ref=e48]:
+              - cell "2" [ref=e49]
+              - cell "松本チーム" [ref=e50]
+              - cell "0" [ref=e51]
+              - cell "0" [ref=e52]
+              - cell "1" [ref=e53]
+              - cell "0" [ref=e54]
+              - cell "-3" [ref=e55]
+              - cell "0" [ref=e56]
+        - generic [ref=e57]:
+          - generic [ref=e59]:
+            - generic [ref=e60]:
+              - generic [ref=e61]: "1."
+              - generic "BO5（5マップ中3本先取）" [ref=e62]: BO5
+              - generic [ref=e63]: 🏆 山本チーム
+              - generic [ref=e64]: 3 - 0
+              - text: 松本チーム
+            - generic [ref=e65]:
+              - button "結果を修正" [ref=e66]
+              - button "この対戦を削除" [ref=e67]: 削除
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - generic [ref=e71]: "2."
+              - generic "BO5（5マップ中3本先取）" [ref=e72]: BO5
+              - text: 山本チーム
+              - generic [ref=e73]: 0 - 3
+              - text: 未定/削除済み引分
+            - button "この対戦を削除" [ref=e75]: 削除
+          - generic [ref=e77]:
+            - generic [ref=e78]:
+              - generic [ref=e79]: "3."
+              - generic "BO5（5マップ中3本先取）" [ref=e80]: BO5
+              - generic [ref=e81]: 🏆 松本チーム
+              - generic [ref=e82]: 3 - 0
+              - text: 未定/削除済み
+            - button "この対戦を削除" [ref=e84]: 削除
+      - generic [ref=e85]:
+        - heading "Bブロック （2チーム / 1試合）" [level=2] [ref=e87]:
+          - text: Bブロック
+          - generic [ref=e88]: （2チーム / 1試合）
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]: 総当たりを一括生成
+            - button "対戦表を生成" [ref=e92]
+          - generic [ref=e93]:
+            - generic [ref=e94]: 個別に追加
+            - combobox [ref=e95]:
+              - option "チームA" [selected]
+              - option "渡辺チーム"
+              - option "高橋チーム"
+            - generic [ref=e96]: vs
+            - combobox [ref=e97]:
+              - option "チームB" [selected]
+              - option "渡辺チーム"
+              - option "高橋チーム"
+            - button "+ 対戦を追加" [disabled] [ref=e98]
+        - table [ref=e100]:
+          - rowgroup [ref=e101]:
+            - row "順位 チーム 勝 分 敗 勝点 得失 POTG" [ref=e102]:
+              - columnheader "順位" [ref=e103]
+              - columnheader "チーム" [ref=e104]
+              - columnheader "勝" [ref=e105]
+              - columnheader "分" [ref=e106]
+              - columnheader "敗" [ref=e107]
+              - columnheader "勝点" [ref=e108]
+              - columnheader "得失" [ref=e109]
+              - columnheader "POTG" [ref=e110]
+          - rowgroup [ref=e111]:
+            - row "1 渡辺チーム 0 0 0 0 0 0" [ref=e112]:
+              - cell "1" [ref=e113]
+              - cell "渡辺チーム" [ref=e114]
+              - cell "0" [ref=e115]
+              - cell "0" [ref=e116]
+              - cell "0" [ref=e117]
+              - cell "0" [ref=e118]
+              - cell "0" [ref=e119]
+              - cell "0" [ref=e120]
+            - row "1 高橋チーム 0 0 0 0 0 0" [ref=e121]:
+              - cell "1" [ref=e122]
+              - cell "高橋チーム" [ref=e123]
+              - cell "0" [ref=e124]
+              - cell "0" [ref=e125]
+              - cell "0" [ref=e126]
+              - cell "0" [ref=e127]
+              - cell "0" [ref=e128]
+              - cell "0" [ref=e129]
+        - generic [ref=e132]:
+          - generic [ref=e133]:
+            - generic [ref=e134]: "1."
+            - generic "BO5（5マップ中3本先取）" [ref=e135]: BO5
+            - text: 渡辺チームvs高橋チーム
+          - generic [ref=e136]:
+            - button "結果を入力" [ref=e137]
+            - button "この対戦を削除" [ref=e138]: 削除
+  - button "Open Next.js Dev Tools" [ref=e144] [cursor=pointer]:
+    - img [ref=e145]
+  - alert [ref=e148]

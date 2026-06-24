@@ -1,0 +1,64 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - heading "ブロック分け" [level=1] [ref=e5]
+      - generic [ref=e6]:
+        - link "対戦表・順位表へ →" [ref=e7] [cursor=pointer]:
+          - /url: /events/fc8a8b72-dbd1-43bf-b860-fed82df94b5c/matches
+        - link "← イベントに戻る" [ref=e8] [cursor=pointer]:
+          - /url: /events/event-b3vrkk
+    - paragraph [ref=e9]: のり検証1
+    - paragraph [ref=e10]: 対戦表が生成済みのため、ブロックの組み替え・削除はできません。組み替えると対戦表とブロックがずれて事故ります。変更したい場合は対戦表側で対象の試合を削除してから戻ってください。
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - heading "未割当のチーム (6)" [level=2] [ref=e13]
+        - generic [ref=e14]:
+          - generic [ref=e16]:
+            - generic [ref=e17]: "4"
+            - generic [ref=e18]: —
+          - generic [ref=e20]:
+            - generic [ref=e21]: "5"
+            - generic [ref=e22]: —
+          - generic [ref=e24]:
+            - generic [ref=e25]: "6"
+            - generic [ref=e26]: —
+          - generic [ref=e28]:
+            - generic [ref=e29]: "7"
+            - generic [ref=e30]: —
+          - generic [ref=e32]:
+            - generic [ref=e33]: "8"
+            - generic [ref=e34]: —
+          - generic [ref=e36]:
+            - generic [ref=e37]: ひで
+            - generic [ref=e38]: "24.5"
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - heading "Aブロック (2)" [level=3] [ref=e43]:
+              - text: Aブロック
+              - generic [ref=e44]: (2)
+            - button "改名" [ref=e46]
+          - generic [ref=e47]:
+            - generic [ref=e49]:
+              - generic [ref=e50]: 山本チーム
+              - generic [ref=e51]: "25.2"
+            - generic [ref=e53]:
+              - generic [ref=e54]: 松本チーム
+              - generic [ref=e55]: "29.8"
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - heading "Bブロック (2)" [level=3] [ref=e58]:
+              - text: Bブロック
+              - generic [ref=e59]: (2)
+            - button "改名" [ref=e61]
+          - generic [ref=e62]:
+            - generic [ref=e64]:
+              - generic [ref=e65]: 渡辺チーム
+              - generic [ref=e66]: "23"
+            - generic [ref=e68]:
+              - generic [ref=e69]: 高橋チーム
+              - generic [ref=e70]: "22"
+    - status [ref=e80]
+  - button "Open Next.js Dev Tools" [ref=e76] [cursor=pointer]:
+    - img [ref=e77]
+  - alert [ref=e81]

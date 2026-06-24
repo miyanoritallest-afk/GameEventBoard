@@ -9,6 +9,9 @@ import {
   useSensors,
   useDraggable,
   useDroppable,
+  pointerWithin,
+  closestCenter,
+  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -111,6 +114,19 @@ function toMemberScore(m: BoardMember): MemberScore {
 
 /** ローカル試算チームの id プレフィックス（DB 保存しない）。 */
 const SIM_TEAM_ID = "sim-1";
+
+/**
+ * ドロップ判定（⑫の付随改善）。
+ * 既定の rectIntersection は「ドラッグ中カードの矩形がドロップ先と交差する面積」で
+ * 判定するため、横長の応募者カードだと領域へ深く押し込まないとヒットしない。
+ * ポインタ位置が領域内かで判定する pointerWithin を第一にし、どのゾーンにも
+ * 重なっていないとき（プールの隙間など）だけ closestCenter にフォールバックする。
+ * これで「カーソルが乗れば浅い位置でも受け付ける」直感的な挙動になる。
+ */
+const dropCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCenter(args);
+};
 
 /** 未割当プールの並び替えキー（⑫）。応募者が多いとき探しやすくする。 */
 type PoolSort =
@@ -643,6 +659,8 @@ export function TeamsBoard({
     <DndContext
       id="teams-board-dnd"
       sensors={sensors}
+      // 横長カードでも浅い位置でドロップを受け付ける（ポインタ位置基準）。
+      collisionDetection={dropCollision}
       // 応募者が多いと未割当プールが縦に長くなるため、ドラッグ中の端で
       // 自動スクロールを効かせる（⑫。チームへ運ぶ移動距離を緩和）。
       autoScroll={{ threshold: { x: 0, y: 0.2 } }}

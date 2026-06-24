@@ -1,0 +1,89 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - heading "イベントを編集" [level=1] [ref=e4]
+    - paragraph [ref=e5]: 内容を変更して保存します。公開URL（slug）は変わりません。
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]: タイトル*
+        - textbox [ref=e9]: 実機検証カップ
+      - generic [ref=e10]:
+        - generic [ref=e11]: ゲーム*
+        - combobox [ref=e12]:
+          - option "OVERWATCH" [selected]
+      - generic [ref=e13]:
+        - generic [ref=e14]: 説明（任意）
+        - textbox [ref=e15]
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]: 開催開始（JST）*
+          - button "2026/06/26 20:00" [ref=e19]:
+            - img
+            - text: 2026/06/26 20:00
+        - generic [ref=e20]:
+          - generic [ref=e21]: 開催終了（JST）*
+          - button "2026/06/27 23:00" [ref=e22]:
+            - img
+            - text: 2026/06/27 23:00
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: 募集締切（任意・JST）
+          - button "2026/06/23 20:00" [ref=e26]:
+            - img
+            - text: 2026/06/23 20:00
+        - generic [ref=e27]:
+          - generic [ref=e28]: 定員（チーム数・任意）
+          - spinbutton [ref=e29]: "10"
+      - group "スコアリング設定" [ref=e30]:
+        - generic [ref=e31]: スコアリング設定
+        - generic [ref=e32]:
+          - checkbox "個人スコアを計算する（ランク申告から算出）" [checked] [ref=e33]
+          - text: 個人スコアを計算する（ランク申告から算出）
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - checkbox "ロールスワップを許可する（全ロールのランクを参照）" [checked] [ref=e36]
+            - text: ロールスワップを許可する（全ロールのランクを参照）
+          - generic [ref=e37]:
+            - generic [ref=e38]:
+              - generic [ref=e39]: 申告シーズン数
+              - spinbutton [ref=e40]: "3"
+            - generic [ref=e41]:
+              - generic [ref=e42]: 未認定ロールの扱い
+              - combobox [ref=e43]:
+                - option "計算に含めない（除外）"
+                - option "同ロールの他シーズン平均で補完" [selected]
+                - option "同シーズンの他ロール平均で補完"
+          - generic [ref=e44]:
+            - checkbox "到達ボーナスを使う（最高到達ランクで加点）" [checked] [ref=e45]
+            - text: 到達ボーナスを使う（最高到達ランクで加点）
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - generic [ref=e48]: "ボーナス: マスター"
+              - spinbutton [ref=e49]: "1"
+            - generic [ref=e50]:
+              - generic [ref=e51]: "ボーナス: GM"
+              - spinbutton [ref=e52]: "2"
+            - generic [ref=e53]:
+              - generic [ref=e54]: "ボーナス: チャンピオン"
+              - spinbutton [ref=e55]: "3"
+          - generic [ref=e56]:
+            - checkbox "チームスコアに上限を設ける（出場メンバー平均スコアの上限）" [checked] [active] [ref=e57]
+            - text: チームスコアに上限を設ける（出場メンバー平均スコアの上限）
+          - generic [ref=e80]:
+            - generic [ref=e81]: チームスコア上限
+            - spinbutton [ref=e82]
+            - paragraph [ref=e83]: 1〜40 で入力（チームの出場メンバー平均スコアの上限）。
+      - group "本戦設定" [ref=e59]:
+        - generic [ref=e60]: 本戦設定
+        - generic [ref=e61]:
+          - generic [ref=e62]: BO（1試合のマップ数）
+          - spinbutton [ref=e63]: "3"
+          - paragraph [ref=e64]: 総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。 対戦表を生成すると全試合に反映されます。偶数は引分けあり。
+      - group "順位設定" [ref=e65]:
+        - generic [ref=e66]: 順位設定
+        - generic [ref=e67]:
+          - checkbox "順位を集計する（勝点・タイブレークで順位を決める）" [ref=e68]
+          - text: 順位を集計する（勝点・タイブレークで順位を決める）
+      - button "変更を保存する" [ref=e69]
+  - button "Open Next.js Dev Tools" [ref=e75] [cursor=pointer]:
+    - img [ref=e76]
+  - alert [ref=e79]

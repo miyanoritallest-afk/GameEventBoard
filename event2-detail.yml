@@ -1,0 +1,51 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - paragraph [ref=e4]: ✓ このイベントは公開されています
+    - heading "実機検証カップ2" [level=1] [ref=e5]
+    - generic [ref=e6]:
+      - generic [ref=e7]: OVERWATCH
+      - generic [ref=e8]: "状態: 公開中"
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - term [ref=e11]: 開催開始
+        - definition [ref=e12]: 2026/08/15 20:00
+      - generic [ref=e13]:
+        - term [ref=e14]: 開催終了
+        - definition [ref=e15]: 2026/08/15 23:00
+      - generic [ref=e16]:
+        - term [ref=e17]: 募集締切
+        - definition [ref=e18]: 2026/08/10 20:00
+      - generic [ref=e19]:
+        - term [ref=e20]: 定員（チーム数）
+        - definition [ref=e21]: "8"
+      - generic [ref=e22]:
+        - term [ref=e23]: ロールスワップ
+        - definition [ref=e24]: 許可
+      - generic [ref=e25]:
+        - term [ref=e26]: 申告シーズン数
+        - definition [ref=e27]: "3"
+      - generic [ref=e28]:
+        - term [ref=e29]: 到達ボーナス
+        - definition [ref=e30]: マスター+1 / GM+2 / チャンピオン+3
+    - generic [ref=e31]:
+      - heading "本戦" [level=2] [ref=e32]
+      - paragraph [ref=e33]: ブロックの組み分けと、対戦表・順位表を確認できます。
+      - generic [ref=e34]:
+        - link "ブロック分けを見る →" [ref=e35] [cursor=pointer]:
+          - /url: /events/7e6d4978-001a-452c-97f6-9fdad7618349/groups
+        - link "対戦表・順位表を見る →" [ref=e36] [cursor=pointer]:
+          - /url: /events/7e6d4978-001a-452c-97f6-9fdad7618349/matches
+    - generic [ref=e37]:
+      - link "編集する" [ref=e38] [cursor=pointer]:
+        - /url: /events/7e6d4978-001a-452c-97f6-9fdad7618349/edit
+      - link "応募者を見る" [ref=e39] [cursor=pointer]:
+        - /url: /events/7e6d4978-001a-452c-97f6-9fdad7618349/registrations
+      - link "チーム編成" [ref=e40] [cursor=pointer]:
+        - /url: /events/7e6d4978-001a-452c-97f6-9fdad7618349/teams
+      - link "自分のイベント一覧" [ref=e41] [cursor=pointer]:
+        - /url: /events/mine
+    - link "← もう1件作成する" [ref=e43] [cursor=pointer]:
+      - /url: /events/new
+  - button "Open Next.js Dev Tools" [ref=e49] [cursor=pointer]:
+    - img [ref=e50]
+  - alert [ref=e53]
