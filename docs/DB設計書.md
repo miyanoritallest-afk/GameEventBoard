@@ -358,9 +358,9 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | 列 | 型 | 制約 | 説明 |
 |----|----|------|------|
 | match_id | uuid | PK, FK→matches | 1試合1結果 |
-| team_a_score | int | NOT NULL | 取マップ数 |
+| team_a_score | int | NOT NULL | 取マップ数。アプリ層で BO 整合を**厳格検証**（奇数BO=過半数先取で即終了・引分なし／偶数BO=全マップ消化・合計=best_of・引分あり）。例 BO5→3-0/3-1/3-2、BO4→4-0/3-1/2-2 |
 | team_b_score | int | NOT NULL | 取マップ数 |
-| potg_a | int | NOT NULL DEFAULT 0 | team_a の POTG 取得数（0016/0017・タイブレーク用。CHECK 0〜99） |
+| potg_a | int | NOT NULL DEFAULT 0 | team_a の POTG 取得数（0016/0017・タイブレーク用。CHECK 0〜99）。POTG使用イベントは「POTG合計＝総マップ数」をアプリ層で検証 |
 | potg_b | int | NOT NULL DEFAULT 0 | team_b の POTG 取得数 |
 | winner_team_id | uuid | FK→teams | 引分null可。スコアからサーバーが算出して固定 |
 | reported_by | uuid | FK→users | 入力者（主催者 or 対戦両チーム代表） |

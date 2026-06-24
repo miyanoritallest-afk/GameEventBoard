@@ -36,3 +36,82 @@ export function decideWinner(params: {
   }
   return { winnerTeamId: null, isDraw: true };
 }
+
+/** スコア妥当性チェックの結果。ok=false のとき message に理由（UI 表示用）。 */
+export type ScoreValidation = { ok: true } | { ok: false; message: string };
+
+/**
+ * BO（best_of＝1試合の最大マップ数）に対してスコアの組み合わせが妥当か検証する（純粋関数）。
+ *
+ * 正の仕様（壁打ち確定・2026-06-24 実機フィードバック⑤）:
+ * - 奇数BO（引分なし）: 「過半数を先取したら即終了」。勝者の取得マップ数は過半数ちょうど。
+ *   勝者 = (best_of + 1) / 2、敗者 = 0〜(勝者 - 1)。合計は可変。
+ *   例 BO5 → 勝者 3 固定。3-0 / 3-1 / 3-2（とその逆）のみ。BO3 → 2-0 / 2-1。
+ * - 偶数BO（引分あり）: 「全 best_of マップを消化」。両者の合計は必ず best_of。
+ *   引分 = best_of/2 - best_of/2、決着 = 勝者 > 敗者 かつ 合計 best_of。
+ *   例 BO4 → 4-0 / 3-1、引分 2-2。BO2 → 2-0、引分 1-1。
+ * - これにより BO5 の 2-1 / 0-0 / 4-1、BO2 の 1-0 のような「あり得ない」入力を弾く。
+ *
+ * 入力スコアは事前に非負整数であること（Zod で担保）を前提とする。
+ */
+export function validateBoScore(params: {
+  bestOf: number;
+  teamAScore: number;
+  teamBScore: number;
+}): ScoreValidation {
+  const { bestOf, teamAScore: a, teamBScore: b } = params;
+  const isEven = bestOf % 2 === 0;
+
+  if (isEven) {
+    // 偶数BO: 全マップ消化＝合計は必ず best_of。引分は best_of/2 同士のみ。
+    if (a + b !== bestOf) {
+      return {
+        ok: false,
+        message: `BO${bestOf}は全${bestOf}マップ消化します（合計が${bestOf}になる組み合わせのみ）。`,
+      };
+    }
+    return { ok: true };
+  }
+
+  // 奇数BO: 過半数先取で即終了。勝者は過半数ちょうど・敗者は 0〜(勝者-1)・引分なし。
+  const winScore = (bestOf + 1) / 2;
+  const hi = Math.max(a, b);
+  const lo = Math.min(a, b);
+  if (a === b) {
+    return { ok: false, message: `BO${bestOf}は奇数のため引分になりません。` };
+  }
+  if (hi !== winScore) {
+    return {
+      ok: false,
+      message: `BO${bestOf}の勝者は${winScore}マップ先取で決まります（${winScore}-x）。`,
+    };
+  }
+  if (lo > winScore - 1) {
+    return {
+      ok: false,
+      message: `BO${bestOf}では敗者の取得マップは${winScore - 1}以下です。`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * POTG 入力が妥当か検証する（純粋関数）。
+ * 正の仕様: POTG は毎マップ必ず1つ選出される → POTG 数の合計は総マップ数（両者スコア合計）と一致。
+ * tiebreakers に potg が無いイベント（POTG 欄を出さない）は検証しない側で 0/0 のまま通す。
+ */
+export function validatePotg(params: {
+  teamAScore: number;
+  teamBScore: number;
+  potgA: number;
+  potgB: number;
+}): ScoreValidation {
+  const totalMaps = params.teamAScore + params.teamBScore;
+  if (params.potgA + params.potgB !== totalMaps) {
+    return {
+      ok: false,
+      message: `POTGは毎マップ選出されます。合計が総マップ数（${totalMaps}）と一致しません。`,
+    };
+  }
+  return { ok: true };
+}
