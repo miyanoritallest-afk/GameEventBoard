@@ -9,6 +9,9 @@ import {
   useSensors,
   useDraggable,
   useDroppable,
+  pointerWithin,
+  closestCenter,
+  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -40,6 +43,16 @@ const POOL_ID = "pool"; // 未割当プールの droppable id
 function parseZone(id: string): string | null {
   return id === POOL_ID ? null : id;
 }
+
+/**
+ * ドロップ判定。ポインタ位置が領域内かで判定する pointerWithin を第一にし、
+ * どこにも重ならないときだけ closestCenter にフォールバックする。
+ * 横長のチームカードでも浅い位置でドロップを受け付けられる（teams-board と同方針）。
+ */
+const dropCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCenter(args);
+};
 
 export function GroupsBoard({
   eventId,
@@ -228,6 +241,7 @@ export function GroupsBoard({
     <DndContext
       id="groups-board-dnd"
       sensors={sensors}
+      collisionDetection={dropCollision}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >

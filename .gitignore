@@ -40,9 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Playwright プロトタイプ確認用スクショ
+# Playwright 実機確認の生成物（スクショ・アクセシビリティスナップショット）
 /.playwright-mcp/
 /*.png
+/*.yml
 
 # Supabase CLI の一時ファイル
 supabase/.temp/
