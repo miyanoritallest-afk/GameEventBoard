@@ -26,6 +26,18 @@ export const OVERWATCH_TIERS = [
 /** ディビジョンは 5（最下位）〜1（最上位）。 */
 export const DIVISIONS = [5, 4, 3, 2, 1] as const;
 
+/** 帯の略称（主催者がスコア上限を設定するときのランク換算ガイド用）。 */
+export const TIER_ABBREV: Record<string, string> = {
+  ブロンズ: "B",
+  シルバー: "S",
+  ゴールド: "G",
+  プラチナ: "P",
+  ダイヤ: "D",
+  マスター: "M",
+  グランドマスター: "GM",
+  チャンピオン: "C",
+};
+
 export type RankDefinition = {
   tier: string;
   division: number;
@@ -73,4 +85,22 @@ export function scoreToRankLabel(score: number | null): string {
   }
   // 補完で中間値のときは「ダイヤ3 相当」と分かるよう近似表記。
   return nearest.score === score ? nearest.label : `${nearest.label}相当`;
+}
+
+/**
+ * スコア値からランク略称（例 "D3"）へ変換する（チームスコア上限の設定ガイド用）。
+ * 帯を `TIER_ABBREV` で略称化し、ディビジョン番号を付ける（"ダイヤ3" → "D3"）。
+ * null は未認定。最も近い段階を採用する（上限入力は 1〜40 の整数なので通常は一致）。
+ */
+export function scoreToRankAbbrev(score: number | null): string {
+  if (score === null) return "未認定";
+  const defs = buildOverwatchRankDefinitions();
+  let nearest = defs[0];
+  for (const d of defs) {
+    if (Math.abs(d.score - score) < Math.abs(nearest.score - score)) {
+      nearest = d;
+    }
+  }
+  const abbrev = TIER_ABBREV[nearest.tier] ?? nearest.tier;
+  return `${abbrev}${nearest.division}`;
 }

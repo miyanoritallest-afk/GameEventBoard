@@ -21,6 +21,7 @@ type EventEditableColumns = Pick<
   | "bonus_master"
   | "bonus_gm"
   | "bonus_champion"
+  | "team_score_cap"
   | "ranking_enabled"
   | "points_win"
   | "points_draw"

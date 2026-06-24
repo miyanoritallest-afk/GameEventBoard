@@ -63,6 +63,7 @@ export default async function EditEventPage({
     bonusMaster: event.bonus_master,
     bonusGm: event.bonus_gm,
     bonusChampion: event.bonus_champion,
+    teamScoreCap: event.team_score_cap ?? undefined,
     rankingEnabled: event.ranking_enabled,
     pointsWin: event.points_win,
     pointsDraw: event.points_draw,

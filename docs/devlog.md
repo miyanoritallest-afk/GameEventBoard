@@ -7,6 +7,30 @@
 
 ---
 
+## 2026-06-24 — B-1: チームスコア上限（team_score_cap）の設定UI（フィードバック①）
+
+主催者がイベント作成/編集フォームでチームスコア上限を設定できる UI を追加。
+
+### やったこと
+- **背景（バグ）**: `team_score_cap` は DB・消費側（teams-board の上限表示／✓上限内・⚠超過判定）・Service には既にあるが、**入力UI・schema・actions が無く主催者が設定できなかった**。その経路を通した。
+- **`overwatch-ranks.ts`**: 帯→略称マップ `TIER_ABBREV`（B/S/G/P/D/M/GM/C）と、スコア→略称ヘルパー `scoreToRankAbbrev`（例 23→"D3"）を追加。設定欄のランク換算ガイド用。
+- **`schema.ts`**: `createDraftEventSchema` に `teamScoreCap` を追加（任意・空可・1〜40の整数。`capacity` と同じ「空文字＝未設定」preprocess パターン）。
+- **`repositories/events.ts`**: 許可カラム（マスアサインメント対策のホワイトリスト）に `team_score_cap` を追加。
+- **`actions.ts`**: `parseEventFormData`（作成/編集共有）で `teamScoreCap`→`team_score_cap` にマップ。空文字は `null`（上限なし）で保存。
+- **`event-form.tsx`**: スコアリング設定 fieldset 内（requireScore 配下）にトグル「チームスコアに上限を設ける」＋数値欄＋ランク換算ガイド（`23 (D3)`）を追加。OFF のときは hidden で空文字を送り null 保存。編集時は cap の有無からトグル状態を復元。
+- **編集ページ defaults**: `teamScoreCap` を渡して保存値を表示。
+- テスト追加（`scoreToRankAbbrev` の略称・schema の境界 0/41/小数を弾き 1〜40 を通す）。lint/typecheck/test(228緑)/build 通過。
+
+### 決めたこと（なぜ・壁打ち済み）
+- **デフォルトは「上限なし」**。空欄＝上限なしの暗黙ではなく「上限なし」と明示文言を出す。
+- **入力範囲 1〜40 の整数**。cap はチーム出場メンバー final_score の「平均」上限なので、ボーナス（実質ペナルティ）が乗っても平均で見れば実用上 1〜40 で足りる。
+- **配置は requireScore 配下**。スコアなしイベントには上限の概念が無いため。トグルは useBonus と同じパターン。
+
+### 次にやること
+- [ ] B-2: 応募者から本戦以降（ブロック/対戦表/順位表）への閲覧導線（⑧）
+
+---
+
 ## 2026-06-24 — A-3: capacity（定員＝チーム数）の実効化（フィードバック③）
 
 主催者が定員超過のチームを作れてしまう／承認時に超過チェックが効かない不具合の修正。

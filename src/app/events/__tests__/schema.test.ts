@@ -136,6 +136,61 @@ describe("createDraftEventSchema — スコアリング設定の既定値", () =
   });
 });
 
+describe("createDraftEventSchema — チームスコア上限（B-1）", () => {
+  it("未指定なら空文字（＝上限なし）として通る", () => {
+    const result = createDraftEventSchema.safeParse(baseInput());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.teamScoreCap).toBe("");
+  });
+
+  it("空文字は未設定（上限なし）として通る", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ teamScoreCap: "" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.teamScoreCap).toBe("");
+  });
+
+  it("1〜40 の整数を数値に強制変換して受理する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ teamScoreCap: "23" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.teamScoreCap).toBe(23);
+  });
+
+  it("境界値 1 と 40 は通る", () => {
+    expect(
+      createDraftEventSchema.safeParse(baseInput({ teamScoreCap: "1" })).success,
+    ).toBe(true);
+    expect(
+      createDraftEventSchema.safeParse(baseInput({ teamScoreCap: "40" }))
+        .success,
+    ).toBe(true);
+  });
+
+  it("0 は失敗する（下限割れ）", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ teamScoreCap: "0" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("41 は失敗する（上限超え）", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ teamScoreCap: "41" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("小数は失敗する（整数のみ）", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ teamScoreCap: "23.5" }),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("createDraftEventSchema — スコア計算設定（PR-C）", () => {
   it("requireScore は未指定なら true に既定化される", () => {
     const result = createDraftEventSchema.safeParse(baseInput());
