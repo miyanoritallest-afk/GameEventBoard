@@ -74,6 +74,12 @@ export default async function EventDetailPage({
     ? await findRegistration(event.id, viewerId)
     : null;
 
+  // 本戦ページ（ブロック分け/対戦表・順位表）への導線を出す条件。
+  // 閲覧できるのは「主催者 or そのイベントの応募者」（groups/matches ページの認可と一致）。
+  // 下書きでは本戦が始まらないので出さない。
+  const canViewTournament =
+    event.status !== "draft" && (isOrganizer || myRegistration !== null);
+
   return (
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-3xl px-6 py-10">
@@ -161,6 +167,33 @@ export default async function EventDetailPage({
           ) : (
             <ApplyButton eventId={event.id} />
           ))}
+
+        {/* 本戦セクション（ブロック分け・対戦表・順位表への導線）。
+            主催者・応募者の双方に同じ導線を出して一元化する。各ページ側で
+            主催者=編集可 / 応募者=閲覧のみ（read-only）に出し分く。 */}
+        {canViewTournament && (
+          <section className="mt-6 rounded-xl border border-border bg-card p-5">
+            <h2 className="text-sm font-semibold">本戦</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              予選ブロックの組み分けと、対戦表・順位表を確認できます。
+              {!isOrganizer && "（閲覧のみ）"}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href={`/events/${event.id}/groups`}
+                className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
+              >
+                ブロック分けを見る →
+              </Link>
+              <Link
+                href={`/events/${event.id}/matches`}
+                className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
+              >
+                対戦表・順位表を見る →
+              </Link>
+            </div>
+          </section>
+        )}
 
         {isOrganizer && event.status === "draft" && (
           <PublishButton eventId={event.id} />
