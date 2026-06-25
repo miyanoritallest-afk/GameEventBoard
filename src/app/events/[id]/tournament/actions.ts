@@ -10,6 +10,8 @@ import {
   replaceTournamentMatches,
   findMatchForReport,
   applyBracketRecompute,
+  findTournamentMatchSlots,
+  updateMatchSlots,
 } from "@/lib/repositories/matches";
 import {
   upsertMatchResult,
@@ -34,6 +36,7 @@ import type { TiebreakerKey } from "@/lib/services/standings";
 import {
   generateTournamentSchema,
   reportTournamentResultSchema,
+  swapBracketTeamsSchema,
 } from "./schema";
 
 /**
@@ -121,7 +124,9 @@ export async function generateTournament(
     };
   }
 
-  const bracket = generateBracket(seededTeamIds);
+  const bracket = generateBracket(seededTeamIds, {
+    thirdPlace: event.tournament_third_place,
+  });
 
   // 進出数を保存（次回表示の既定値）し、ブラケットを永続化する。
   await updateTournamentAdvanceCount({ eventId, advanceCount: parsed.data.advanceCount });
@@ -282,4 +287,83 @@ async function applyRecompute(eventId: string): Promise<void> {
       .filter((m) => m.shouldClearResult)
       .map((m) => m.matchId),
   });
+}
+
+/**
+ * 1回戦のチームを入れ替える（本戦-5c・手動微調整）。2つのスロット(matchId+a/b)の中身を swap する。
+ *
+ * 防御:
+ * 1. ログイン → 主催者確認。
+ * 2. 2スロットがともに同一イベントの「1回戦（round=1）」のトーナメント試合であること。
+ * 3. 結果が1件でも入っていたら不可（結果ありは配置が固定。全体ロック＝壁打ち確定）。
+ * 4. チーム id は入力から取らず、現在のスロット値を読んで入れ替える（マスアサインメント対策）。
+ * swap 後は再計算で2回戦以降の自動進出を追従させる。
+ */
+export async function swapBracketTeams(input: {
+  x: { matchId: string; slot: "a" | "b" };
+  y: { matchId: string; slot: "a" | "b" };
+}): Promise<TournamentActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const parsed = swapBracketTeamsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
+  }
+  const { x, y } = parsed.data;
+
+  const mx = await findTournamentMatchSlots(x.matchId);
+  const my = await findTournamentMatchSlots(y.matchId);
+  if (!mx || !my) return { error: "対象の試合が見つかりません。" };
+  if (mx.eventId !== my.eventId) {
+    return { error: "別のイベントの試合は入れ替えできません。" };
+  }
+  if (mx.round !== 1 || my.round !== 1) {
+    return { error: "入れ替えできるのは1回戦のチームだけです。" };
+  }
+
+  const event = await findEventById(mx.eventId);
+  if (!event || event.organizer_id !== userId) {
+    return { error: "このイベントを操作する権限がありません。" };
+  }
+
+  // 結果が1件でもあれば微調整は不可（全体ロック）。
+  const { results } = await fetchTournamentForRecompute(mx.eventId);
+  if (results.length > 0) {
+    return {
+      error:
+        "すでに結果が入力されているため、チームの入れ替えはできません。修正するには結果を取り消してください。",
+    };
+  }
+
+  // 現在のスロット値を読み、x と y の中身を入れ替える。
+  const getSlot = (
+    m: { teamAId: string | null; teamBId: string | null },
+    slot: "a" | "b",
+  ) => (slot === "a" ? m.teamAId : m.teamBId);
+  const valX = getSlot(mx, x.slot);
+  const valY = getSlot(my, y.slot);
+
+  // 同一試合内の swap も、別試合間の swap も同じ手順で扱う（mx/my を更新後値で組み立てる）。
+  const next = {
+    [mx.id]: { teamAId: mx.teamAId, teamBId: mx.teamBId },
+    [my.id]: { teamAId: my.teamAId, teamBId: my.teamBId },
+  } as Record<string, { teamAId: string | null; teamBId: string | null }>;
+  const setSlot = (matchId: string, slot: "a" | "b", v: string | null) => {
+    if (slot === "a") next[matchId].teamAId = v;
+    else next[matchId].teamBId = v;
+  };
+  setSlot(x.matchId, x.slot, valY);
+  setSlot(y.matchId, y.slot, valX);
+
+  await updateMatchSlots({ matchId: mx.id, ...next[mx.id] });
+  if (my.id !== mx.id) {
+    await updateMatchSlots({ matchId: my.id, ...next[my.id] });
+  }
+
+  // 2回戦以降の自動進出（BYE 等）を再計算で追従させる。
+  await applyRecompute(mx.eventId);
+
+  revalidatePath(`/events/${mx.eventId}/tournament`);
+  return {};
 }

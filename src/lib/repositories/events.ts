@@ -28,6 +28,7 @@ type EventEditableColumns = Pick<
   | "points_loss"
   | "tiebreakers"
   | "group_best_of"
+  | "tournament_third_place"
 >;
 
 /**

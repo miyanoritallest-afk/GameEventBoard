@@ -40,7 +40,21 @@ export const reportTournamentResultSchema = z.object({
   potgB: potgCount,
 });
 
+/**
+ * 1回戦のチーム入れ替え（本戦-5c）。2つのスロットを matchId＋slot(a/b) で指定する。
+ * チーム id を入力から取らない（マスアサインメント対策）。サーバーが両スロットの中身を入れ替える。
+ */
+const slotRef = z.object({
+  matchId: z.string().uuid("不正な試合IDです"),
+  slot: z.enum(["a", "b"]),
+});
+export const swapBracketTeamsSchema = z.object({
+  x: slotRef,
+  y: slotRef,
+});
+
 export type GenerateTournamentInput = z.infer<typeof generateTournamentSchema>;
 export type ReportTournamentResultInput = z.infer<
   typeof reportTournamentResultSchema
 >;
+export type SwapBracketTeamsInput = z.infer<typeof swapBracketTeamsSchema>;

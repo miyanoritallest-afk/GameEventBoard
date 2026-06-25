@@ -7,7 +7,11 @@ import { listTournamentMatches } from "@/lib/repositories/matches";
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { listCaptainTeamIds } from "@/lib/repositories/teams";
 import { computeBlockSeeds } from "@/lib/repositories/tournament";
-import { extractSeededTeams, type SeedTeam } from "@/lib/services/bracket";
+import {
+  extractSeededTeams,
+  tournamentPodium,
+  type SeedTeam,
+} from "@/lib/services/bracket";
 import type { TiebreakerKey } from "@/lib/services/standings";
 import {
   TournamentBoard,
@@ -135,6 +139,32 @@ export default async function EventTournamentPage({
     teamName: teamNameById.get(teamId) ?? "-",
   }));
 
+  // 表彰台（優勝・準優勝・3位）。決勝・準決勝・3位決定戦の結果から算出する。
+  const podiumRaw = tournamentPodium(
+    matches.map((m) => ({
+      matchId: m.id,
+      round: m.round,
+      position: m.position,
+      teamAId: m.teamAId,
+      teamBId: m.teamBId,
+    })),
+    matches
+      .filter((m) => m.hasResult)
+      .map((m) => ({ matchId: m.id, winnerTeamId: m.winnerTeamId })),
+  );
+  const podium = {
+    champion: podiumRaw.champion
+      ? teamNameById.get(podiumRaw.champion) ?? null
+      : null,
+    runnerUp: podiumRaw.runnerUp
+      ? teamNameById.get(podiumRaw.runnerUp) ?? null
+      : null,
+    third: podiumRaw.third.map((id) => teamNameById.get(id) ?? "-"),
+  };
+
+  // 結果が1件もなければ1回戦の手動入れ替え（D&D）を許可する（壁打ち確定）。
+  const swapEnabled = isOrganizer && matches.some((m) => m.hasResult) === false;
+
   return (
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1400px] px-6 py-10">
@@ -164,6 +194,8 @@ export default async function EventTournamentPage({
           readOnly={!isOrganizer}
           rankingEnabled={event.ranking_enabled}
           usePotg={usePotg}
+          swapEnabled={swapEnabled}
+          podium={podium}
           initialAdvanceCount={currentAdvance}
           previewSeeded={previewSeeded}
           initialMatches={matches}

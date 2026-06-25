@@ -103,14 +103,20 @@ export function seedOrder(size: number): number[] {
  * シード順の進出チーム id 配列から、シングルエリミのブラケット全試合を生成する。
  *
  * @param seededTeamIds 進出チームをシード順（強い順）に並べた id 配列。
+ * @param options.thirdPlace 3位決定戦を作るか。準決勝が2試合（size≥4）のときだけ追加する。
  * @returns 全ラウンドの BracketMatch 配列（round 昇順・position 昇順）。
  *
  * - 進出 2 チーム未満は空配列（トーナメント不成立）。
  * - BYE: ブラケットサイズに満たない枠は上位シードに割り当てる。1回戦で相手が
  *   いない（BYE）チームは、対応する 2 回戦カードへ自動進出させる（teamAId/teamBId に直接セット）。
  * - 全ラウンド分のカードを作る（決勝まで）。未確定スロットは null。
+ * - 3位決定戦: 最終ラウンド（決勝と同じ round）に position=1 として追加する。
+ *   準決勝（最終round-1）の2敗者が入る。スロットは生成時 null（recompute で敗者を流し込む）。
  */
-export function generateBracket(seededTeamIds: string[]): BracketMatch[] {
+export function generateBracket(
+  seededTeamIds: string[],
+  options: { thirdPlace?: boolean } = {},
+): BracketMatch[] {
   const teamCount = seededTeamIds.length;
   if (teamCount < 2) return [];
 
@@ -158,6 +164,18 @@ export function generateBracket(seededTeamIds: string[]): BracketMatch[] {
     }
     matches.push(...cur);
     prevRound = cur;
+  }
+
+  // --- 3位決定戦 ---
+  // 準決勝が2試合あるとき（size≥4＝totalRounds≥2）かつ設定ONのときだけ、
+  // 最終ラウンド（決勝と同じ round）に position=1 で追加する。スロットは null（敗者は recompute で）。
+  if (options.thirdPlace && totalRounds >= 2) {
+    matches.push({
+      round: totalRounds,
+      position: 1,
+      teamAId: null,
+      teamBId: null,
+    });
   }
 
   return matches;
@@ -250,6 +268,11 @@ export function recomputeBracket(
     slots.set(`1:${m.position}`, { teamAId: m.teamAId, teamBId: m.teamBId });
   }
 
+  // 3位決定戦は「最終 round の position 1」。通常の勝者進出ループから分離して扱う。
+  const hasThirdPlace = matches.some(
+    (m) => m.round === rounds && m.position === 1,
+  );
+
   /** その試合の勝者を返す。結果があれば winner、BYE（片側のみ）なら自動進出、なければ null。 */
   const winnerOf = (round: number, position: number): string | null => {
     const key = `${round}:${position}`;
@@ -269,14 +292,45 @@ export function recomputeBracket(
     return null;
   };
 
+  /** その試合の敗者を返す（3位決定戦の進出用）。両チーム確定＆結果ありのときだけ一意。 */
+  const loserOf = (round: number, position: number): string | null => {
+    const key = `${round}:${position}`;
+    const slot = slots.get(key);
+    if (!slot) return null;
+    const { teamAId, teamBId } = slot;
+    if (teamAId === null || teamBId === null) return null; // 片側未確定は敗者不定
+    const m = byRoundPos.get(key);
+    if (!m || !hasResult(m.matchId)) return null; // 結果なしは敗者不定
+    const w = winnerByMatch.get(m.matchId) ?? null;
+    if (w === teamAId) return teamBId;
+    if (w === teamBId) return teamAId;
+    return null; // 矛盾（無効化対象）
+  };
+
   // round 2 以降を上流から順に確定（上流が確定してから下流の勝者を引くため round 昇順）。
   for (let round = 2; round <= rounds; round++) {
-    const count = matches.filter((m) => m.round === round).length;
-    for (let pos = 0; pos < count; pos++) {
+    // 通常の勝者進出: position 0..(決勝の数-1)。最終 round の決勝は position 0 のみ。
+    // 3位決定戦（最終 round の position 1）は除外し、後段で敗者から確定させる。
+    const positions = matches
+      .filter(
+        (m) =>
+          m.round === round &&
+          !(hasThirdPlace && round === rounds && m.position === 1),
+      )
+      .map((m) => m.position);
+    for (const pos of positions) {
       const teamAId = winnerOf(round - 1, pos * 2);
       const teamBId = winnerOf(round - 1, pos * 2 + 1);
       slots.set(`${round}:${pos}`, { teamAId, teamBId });
     }
+  }
+
+  // 3位決定戦: 準決勝（最終 round - 1）の position 0 / 1 の敗者を入れる。
+  if (hasThirdPlace && rounds >= 2) {
+    slots.set(`${rounds}:1`, {
+      teamAId: loserOf(rounds - 1, 0),
+      teamBId: loserOf(rounds - 1, 1),
+    });
   }
 
   // 各試合の最終状態 + 結果無効化判定を組み立てる。
@@ -319,4 +373,72 @@ export function toOddBestOf(bestOf: number): number {
   if (n % 2 === 0) n += 1; // 偶数は1つ上の奇数へ
   if (n > 15) n = 15;
   return n;
+}
+
+/** 表彰台（本戦-5c）。確定していない順位は null / 空配列。 */
+export type Podium = {
+  /** 優勝（決勝の勝者）。 */
+  champion: string | null;
+  /** 準優勝（決勝の敗者）。 */
+  runnerUp: string | null;
+  /** 3位。3位決定戦ありなら勝者1チーム、なしなら準決勝敗者2チーム（3位タイ）。未確定は空。 */
+  third: string[];
+};
+
+/**
+ * 決勝・準決勝・3位決定戦の結果から表彰台を算出する（純粋関数・本戦-5c）。
+ *
+ * - 優勝/準優勝: 決勝（最終 round の position 0）の勝者/敗者。決勝に結果がなければ null。
+ * - 3位:
+ *   - 3位決定戦（最終 round の position 1）があり結果があれば、その勝者1チーム。
+ *   - なければ準決勝（最終 round - 1）2試合の敗者を 3位タイ（確定している分だけ）。
+ *
+ * 入力は recompute 済み（あるべきスロット）の matches と結果を渡す前提。
+ */
+export function tournamentPodium(
+  matches: StoredMatch[],
+  results: StoredResult[],
+): Podium {
+  if (matches.length === 0) {
+    return { champion: null, runnerUp: null, third: [] };
+  }
+  const rounds = Math.max(...matches.map((m) => m.round));
+  const winnerByMatch = new Map<string, string | null>();
+  for (const r of results) winnerByMatch.set(r.matchId, r.winnerTeamId);
+
+  const at = (round: number, position: number): StoredMatch | undefined =>
+    matches.find((m) => m.round === round && m.position === position);
+
+  /** 試合の勝者・敗者（両チーム確定＆結果ありのときだけ）。 */
+  const outcome = (
+    m: StoredMatch | undefined,
+  ): { winner: string | null; loser: string | null } => {
+    if (!m || m.teamAId === null || m.teamBId === null) {
+      return { winner: null, loser: null };
+    }
+    if (!winnerByMatch.has(m.matchId)) return { winner: null, loser: null };
+    const w = winnerByMatch.get(m.matchId) ?? null;
+    if (w === m.teamAId) return { winner: w, loser: m.teamBId };
+    if (w === m.teamBId) return { winner: w, loser: m.teamAId };
+    return { winner: null, loser: null }; // 引分・矛盾
+  };
+
+  const final = outcome(at(rounds, 0));
+  const champion = final.winner;
+  const runnerUp = final.loser;
+
+  // 3位: 3位決定戦があればその勝者、なければ準決勝2敗者（3位タイ）。
+  let third: string[] = [];
+  const thirdMatch = at(rounds, 1);
+  if (thirdMatch) {
+    const tp = outcome(thirdMatch);
+    third = tp.winner ? [tp.winner] : [];
+  } else if (rounds >= 2) {
+    const semiLosers = [outcome(at(rounds - 1, 0)).loser, outcome(at(rounds - 1, 1)).loser].filter(
+      (id): id is string => id !== null,
+    );
+    third = semiLosers;
+  }
+
+  return { champion, runnerUp, third };
 }

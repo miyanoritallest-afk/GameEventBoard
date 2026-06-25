@@ -74,6 +74,7 @@ export default async function EditEventPage({
       | "potg"
     )[],
     groupBestOf: event.group_best_of,
+    tournamentThirdPlace: event.tournament_third_place,
   };
 
   return (

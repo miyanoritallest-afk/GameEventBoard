@@ -3,6 +3,18 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  pointerWithin,
+  closestCenter,
+  type CollisionDetection,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -16,7 +28,30 @@ import {
   generateTournament,
   reportTournamentResult,
   clearTournamentResult,
+  swapBracketTeams,
 } from "./actions";
+
+type Podium = {
+  champion: string | null;
+  runnerUp: string | null;
+  third: string[];
+};
+
+/** D&D の slot id（matchId と a/b スロット）をエンコード/デコードする。 */
+function slotId(matchId: string, slot: "a" | "b"): string {
+  return `${matchId}::${slot}`;
+}
+function parseSlotId(id: string): { matchId: string; slot: "a" | "b" } | null {
+  const [matchId, slot] = id.split("::");
+  if (!matchId || (slot !== "a" && slot !== "b")) return null;
+  return { matchId, slot };
+}
+
+/** D&D 判定。ポインタ位置優先（横長カードでも浅い位置で受け付ける・予選と同方針）。 */
+const dropCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCenter(args);
+};
 
 /** ブラケット1試合（page.tsx で DB から整形して渡す）。 */
 export type BoardBracketMatch = {
@@ -55,6 +90,8 @@ export function TournamentBoard({
   readOnly,
   rankingEnabled,
   usePotg,
+  swapEnabled,
+  podium,
   initialAdvanceCount,
   previewSeeded,
   initialMatches,
@@ -66,12 +103,19 @@ export function TournamentBoard({
   rankingEnabled: boolean;
   /** POTG を使うイベントか（結果入力に POTG 欄を出すか）。 */
   usePotg: boolean;
+  /** 1回戦の手動入れ替え（D&D）を許可するか（主催者かつ結果が1件もないとき）。 */
+  swapEnabled: boolean;
+  /** 表彰台（優勝・準優勝・3位の表示名）。 */
+  podium: Podium;
   initialAdvanceCount: number;
   /** 現在の進出数で抽出されるシード順チーム（生成前プレビュー）。 */
   previewSeeded: PreviewSeed[];
   initialMatches: BoardBracketMatch[];
 }) {
   const router = useRouter();
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
   const [advanceCount, setAdvanceCount] = useState(initialAdvanceCount);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +148,30 @@ export function TournamentBoard({
       router.refresh();
     });
   }
+
+  /** 1回戦スロットの D&D 入れ替え。drop 先・元がともに 1 回戦スロットのときだけ swap する。 */
+  function handleDragEnd(e: DragEndEvent) {
+    if (!swapEnabled) return;
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const x = parseSlotId(String(active.id));
+    const y = parseSlotId(String(over.id));
+    if (!x || !y) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await swapBracketTeams({ x, y });
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  const hasPodium =
+    podium.champion !== null ||
+    podium.runnerUp !== null ||
+    podium.third.length > 0;
 
   return (
     <div className="mt-6 space-y-6">
@@ -176,6 +244,38 @@ export function TournamentBoard({
         </div>
       )}
 
+      {/* 表彰台（決勝などが確定したら表示）。 */}
+      {hasPodium && (
+        <div className="rounded-xl border border-primary/40 bg-primary/5 p-4">
+          <h2 className="text-sm font-semibold text-primary">表彰台</h2>
+          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            {podium.champion && (
+              <span>
+                🏆 優勝: <span className="font-semibold">{podium.champion}</span>
+              </span>
+            )}
+            {podium.runnerUp && (
+              <span>
+                🥈 準優勝: <span className="font-medium">{podium.runnerUp}</span>
+              </span>
+            )}
+            {podium.third.length > 0 && (
+              <span>
+                🥉 {podium.third.length > 1 ? "3位タイ" : "3位"}:{" "}
+                <span className="font-medium">{podium.third.join(" / ")}</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 手動入れ替えの案内（1回戦・結果なしのときのみ）。 */}
+      {swapEnabled && hasBracket && (
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          1回戦のチームはドラッグ＆ドロップで入れ替えできます（結果を入力すると入れ替えはできなくなります）。
+        </p>
+      )}
+
       {/* ブラケット表示 */}
       {!hasBracket ? (
         <p className="text-sm text-muted-foreground">
@@ -183,25 +283,36 @@ export function TournamentBoard({
           {!readOnly && rankingEnabled && "上の「トーナメントを生成」で作成してください。"}
         </p>
       ) : (
-        <div className="flex gap-6 overflow-x-auto pb-4">
-          {rounds.map((roundMatches, i) => (
-            <div key={i} className="flex min-w-[14rem] flex-col gap-4">
-              <h3 className="text-sm font-semibold text-muted-foreground">
-                {roundLabel(i + 1, totalRounds)}
-              </h3>
-              <div className="flex flex-1 flex-col justify-around gap-4">
-                {roundMatches.map((m) => (
-                  <BracketCard
-                    key={m.id}
-                    match={m}
-                    readOnly={readOnly}
-                    usePotg={usePotg}
-                  />
-                ))}
+        <DndContext
+          id="tournament-board-dnd"
+          sensors={sensors}
+          collisionDetection={dropCollision}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-6 overflow-x-auto pb-4">
+            {rounds.map((roundMatches, i) => (
+              <div key={i} className="flex min-w-[14rem] flex-col gap-4">
+                <h3 className="text-sm font-semibold text-muted-foreground">
+                  {roundLabel(i + 1, totalRounds)}
+                </h3>
+                <div className="flex flex-1 flex-col justify-around gap-4">
+                  {roundMatches.map((m) => (
+                    <BracketCard
+                      key={m.id}
+                      match={m}
+                      readOnly={readOnly}
+                      usePotg={usePotg}
+                      // 1回戦かつ swap 可能なときだけスロットをドラッグ対象にする。
+                      swappable={swapEnabled && m.round === 1}
+                      // 最終 round の position 1 は3位決定戦（ラベル出し分け用）。
+                      isThirdPlace={m.round === totalRounds && m.position === 1}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </DndContext>
       )}
 
       {/* 生成（作り直し）の確認ダイアログ（破壊的操作の警告）。 */}
@@ -235,16 +346,21 @@ export function TournamentBoard({
 
 /**
  * ブラケットの1試合カード。未確定スロットは「未定」と表示。
- * 両チーム確定かつ入力権限がある試合は、クリックで結果入力フォームを展開する。
+ * - swappable（1回戦・結果なし）: スロットを D&D で入れ替え可能にする（結果入力は出さない）。
+ * - それ以外: 両チーム確定かつ入力権限があればクリックで結果入力フォームを展開。
  */
 function BracketCard({
   match,
   readOnly,
   usePotg,
+  swappable,
+  isThirdPlace,
 }: {
   match: BoardBracketMatch;
   readOnly: boolean;
   usePotg: boolean;
+  swappable: boolean;
+  isThirdPlace: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const bothSet = match.teamAId !== null && match.teamBId !== null;
@@ -258,32 +374,95 @@ function BracketCard({
 
   return (
     <div className="rounded-lg border border-border bg-card text-sm">
-      <button
-        type="button"
-        disabled={!canInput}
-        onClick={() => canInput && setOpen((v) => !v)}
-        className={`w-full p-3 text-left ${canInput ? "hover:bg-muted/40" : ""}`}
-      >
-        <ScoreSlot
-          name={match.teamAName}
-          score={match.teamAScore}
-          winner={winnerA}
-        />
-        <div className="my-1 border-t border-dashed border-border" />
-        <ScoreSlot
-          name={match.teamBName}
-          score={match.teamBScore}
-          winner={winnerB}
-        />
-      </button>
+      {isThirdPlace && (
+        <div className="border-b border-border px-3 pt-2 text-xs font-semibold text-muted-foreground">
+          3位決定戦
+        </div>
+      )}
 
-      {open && canInput && (
+      {swappable ? (
+        // 1回戦の入れ替え用: 各スロットを draggable＋droppable にする。
+        <div className="p-3">
+          <SwapSlot
+            matchId={match.id}
+            slot="a"
+            name={match.teamAName}
+            teamId={match.teamAId}
+          />
+          <div className="my-1 border-t border-dashed border-border" />
+          <SwapSlot
+            matchId={match.id}
+            slot="b"
+            name={match.teamBName}
+            teamId={match.teamBId}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={!canInput}
+          onClick={() => canInput && setOpen((v) => !v)}
+          className={`w-full p-3 text-left ${canInput ? "hover:bg-muted/40" : ""}`}
+        >
+          <ScoreSlot
+            name={match.teamAName}
+            score={match.teamAScore}
+            winner={winnerA}
+          />
+          <div className="my-1 border-t border-dashed border-border" />
+          <ScoreSlot
+            name={match.teamBName}
+            score={match.teamBScore}
+            winner={winnerB}
+          />
+        </button>
+      )}
+
+      {!swappable && open && canInput && (
         <ResultForm
           match={match}
           usePotg={usePotg}
           onDone={() => setOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** 1回戦の入れ替え用スロット。draggable（チームあり）かつ droppable。 */
+function SwapSlot({
+  matchId,
+  slot,
+  name,
+  teamId,
+}: {
+  matchId: string;
+  slot: "a" | "b";
+  name: string | null;
+  teamId: string | null;
+}) {
+  const id = slotId(matchId, slot);
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+    id,
+    disabled: teamId === null,
+  });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id });
+
+  return (
+    <div
+      ref={setDropRef}
+      className={`rounded px-1 py-1 ${isOver ? "bg-primary/10" : ""}`}
+    >
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        className={`${teamId !== null ? "cursor-grab" : ""} ${
+          isDragging ? "opacity-40" : ""
+        } ${name ? "font-medium" : "text-muted-foreground"}`}
+      >
+        {name ?? "未定"}
+      </div>
     </div>
   );
 }

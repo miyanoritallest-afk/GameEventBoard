@@ -233,6 +233,7 @@ owner/admin の2段階権限。検索招待 → 本人承認のフローを stat
 | tiebreakers | text[] | NOT NULL DEFAULT '{}' | 同着の優先順位（先頭ほど優先）。値は head_to_head/map_diff/potg（CHECK で許可値のみ）。集計・表示はPR-3c |
 | **— 決勝トーナメント設定（本戦・3.4.1） —** | | | 0019で追加 |
 | tournament_advance_count | int | NOT NULL DEFAULT 0 | 各ブロック上位N（決勝T進出数）。0=未使用。ブロック数×Nで進出総数、進出数以上の最小2の累乗をブラケットサイズにし不足枠はBYE。CHECK 0〜99。生成・表示はPR-5a |
+| tournament_third_place | boolean | NOT NULL DEFAULT false | 3位決定戦を行うか。true かつ準決勝が2試合（4チーム以上）のとき、決勝と同じ最終roundに bracket_position=1 で生成（準決勝2敗者）。0020で追加・PR-5c |
 | **— Discord連携（全体告知 3.5.2） —** | | | |
 | discord_webhook_url | text | | 告知チャンネル。未設定なら series 側を使う |
 | auto_announce | boolean | NOT NULL DEFAULT true | 公開/更新時に告知チャンネルへ自動投稿するか |

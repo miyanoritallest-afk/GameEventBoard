@@ -97,6 +97,7 @@ function parseEventFormData(
     pointsLoss: formData.get("pointsLoss"),
     tiebreakers: formData.get("tiebreakers"),
     groupBestOf: formData.get("groupBestOf"),
+    tournamentThirdPlace: formData.get("tournamentThirdPlace") === "on",
   });
 
   if (!parsed.success) {
@@ -137,6 +138,7 @@ function parseEventFormData(
       points_loss: v.pointsLoss,
       tiebreakers: v.tiebreakers,
       group_best_of: v.groupBestOf,
+      tournament_third_place: v.tournamentThirdPlace,
     },
   };
 }
@@ -164,6 +166,7 @@ type EventEditableValues = {
   points_loss: number;
   tiebreakers: ("head_to_head" | "map_diff" | "potg")[];
   group_best_of: number;
+  tournament_third_place: boolean;
 };
 
 export async function createEvent(

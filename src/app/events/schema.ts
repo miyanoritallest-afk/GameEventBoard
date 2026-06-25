@@ -126,6 +126,8 @@ export const createDraftEventSchema = z
         .min(1, "BOは1以上で入力してください")
         .max(15, "BOは15以下で入力してください"),
     ),
+    // 3位決定戦を行うか（本戦-5c）。チェックボックス＝on/未送信。
+    tournamentThirdPlace: z.coerce.boolean().default(false),
     // タイブレーク優先順位。フォームからはカンマ区切り文字列（D&D の順序）で来るので
     // 配列に正規化し、許可値のみ・重複なしを検証する（先頭ほど優先）。
     tiebreakers: z.preprocess(
