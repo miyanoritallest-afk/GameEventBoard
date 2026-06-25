@@ -74,11 +74,10 @@ export default async function EventDetailPage({
     ? await findRegistration(event.id, viewerId)
     : null;
 
-  // 本戦ページ（ブロック分け/対戦表・順位表）への導線を出す条件。
-  // 閲覧できるのは「主催者 or そのイベントの応募者」（groups/matches ページの認可と一致）。
+  // 本戦ページ（ブロック分け/対戦表・順位表/トーナメント）への導線を出す条件。
+  // フェーズB: 公開済みなら観戦者（非ログイン・非参加者）にも導線を出す（閲覧の全面公開）。
   // 下書きでは本戦が始まらないので出さない。
-  const canViewTournament =
-    event.status !== "draft" && (isOrganizer || myRegistration !== null);
+  const canViewTournament = event.status !== "draft";
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">

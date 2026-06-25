@@ -307,9 +307,16 @@ export function GroupsBoard({
         </p>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
-        {/* 左: 未割当プール（承認済みチーム） */}
-        <Pool teams={unassigned} showScore={showScore} draggable={editable} />
+      {/* 観戦者（readOnly）には未割当プールを見せず、確定したブロックだけ全幅で表示する。 */}
+      <div
+        className={`mt-6 grid gap-6 ${
+          readOnly ? "" : "lg:grid-cols-[20rem_1fr]"
+        }`}
+      >
+        {/* 左: 未割当プール（承認済みチーム）。観戦者には出さない。 */}
+        {!readOnly && (
+          <Pool teams={unassigned} showScore={showScore} draggable={editable} />
+        )}
 
         {/* 右: ブロック群 */}
         <div className="space-y-4">

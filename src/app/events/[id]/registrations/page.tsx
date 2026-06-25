@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
-import {
-  findRegistration,
-  listRegistrationsByEvent,
-} from "@/lib/repositories/registrations";
+import { listRegistrationsByEvent } from "@/lib/repositories/registrations";
+import { canViewEvent } from "@/lib/services/event-status";
 import {
   RegistrationRow,
   type RegistrationRowData,
@@ -31,28 +29,20 @@ export default async function EventRegistrationsPage({
 }) {
   const { id } = await params;
 
-  // A: ログイン確認。
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    redirect(
-      `/login?redirect=${encodeURIComponent(`/events/${id}/registrations`)}`,
-    );
-  }
+  const viewerId = user?.id ?? null;
 
-  // 閲覧は「主催者 or そのイベントの応募者」に開放（self 応募の前提＝PR-3a）。
-  // それ以外・存在しないは 404（存在を隠す）。操作系は主催者のみ（canManage）。
+  // 閲覧は「公開済みなら誰でも（観戦者含む）・下書きは主催者のみ」（フェーズB）。
+  // 操作系（承認・スコア）は主催者のみ（RegistrationRow が isOrganizer で出し分け）。
   const event = await findEventById(id);
   if (!event) notFound();
-  const isOrganizer = event.organizer_id === user.id;
-  const myRegistration = isOrganizer
-    ? null
-    : await findRegistration(event.id, user.id);
-  if (!isOrganizer && !myRegistration) {
+  if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
   }
+  const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
 
   const registrations = await listRegistrationsByEvent(event.id);
 

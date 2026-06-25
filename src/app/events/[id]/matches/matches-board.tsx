@@ -736,7 +736,8 @@ function MatchDetail({
           📺 {match.streamerName || "配信"}
         </a>
       )}
-      {!hasSchedule && !hasStream && !canEditDetail && (
+      {/* 「未設定」は編集権のある人だけに見せる（観戦者にはノイズなので出さない）。 */}
+      {!hasSchedule && !hasStream && canEditDetail && (
         <span className="text-muted-foreground/60">日時・配信は未設定</span>
       )}
 

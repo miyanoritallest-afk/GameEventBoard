@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
@@ -7,6 +7,7 @@ import {
   listTeamsWithMembers,
   listUnassignedApproved,
 } from "@/lib/repositories/teams";
+import { canViewEvent } from "@/lib/services/event-status";
 import { TeamsBoard, type BoardMember, type BoardTeam } from "./teams-board";
 
 export const dynamic = "force-dynamic";
@@ -31,21 +32,20 @@ export default async function EventTeamsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    redirect(`/login?redirect=${encodeURIComponent(`/events/${id}/teams`)}`);
-  }
+  const viewerId = user?.id ?? null;
 
-  // 閲覧は「主催者 or そのイベントの応募者」に開放（self 応募の前提＝PR-3a）。
-  // 主催者は編集可、応募者は試算のみ（read-only）。それ以外・存在しないは 404。
+  // 閲覧は「公開済みなら誰でも（観戦者含む）・下書きは主催者のみ」（フェーズB）。
+  // 主催者は編集可、応募者は試算のみ、観戦者は閲覧のみ（read-only）。
   const event = await findEventById(id);
   if (!event) notFound();
-  const isOrganizer = event.organizer_id === user.id;
-  const myRegistration = isOrganizer
-    ? null
-    : await findRegistration(event.id, user.id);
-  if (!isOrganizer && !myRegistration) {
+  if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
   }
+  const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
+  const myRegistration =
+    isOrganizer || viewerId === null
+      ? null
+      : await findRegistration(event.id, viewerId);
 
   const [teamsRaw, unassignedRaw] = await Promise.all([
     listTeamsWithMembers(event.id),
@@ -99,25 +99,30 @@ export default async function EventTeamsPage({
     }),
   }));
 
-  const unassigned: BoardMember[] = (unassignedRaw ?? []).map((reg) =>
-    toBoardMember(reg as unknown as RegJoin, {}),
-  );
+  // 未割当の応募者プールは編成作業の領域。観戦者（read-only）には見せず、確定したチームだけ表示。
+  // 応募者（自分の試算用）には従来どおり見せる。
+  const unassigned: BoardMember[] =
+    isOrganizer || myRegistration !== null
+      ? (unassignedRaw ?? []).map((reg) => toBoardMember(reg as unknown as RegJoin, {}))
+      : [];
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
       {/* 編成画面は判断材料を横に並べるため広い幅を取る（他ページの max-w-3xl/6xl より広い）。 */}
       <div className="mx-auto max-w-[1600px] px-6 py-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">チーム編成</h1>
+          {/* 観戦者には「編成」でなく「参加チーム」と見せる（純粋閲覧）。 */}
+          <h1 className="text-2xl font-bold">
+            {isOrganizer || myRegistration !== null ? "チーム編成" : "参加チーム"}
+          </h1>
           <div className="flex items-center gap-4">
-            {isOrganizer && (
-              <Link
-                href={`/events/${event.id}/groups`}
-                className="text-sm text-primary hover:underline"
-              >
-                ブロック分けへ →
-              </Link>
-            )}
+            {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
+            <Link
+              href={`/events/${event.id}/groups`}
+              className="text-sm text-primary hover:underline"
+            >
+              ブロック分けへ →
+            </Link>
             <Link
               href={`/events/${event.slug ?? event.id}`}
               className="text-sm text-muted-foreground hover:underline"
@@ -132,6 +137,7 @@ export default async function EventTeamsPage({
           eventId={event.id}
           readOnly={!isOrganizer}
           isOrganizer={isOrganizer}
+          spectator={!isOrganizer && myRegistration === null}
           selfFormation={event.team_formation === "self"}
           myRegistrationId={myRegistration?.id ?? null}
           showScore={event.require_score}
