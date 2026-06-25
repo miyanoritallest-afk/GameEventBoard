@@ -11,8 +11,13 @@ import {
   deleteGroup as deleteGroupRepo,
   assignTeamToGroup,
   unassignTeamFromGroup,
+  listApprovedTeamsForDraft,
+  replaceGroupsWithAssignments,
 } from "@/lib/repositories/groups";
-import { groupNameSchema, assignTeamSchema } from "./schema";
+import { listGroupMatches } from "@/lib/repositories/matches";
+import { teamScore, type MemberScore } from "@/lib/services/team-score";
+import { snakeDraft, blockName, type DraftTeam } from "@/lib/services/snake-draft";
+import { groupNameSchema, assignTeamSchema, autoDraftSchema } from "./schema";
 
 /**
  * 予選ブロック分け（本戦 PR-1）の Server Action（Controller。薄く保つ）。
@@ -205,5 +210,91 @@ export async function unassignTeam(teamId: string): Promise<GroupActionState> {
   }
 
   revalidatePath(`/events/${team.event_id}/groups`);
+  return {};
+}
+
+/**
+ * 自動ブロック分け（PR-4）。承認済みチームをスコア降順スネークドラフトで N ブロックへ配り直す。
+ * 既存ブロック・割当は全削除してゼロから組み直す（破壊的・UI 側で確認ダイアログ必須）。
+ *
+ * 防御:
+ * 1. ログイン確認。
+ * 2. 主催者本人確認（IDOR）。RLS（0013）が最終防衛。
+ * 3. 対戦表生成済み（locked）なら拒否。組み替えると対戦カードとブロックがズレて事故るため。
+ * 4. blockCount を Zod ＋「1〜承認チーム数」で検証（マスアサインメント対策・対象はサーバー固定）。
+ */
+export async function autoAssignGroups(
+  eventId: string,
+  blockCount: number,
+): Promise<GroupActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const event = await requireOrganizer(eventId, userId);
+  if (!event) return { error: "このイベントを操作する権限がありません。" };
+
+  // 対戦表が1件でも生成済みならロック（groups/page.tsx の locked と同条件）。
+  const matches = await listGroupMatches(eventId);
+  if ((matches ?? []).length > 0) {
+    return {
+      error:
+        "対戦表が生成済みのため、自動ブロック分けはできません。対戦表側で試合を削除してからお試しください。",
+    };
+  }
+
+  const parsed = autoDraftSchema.safeParse({ blockCount });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
+  }
+
+  // 全 approved チームを取得し、出場メンバー平均でスコアを算出する（page.tsx と同じ整形）。
+  const teamsRaw = await listApprovedTeamsForDraft(eventId);
+  type TeamJoin = {
+    id: string;
+    name: string;
+    team_members:
+      | {
+          position: string;
+          registrations: {
+            final_score: number | null;
+            organizer_override_score: number | null;
+          } | null;
+        }[]
+      | null;
+  };
+  const draftTeams: DraftTeam[] = (teamsRaw ?? []).map((t) => {
+    const tj = t as unknown as TeamJoin;
+    const members: MemberScore[] = (tj.team_members ?? []).map((tm) => ({
+      id: "",
+      position: tm.position === "reserve" ? "reserve" : "regular",
+      finalScore: tm.registrations?.final_score ?? null,
+      overrideScore: tm.registrations?.organizer_override_score ?? null,
+    }));
+    return { id: tj.id, score: teamScore(members) };
+  });
+
+  if (draftTeams.length === 0) {
+    return { error: "承認済みのチームがありません。" };
+  }
+  // ブロック数が承認チーム数を超えると空ブロックしか作れない＝無意味なので弾く。
+  if (parsed.data.blockCount > draftTeams.length) {
+    return {
+      error: `ブロック数は承認チーム数（${draftTeams.length}）以下で指定してください。`,
+    };
+  }
+
+  // スネークドラフトで配り、A,B,C... の名前を採番してブロックを組み立てる。
+  const assignments = snakeDraft(draftTeams, parsed.data.blockCount);
+  const blocks = assignments.map((teamIds, i) => ({
+    name: blockName(i),
+    teamIds,
+  }));
+
+  const result = await replaceGroupsWithAssignments({ eventId, blocks });
+  if (!result.ok) {
+    return { error: "自動ブロック分けに失敗しました。画面を更新してからお試しください。" };
+  }
+
+  revalidatePath(`/events/${eventId}/groups`);
   return {};
 }

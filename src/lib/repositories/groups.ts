@@ -182,6 +182,77 @@ export async function listGroupTeamIds(groupId: string): Promise<string[]> {
 }
 
 /**
+ * 自動ブロック分け（PR-4）用。イベントの全 approved チームを、スコア源のメンバーごと返す。
+ * 割当状態は問わない（既存ブロックを全削除してゼロから組み直すため）。表示順はチーム名。
+ */
+export async function listApprovedTeamsForDraft(eventId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .select(
+      `id, name, status,
+       team_members(
+         position,
+         registrations(final_score, organizer_override_score)
+       )`,
+    )
+    .eq("event_id", eventId)
+    .eq("status", "approved")
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 自動ブロック分け（PR-4）の一括適用。イベントの既存ブロックを全削除し、
+ * 渡されたブロック群（名前＋所属 team_id 配列）を新規作成して一括割当する。
+ *
+ * group_teams は groups の FK on delete cascade で連動して消えるため、
+ * 既存割当も groups 削除で一掃される。所有権確認は呼び出し側＋RLS（0013）が担保。
+ * 名前は呼び出し側で A,B,C... を採番済み（このイベント内で一意）。
+ */
+export async function replaceGroupsWithAssignments(params: {
+  eventId: string;
+  blocks: { name: string; teamIds: string[] }[];
+}): Promise<{ ok: true } | { ok: false }> {
+  const supabase = await createClient();
+
+  // 1) 既存ブロックを全削除（group_teams は cascade で連動削除）。
+  const { error: delErr } = await supabase
+    .from("groups")
+    .delete()
+    .eq("event_id", params.eventId);
+  if (delErr) throw delErr;
+
+  if (params.blocks.length === 0) return { ok: true };
+
+  // 2) ブロックを一括作成し、作成後の id を名前で引けるようにする。
+  const { data: created, error: insErr } = await supabase
+    .from("groups")
+    .insert(params.blocks.map((b) => ({ event_id: params.eventId, name: b.name })))
+    .select("id, name");
+  if (insErr) throw insErr;
+
+  const idByName = new Map<string, string>(
+    (created ?? []).map((g) => [g.name, g.id]),
+  );
+
+  // 3) 各ブロックの所属を group_teams へ一括 insert。
+  const rows = params.blocks.flatMap((b) => {
+    const groupId = idByName.get(b.name);
+    if (!groupId) return [];
+    return b.teamIds.map((teamId) => ({ group_id: groupId, team_id: teamId }));
+  });
+  if (rows.length > 0) {
+    const { error: gtErr } = await supabase.from("group_teams").insert(rows);
+    if (gtErr) throw gtErr;
+  }
+
+  return { ok: true };
+}
+
+/**
  * 未割当プール用。approved なチームのうち、まだどのブロックにも属さないものを返す。
  * group_teams（このイベントのブロック）に存在しない team を抽出する。
  */
