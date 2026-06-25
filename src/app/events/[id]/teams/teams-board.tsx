@@ -193,6 +193,7 @@ export function TeamsBoard({
   eventId,
   readOnly = false,
   isOrganizer = false,
+  spectator = false,
   selfFormation = false,
   myRegistrationId = null,
   showScore,
@@ -205,6 +206,11 @@ export function TeamsBoard({
   eventId: string;
   /** 試算モード（応募者の閲覧）。D&D で組み替えできるが保存しない・操作ボタンを隠す。 */
   readOnly?: boolean;
+  /**
+   * 観戦者（非ログイン/非参加者）か。試算（シミュレーション枠）も未割当プールも出さず、
+   * 確定したチーム一覧だけを純粋閲覧する（フェーズB）。readOnly かつ非応募者のとき true。
+   */
+  spectator?: boolean;
   /** 主催者か（承認/却下ボタンの出し分け）。 */
   isOrganizer?: boolean;
   /** team_formation='self' のイベントか（応募者の確定ボタンの出し分け）。 */
@@ -221,8 +227,9 @@ export function TeamsBoard({
   // 試算モード（応募者の閲覧）では、実チームの有無に関わらず「シミュレーション」枠を
   // 常に先頭に1枚用意する（自分の試算用。DB 保存しない。id はローカル専用プレフィックス）。
   // 実チームがあれば、その後ろに参考として表示する（試算で組み替えても保存されない）。
+  // 観戦者（spectator）には試算枠を出さず、確定チームだけを純粋閲覧させる。
   const [teams, setTeams] = useState<BoardTeam[]>(() =>
-    readOnly
+    readOnly && !spectator
       ? [
           {
             id: SIM_TEAM_ID,
@@ -704,8 +711,15 @@ export function TeamsBoard({
         </div>
       )}
 
+      {/* 観戦者: 純粋閲覧のバナー（試算なし）。 */}
+      {spectator && (
+        <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          参加チームを閲覧しています。
+        </p>
+      )}
+
       {/* 試算モードのバナー（応募者の閲覧）。保存されないことを明示する。 */}
-      {readOnly && (
+      {readOnly && !spectator && (
         <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           試算モードで閲覧しています。自由に組み替えてチーム平均を試算できますが、
           <span className="font-medium">変更は保存されません</span>。
@@ -796,20 +810,27 @@ export function TeamsBoard({
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[20rem_1fr]">
-        {/* 左: 未割当プール */}
-        <Pool
-          members={sortPool(unassigned, poolSort)}
-          totalCount={unassigned.length}
-          showScore={showScore}
-          sort={poolSort}
-          onSortChange={setPoolSort}
-          // 「チームへ送る」先候補。試算モードは SIM 枠のみ・実モードは全チーム。
-          assignTargets={teams
-            .filter((t) => (readOnly ? t.id === SIM_TEAM_ID : true))
-            .map((t) => ({ id: t.id, name: t.name }))}
-          onAssign={handleAssignToTeam}
-        />
+      {/* 観戦者には未割当プールを見せず、確定チームだけ全幅で表示する（フェーズB）。 */}
+      <div
+        className={`mt-6 grid gap-6 ${
+          spectator ? "" : "lg:grid-cols-[20rem_1fr]"
+        }`}
+      >
+        {/* 左: 未割当プール。観戦者には出さない。 */}
+        {!spectator && (
+          <Pool
+            members={sortPool(unassigned, poolSort)}
+            totalCount={unassigned.length}
+            showScore={showScore}
+            sort={poolSort}
+            onSortChange={setPoolSort}
+            // 「チームへ送る」先候補。試算モードは SIM 枠のみ・実モードは全チーム。
+            assignTargets={teams
+              .filter((t) => (readOnly ? t.id === SIM_TEAM_ID : true))
+              .map((t) => ({ id: t.id, name: t.name }))}
+            onAssign={handleAssignToTeam}
+          />
+        )}
 
         {/* 右: チーム群 */}
         <div className="space-y-4">
@@ -1333,7 +1354,8 @@ function Zone({
       >
         {members.length === 0 ? (
           <p className="px-1 py-2 text-center text-xs text-muted-foreground">
-            ＋ ここにドラッグ
+            {/* 閲覧者にはドラッグ案内を出さない（ノイズ防止）。 */}
+            {readOnly ? "なし" : "＋ ここにドラッグ"}
           </p>
         ) : (
           members.map((m) => (

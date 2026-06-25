@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
-import { findRegistration } from "@/lib/repositories/registrations";
 import {
   listGroupsWithTeams,
   listUnassignedApprovedTeams,
 } from "@/lib/repositories/groups";
 import { listGroupMatches } from "@/lib/repositories/matches";
 import { teamScore, type MemberScore } from "@/lib/services/team-score";
+import { canViewEvent } from "@/lib/services/event-status";
 import { GroupsBoard, type BoardGroup, type BoardTeam } from "./groups-board";
 
 export const dynamic = "force-dynamic";
@@ -34,19 +34,15 @@ export default async function EventGroupsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    redirect(`/login?redirect=${encodeURIComponent(`/events/${id}/groups`)}`);
-  }
+  const viewerId = user?.id ?? null;
 
   const event = await findEventById(id);
   if (!event) notFound();
-  const isOrganizer = event.organizer_id === user.id;
-  const myRegistration = isOrganizer
-    ? null
-    : await findRegistration(event.id, user.id);
-  if (!isOrganizer && !myRegistration) {
+  // 閲覧は「公開済みなら誰でも（観戦者含む）・下書きは主催者のみ」。編集は readOnly で制御。
+  if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
   }
+  const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
 
   const [groupsRaw, unassignedRaw, matchesRaw] = await Promise.all([
     listGroupsWithTeams(event.id),
@@ -96,9 +92,10 @@ export default async function EventGroupsPage({
     ),
   }));
 
-  const unassigned: BoardTeam[] = (unassignedRaw ?? []).map((t) =>
-    toBoardTeam(t as unknown as TeamJoin),
-  );
+  // 未割当プールは振り分け作業の領域。観戦者（read-only）には見せず、確定したブロックだけ表示する。
+  const unassigned: BoardTeam[] = isOrganizer
+    ? (unassignedRaw ?? []).map((t) => toBoardTeam(t as unknown as TeamJoin))
+    : [];
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
@@ -106,14 +103,13 @@ export default async function EventGroupsPage({
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">ブロック分け</h1>
           <div className="flex items-center gap-4">
-            {isOrganizer && (
-              <Link
-                href={`/events/${event.id}/matches`}
-                className="text-sm text-primary hover:underline"
-              >
-                対戦表・順位表へ →
-              </Link>
-            )}
+            {/* 対戦表・順位表への導線は観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
+            <Link
+              href={`/events/${event.id}/matches`}
+              className="text-sm text-primary hover:underline"
+            >
+              対戦表・順位表へ →
+            </Link>
             <Link
               href={`/events/${event.slug ?? event.id}`}
               className="text-sm text-muted-foreground hover:underline"

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
@@ -8,6 +8,7 @@ import { listGroupMatches } from "@/lib/repositories/matches";
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { listCaptainTeamIds } from "@/lib/repositories/teams";
 import { computeStandings } from "@/lib/services/standings";
+import { canViewEvent } from "@/lib/services/event-status";
 import { utcIsoToJstLocal } from "@/lib/datetime-local";
 import {
   MatchesBoard,
@@ -38,19 +39,19 @@ export default async function EventMatchesPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    redirect(`/login?redirect=${encodeURIComponent(`/events/${id}/matches`)}`);
-  }
+  const viewerId = user?.id ?? null;
 
   const event = await findEventById(id);
   if (!event) notFound();
-  const isOrganizer = event.organizer_id === user.id;
-  const myRegistration = isOrganizer
-    ? null
-    : await findRegistration(event.id, user.id);
-  if (!isOrganizer && !myRegistration) {
+  // 閲覧は「公開済みなら誰でも（観戦者含む）・下書きは主催者のみ」。編集は readOnly/canReport で制御。
+  if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
   }
+  const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
+  const myRegistration =
+    isOrganizer || viewerId === null
+      ? null
+      : await findRegistration(event.id, viewerId);
 
   const [groupsRaw, matchesRaw, resultsRaw, captainTeamIds] = await Promise.all([
     listGroupsWithTeams(event.id),
@@ -218,14 +219,13 @@ export default async function EventMatchesPage({
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">対戦表・順位表</h1>
           <div className="flex items-center gap-4">
-            {isOrganizer && (
-              <Link
-                href={`/events/${event.id}/groups`}
-                className="text-sm text-primary hover:underline"
-              >
-                ← ブロック分けへ
-              </Link>
-            )}
+            {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
+            <Link
+              href={`/events/${event.id}/groups`}
+              className="text-sm text-primary hover:underline"
+            >
+              ← ブロック分けへ
+            </Link>
             <Link
               href={`/events/${event.id}/tournament`}
               className="text-sm text-primary hover:underline"
