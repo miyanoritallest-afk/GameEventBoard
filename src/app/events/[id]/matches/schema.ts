@@ -40,14 +40,52 @@ const potgCount = z
   .max(99, "POTG数が大きすぎます")
   .default(0);
 
+/** リプレイコード（マップ別・任意）。各要素は空可・16文字以内。配列長は最大15（BO上限）。 */
+export const replayCodes = z
+  .array(
+    z
+      .string()
+      .trim()
+      .max(16, "リプレイコードは16文字以内で入力してください"),
+  )
+  .max(15, "リプレイコードが多すぎます")
+  .default([]);
+
 export const reportResultSchema = z.object({
   matchId: z.string().uuid("不正な試合IDです"),
   teamAScore: mapScore,
   teamBScore: mapScore,
   potgA: potgCount,
   potgB: potgCount,
+  replayCodes,
+});
+
+/** 試合日時の更新（主催者or代表）。空文字＝日時クリア（null）。 */
+export const updateScheduleSchema = z.object({
+  matchId: z.string().uuid("不正な試合IDです"),
+  // datetime-local 文字列（JST）。空は未設定。
+  scheduledAtLocal: z.string().max(40).optional().default(""),
+});
+
+/** 配信情報の更新（主催者のみ）。URL・配信者名はともに任意。 */
+export const updateStreamSchema = z.object({
+  matchId: z.string().uuid("不正な試合IDです"),
+  streamUrl: z
+    .string()
+    .trim()
+    .max(500, "配信URLが長すぎます")
+    .optional()
+    .default(""),
+  streamerName: z
+    .string()
+    .trim()
+    .max(100, "配信者名が長すぎます")
+    .optional()
+    .default(""),
 });
 
 export type GenerateMatchesInput = z.infer<typeof generateMatchesSchema>;
 export type AddMatchInput = z.infer<typeof addMatchSchema>;
 export type ReportResultInput = z.infer<typeof reportResultSchema>;
+export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
+export type UpdateStreamInput = z.infer<typeof updateStreamSchema>;

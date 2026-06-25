@@ -31,6 +31,8 @@ import {
   decideWinner,
   validateBoScore,
   validatePotg,
+  mapsPlayed,
+  normalizeReplayCodes,
 } from "@/lib/services/match-result";
 import type { TiebreakerKey } from "@/lib/services/standings";
 import {
@@ -171,6 +173,7 @@ export async function reportTournamentResult(
     teamBScore: number;
     potgA?: number;
     potgB?: number;
+    replayCodes?: string[];
   },
   confirmed: boolean,
 ): Promise<ReportResultState> {
@@ -182,6 +185,10 @@ export async function reportTournamentResult(
     return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
   }
   const { matchId, teamAScore, teamBScore, potgA, potgB } = parsed.data;
+  const replayCodes = normalizeReplayCodes(
+    parsed.data.replayCodes,
+    mapsPlayed(teamAScore, teamBScore),
+  );
 
   const match = await requireReporter(matchId, userId);
   if (!match) return { error: "この試合の結果を入力する権限がありません。" };
@@ -238,6 +245,7 @@ export async function reportTournamentResult(
     reportedBy: userId,
     potgA: potgA ?? 0,
     potgB: potgB ?? 0,
+    replayCodes,
   });
   if (!saved.ok) {
     return { error: "結果の保存に失敗しました。画面を更新してからお試しください。" };

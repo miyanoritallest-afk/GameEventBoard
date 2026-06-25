@@ -4,6 +4,8 @@ import {
   validateBoScore,
   validatePotg,
   describeBestOf,
+  mapsPlayed,
+  normalizeReplayCodes,
 } from "../match-result";
 
 /**
@@ -126,5 +128,37 @@ describe("describeBestOf", () => {
   it("偶数BOは全マップ消化・引分ありの表記", () => {
     expect(describeBestOf(2)).toBe("全2マップ・引分あり");
     expect(describeBestOf(4)).toBe("全4マップ・引分あり");
+  });
+});
+
+/** リプレイコード欄数＝行われたマップ数（フェーズA）。 */
+describe("mapsPlayed", () => {
+  it("両者スコアの合計", () => {
+    expect(mapsPlayed(2, 1)).toBe(3); // BO3 決着
+    expect(mapsPlayed(3, 0)).toBe(3); // BO5 ストレート
+    expect(mapsPlayed(2, 2)).toBe(4); // BO4 引分
+    expect(mapsPlayed(0, 0)).toBe(0); // 未入力
+  });
+  it("負値・小数は防御的に丸める", () => {
+    expect(mapsPlayed(-1, 2)).toBe(1);
+    expect(mapsPlayed(2.7, 1.2)).toBe(3);
+  });
+});
+
+/** リプレイコードの保存用正規化（フェーズA）。 */
+describe("normalizeReplayCodes", () => {
+  it("マップ数に長さを揃える（多い分は捨て、足りない分は空文字）", () => {
+    expect(normalizeReplayCodes(["AAA", "BBB", "CCC", "DDD"], 3)).toEqual([
+      "AAA",
+      "BBB",
+      "CCC",
+    ]);
+    expect(normalizeReplayCodes(["AAA"], 3)).toEqual(["AAA", "", ""]);
+  });
+  it("各要素をトリムする", () => {
+    expect(normalizeReplayCodes([" AAA ", "  "], 2)).toEqual(["AAA", ""]);
+  });
+  it("マップ数0なら空配列", () => {
+    expect(normalizeReplayCodes(["AAA"], 0)).toEqual([]);
   });
 });

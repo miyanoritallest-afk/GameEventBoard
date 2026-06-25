@@ -117,6 +117,33 @@ export function validatePotg(params: {
 }
 
 /**
+ * 1試合で行われたマップ数 = 両者の取マップ数の合計（フェーズA・リプレイコード欄数の根拠）。
+ * 奇数BOは可変（BO5 なら 3〜5）、偶数BOは best_of 固定。
+ * リプレイコードは「1マップ＝1コード」なので、入力欄はこの数だけ出す。
+ */
+export function mapsPlayed(teamAScore: number, teamBScore: number): number {
+  return Math.max(0, Math.floor(teamAScore) + Math.floor(teamBScore));
+}
+
+/**
+ * リプレイコードを保存用に正規化する（フェーズA）。
+ * - 行われたマップ数（mapsPlayed）に長さを揃える（多い分は捨て、足りない分は空文字で埋める）。
+ * - 各要素は前後空白をトリム。空欄のまま保存してよい（任意入力）。
+ * 末尾が全部空文字でも配列長はマップ数に保つ（マップとコードの対応を崩さない）。
+ */
+export function normalizeReplayCodes(
+  codes: string[],
+  mapCount: number,
+): string[] {
+  const n = Math.max(0, Math.floor(mapCount));
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push((codes[i] ?? "").trim());
+  }
+  return out;
+}
+
+/**
  * BO の意味を日本語で説明する（UI のツールチップ・補足表示用・⑦/④）。
  * 「BO3」だけでは初見で伝わらないため、勝敗ルールを文章で添える。
  * - 奇数BO: 過半数先取で決着（引分なし）。例 BO3 → 「3マップ中2本先取」。

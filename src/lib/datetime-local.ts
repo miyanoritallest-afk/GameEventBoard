@@ -53,6 +53,35 @@ export function formatLocalInputForDisplay(
   );
 }
 
+/**
+ * datetime-local の JST ローカル時刻文字列（"YYYY-MM-DDTHH:mm"）を UTC(ISO) に変換する。
+ * 空・不正なら null。JST 入力 → UTC 保存（CLAUDE.md のルール）の共有ヘルパ。
+ */
+export function jstLocalToUtcIso(
+  local: string | null | undefined,
+): string | null {
+  if (!local) return null;
+  const iso = local.length === 16 ? `${local}:00+09:00` : `${local}+09:00`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * UTC(ISO) を JST の datetime-local 文字列（"YYYY-MM-DDTHH:mm"）に変換する。
+ * 空・不正なら ""。UTC 保存 → JST 表示（フォーム初期値）に使う。
+ */
+export function utcIsoToJstLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  // UTC からの分を JST(+9h) にずらし、そのローカル表現を整形する。
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return (
+    `${jst.getUTCFullYear()}-${pad2(jst.getUTCMonth() + 1)}-${pad2(jst.getUTCDate())}` +
+    `T${pad2(jst.getUTCHours())}:${pad2(jst.getUTCMinutes())}`
+  );
+}
+
 /** 15分刻みの分の選択肢（"00","15","30","45"）。 */
 export const MINUTE_STEPS = ["00", "15", "30", "45"] as const;
 

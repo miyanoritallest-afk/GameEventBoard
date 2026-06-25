@@ -13,6 +13,7 @@ import {
   type SeedTeam,
 } from "@/lib/services/bracket";
 import type { TiebreakerKey } from "@/lib/services/standings";
+import { utcIsoToJstLocal } from "@/lib/datetime-local";
 import {
   TournamentBoard,
   type BoardBracketMatch,
@@ -80,7 +81,7 @@ export default async function EventTournamentPage({
   const { seeds, teamNameById } = seedData;
   const captainTeamIdSet = new Set(captainTeamIds);
 
-  // 試合 id → 結果（スコア・勝者・POTG）。
+  // 試合 id → 結果（スコア・勝者・POTG・リプレイ）。
   type ResultRow = {
     match_id: string;
     team_a_score: number;
@@ -88,6 +89,7 @@ export default async function EventTournamentPage({
     winner_team_id: string | null;
     potg_a: number;
     potg_b: number;
+    replay_codes: string[] | null;
   };
   const resultByMatch = new Map<string, ResultRow>();
   for (const r of (resultsRaw ?? []) as unknown as ResultRow[]) {
@@ -102,6 +104,9 @@ export default async function EventTournamentPage({
     round: number | null;
     bracket_position: number | null;
     best_of: number;
+    scheduled_at?: string | null;
+    stream_url?: string | null;
+    streamer_name?: string | null;
   };
   const matches: BoardBracketMatch[] = ((tournamentRaw ?? []) as TMatchRow[]).map(
     (m) => {
@@ -127,6 +132,11 @@ export default async function EventTournamentPage({
         bestOf: m.best_of,
         hasResult: result !== null,
         canReport,
+        replayCodes: result?.replay_codes ?? [],
+        scheduledAtLocal: utcIsoToJstLocal(m.scheduled_at ?? null),
+        streamUrl: m.stream_url ?? null,
+        streamerName: m.streamer_name ?? null,
+        isOrganizer,
       };
     },
   );

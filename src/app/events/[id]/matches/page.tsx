@@ -8,6 +8,7 @@ import { listGroupMatches } from "@/lib/repositories/matches";
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { listCaptainTeamIds } from "@/lib/repositories/teams";
 import { computeStandings } from "@/lib/services/standings";
+import { utcIsoToJstLocal } from "@/lib/datetime-local";
 import {
   MatchesBoard,
   type BoardGroup,
@@ -72,6 +73,7 @@ export default async function EventMatchesPage({
     winner_team_id: string | null;
     potg_a: number;
     potg_b: number;
+    replay_codes: string[] | null;
   };
   const resultRows = (resultsRaw ?? []) as unknown as ResultRow[];
   const resultByMatch = new Map<string, ResultRow>();
@@ -117,13 +119,16 @@ export default async function EventMatchesPage({
     group_id: string | null;
     team_a_id: string | null;
     team_b_id: string | null;
+    scheduled_at?: string | null;
+    stream_url?: string | null;
+    streamer_name?: string | null;
   };
   const matchById = new Map<string, MatchRow>();
   for (const m of (matchesRaw ?? []) as MatchRow[]) matchById.set(m.id, m);
 
   // ブロックごとに試合を束ねる。
   const matchesByGroup = new Map<string, BoardMatch[]>();
-  for (const m of matchesRaw ?? []) {
+  for (const m of (matchesRaw ?? []) as MatchRow[]) {
     if (!m.group_id) continue;
     const arr = matchesByGroup.get(m.group_id) ?? [];
     const result = resultByMatch.get(m.id) ?? null;
@@ -146,6 +151,11 @@ export default async function EventMatchesPage({
       bestOf: (m as { best_of?: number }).best_of ?? 3,
       hasResult: result !== null,
       canReport,
+      replayCodes: result?.replay_codes ?? [],
+      scheduledAtLocal: utcIsoToJstLocal(m.scheduled_at ?? null),
+      streamUrl: m.stream_url ?? null,
+      streamerName: m.streamer_name ?? null,
+      isOrganizer,
     });
     matchesByGroup.set(m.group_id, arr);
   }
