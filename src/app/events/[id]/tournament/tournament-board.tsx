@@ -12,7 +12,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { generateTournament } from "./actions";
+import {
+  generateTournament,
+  reportTournamentResult,
+  clearTournamentResult,
+} from "./actions";
 
 /** ブラケット1試合（page.tsx で DB から整形して渡す）。 */
 export type BoardBracketMatch = {
@@ -23,6 +27,16 @@ export type BoardBracketMatch = {
   teamBId: string | null;
   teamAName: string | null;
   teamBName: string | null;
+  /** 結果（取マップ数・勝者・POTG）。未入力は null。 */
+  teamAScore: number | null;
+  teamBScore: number | null;
+  winnerTeamId: string | null;
+  potgA: number;
+  potgB: number;
+  bestOf: number;
+  hasResult: boolean;
+  /** この閲覧者がこの試合の結果を入力できるか（主催者 or 対戦両チーム代表）。 */
+  canReport: boolean;
 };
 
 type PreviewSeed = { seed: number; teamId: string; teamName: string };
@@ -40,6 +54,7 @@ export function TournamentBoard({
   eventId,
   readOnly,
   rankingEnabled,
+  usePotg,
   initialAdvanceCount,
   previewSeeded,
   initialMatches,
@@ -49,6 +64,8 @@ export function TournamentBoard({
   readOnly: boolean;
   /** 順位機能が有効か。無効だと進出抽出ができないので生成不可。 */
   rankingEnabled: boolean;
+  /** POTG を使うイベントか（結果入力に POTG 欄を出すか）。 */
+  usePotg: boolean;
   initialAdvanceCount: number;
   /** 現在の進出数で抽出されるシード順チーム（生成前プレビュー）。 */
   previewSeeded: PreviewSeed[];
@@ -174,7 +191,12 @@ export function TournamentBoard({
               </h3>
               <div className="flex flex-1 flex-col justify-around gap-4">
                 {roundMatches.map((m) => (
-                  <BracketCard key={m.id} match={m} />
+                  <BracketCard
+                    key={m.id}
+                    match={m}
+                    readOnly={readOnly}
+                    usePotg={usePotg}
+                  />
                 ))}
               </div>
             </div>
@@ -211,21 +233,280 @@ export function TournamentBoard({
   );
 }
 
-/** ブラケットの1試合カード。未確定スロットは「未定」と表示。 */
-function BracketCard({ match }: { match: BoardBracketMatch }) {
+/**
+ * ブラケットの1試合カード。未確定スロットは「未定」と表示。
+ * 両チーム確定かつ入力権限がある試合は、クリックで結果入力フォームを展開する。
+ */
+function BracketCard({
+  match,
+  readOnly,
+  usePotg,
+}: {
+  match: BoardBracketMatch;
+  readOnly: boolean;
+  usePotg: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const bothSet = match.teamAId !== null && match.teamBId !== null;
+  // 入力できるのは「閲覧者でない（主催者）or 代表」かつ両チーム確定のとき。
+  const canInput = (!readOnly || match.canReport) && bothSet;
+
+  const winnerA =
+    match.winnerTeamId !== null && match.winnerTeamId === match.teamAId;
+  const winnerB =
+    match.winnerTeamId !== null && match.winnerTeamId === match.teamBId;
+
   return (
-    <div className="rounded-lg border border-border bg-card p-3 text-sm">
-      <Slot name={match.teamAName} />
-      <div className="my-1 border-t border-dashed border-border" />
-      <Slot name={match.teamBName} />
+    <div className="rounded-lg border border-border bg-card text-sm">
+      <button
+        type="button"
+        disabled={!canInput}
+        onClick={() => canInput && setOpen((v) => !v)}
+        className={`w-full p-3 text-left ${canInput ? "hover:bg-muted/40" : ""}`}
+      >
+        <ScoreSlot
+          name={match.teamAName}
+          score={match.teamAScore}
+          winner={winnerA}
+        />
+        <div className="my-1 border-t border-dashed border-border" />
+        <ScoreSlot
+          name={match.teamBName}
+          score={match.teamBScore}
+          winner={winnerB}
+        />
+      </button>
+
+      {open && canInput && (
+        <ResultForm
+          match={match}
+          usePotg={usePotg}
+          onDone={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
-function Slot({ name }: { name: string | null }) {
+/** スコア付きスロット。勝者は強調、未確定は「未定」。 */
+function ScoreSlot({
+  name,
+  score,
+  winner,
+}: {
+  name: string | null;
+  score: number | null;
+  winner: boolean;
+}) {
   return (
-    <div className={name ? "font-medium" : "text-muted-foreground"}>
-      {name ?? "未定"}
+    <div className="flex items-center justify-between gap-2">
+      <span
+        className={
+          name
+            ? winner
+              ? "font-semibold text-primary"
+              : "font-medium"
+            : "text-muted-foreground"
+        }
+      >
+        {winner && "🏆 "}
+        {name ?? "未定"}
+      </span>
+      {score !== null && (
+        <span
+          className={`tabular-nums ${winner ? "font-bold text-primary" : ""}`}
+        >
+          {score}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ブラケットカード内の結果入力フォーム（クリック展開）。
+ * スコア（取マップ数）＋必要なら POTG。保存で reportTournamentResult を呼ぶ。
+ * 下流の結果が消える修正のときだけ、サーバーが needsConfirm を返すので AlertDialog で確認する。
+ */
+function ResultForm({
+  match,
+  usePotg,
+  onDone,
+}: {
+  match: BoardBracketMatch;
+  usePotg: boolean;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [aScore, setAScore] = useState(match.teamAScore ?? 0);
+  const [bScore, setBScore] = useState(match.teamBScore ?? 0);
+  const [aPotg, setAPotg] = useState(match.potgA);
+  const [bPotg, setBPotg] = useState(match.potgB);
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ count: number } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function submit(confirmed: boolean) {
+    setError(null);
+    startTransition(async () => {
+      const res = await reportTournamentResult(
+        {
+          matchId: match.id,
+          teamAScore: aScore,
+          teamBScore: bScore,
+          potgA: usePotg ? aPotg : 0,
+          potgB: usePotg ? bPotg : 0,
+        },
+        confirmed,
+      );
+      if (res.needsConfirm) {
+        setConfirm({ count: res.clearCount ?? 0 });
+        return;
+      }
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      setConfirm(null);
+      onDone();
+      router.refresh();
+    });
+  }
+
+  function handleClear() {
+    setError(null);
+    startTransition(async () => {
+      const res = await clearTournamentResult(match.id);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      onDone();
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="border-t border-border p-3">
+      <p className="mb-2 text-xs text-muted-foreground">
+        取ったマップ数を入力（BO{match.bestOf}）
+      </p>
+      {error && (
+        <p className="mb-2 rounded border border-destructive/50 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="space-y-2">
+        <ScoreInput
+          label={match.teamAName ?? "A"}
+          score={aScore}
+          potg={aPotg}
+          usePotg={usePotg}
+          onScore={setAScore}
+          onPotg={setAPotg}
+        />
+        <ScoreInput
+          label={match.teamBName ?? "B"}
+          score={bScore}
+          potg={bPotg}
+          usePotg={usePotg}
+          onScore={setBScore}
+          onPotg={setBPotg}
+        />
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => submit(false)}
+          disabled={isPending}
+          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        >
+          保存
+        </button>
+        {match.hasResult && (
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={isPending}
+            className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-60"
+          >
+            取り消し
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onDone}
+          className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+        >
+          閉じる
+        </button>
+      </div>
+
+      {/* 下流の結果が消える修正のときだけ確認する（条件付き）。 */}
+      <AlertDialog
+        open={confirm !== null}
+        onOpenChange={(o) => !o && setConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>この先の試合結果も削除されます</AlertDialogTitle>
+            <AlertDialogDescription>
+              この修正で勝者が変わるため、すでに入力済みの後続{confirm?.count ?? 0}
+              試合の結果が削除されます。よろしいですか？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction onClick={() => submit(true)}>
+              修正して反映する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/** 1チーム分のスコア（＋POTG）入力行。 */
+function ScoreInput({
+  label,
+  score,
+  potg,
+  usePotg,
+  onScore,
+  onPotg,
+}: {
+  label: string;
+  score: number;
+  potg: number;
+  usePotg: boolean;
+  onScore: (n: number) => void;
+  onPotg: (n: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex-1 truncate text-xs">{label}</span>
+      <input
+        type="number"
+        min={0}
+        max={20}
+        value={score}
+        onChange={(e) => onScore(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+        className="w-14 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums"
+        aria-label={`${label} の取マップ数`}
+      />
+      {usePotg && (
+        <input
+          type="number"
+          min={0}
+          max={99}
+          value={potg}
+          onChange={(e) => onPotg(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+          className="w-14 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums"
+          aria-label={`${label} の POTG 数`}
+          title="POTG"
+        />
+      )}
     </div>
   );
 }

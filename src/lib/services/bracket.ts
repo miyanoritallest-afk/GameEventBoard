@@ -174,3 +174,149 @@ function byeWinner(m: BracketMatch | undefined): string | null {
   if (teamBId !== null && teamAId === null) return teamBId;
   return null; // 実試合 or 両 BYE は未確定
 }
+
+// --- 再計算（本戦-5b: 結果入力後の勝者自動進出・下流連鎖リセット） ---
+
+/** 再計算の入力に使う、DB から取った1試合（順序確定のため round/position 必須）。 */
+export type StoredMatch = {
+  matchId: string;
+  round: number;
+  position: number;
+  teamAId: string | null;
+  teamBId: string | null;
+};
+
+/** 再計算の入力に使う、1試合の結果（勝者）。引分は winnerTeamId=null（T では奇数BO強制で出ない想定）。 */
+export type StoredResult = {
+  matchId: string;
+  winnerTeamId: string | null;
+};
+
+/** 再計算で「あるべき状態」になった1試合。スロット更新と結果無効化の指示を持つ。 */
+export type RecomputedMatch = {
+  matchId: string;
+  round: number;
+  position: number;
+  /** あるべき上スロット（前ラウンド勝者 or 1回戦のシード or BYE 自動進出）。未確定は null。 */
+  teamAId: string | null;
+  /** あるべき下スロット。未確定は null。 */
+  teamBId: string | null;
+  /**
+   * この試合の既存結果を削除すべきか。
+   * 「結果保存時からスロットのチーム構成が変わった」= winner_team_id が新スロットに居ない、
+   * またはスロットが未確定に戻った場合に true。
+   */
+  shouldClearResult: boolean;
+};
+
+/**
+ * トーナメント全体を「現在の全結果」から再計算する（本戦-5b・全再計算方式）。
+ *
+ * 1回戦のチーム配置（シード）を真実の起点とし、結果のある試合の勝者を次ラウンドへ伝播させる。
+ * BYE（1回戦で片側 null）は結果なしで自動進出。多段の連鎖（準々→準決→決勝）も
+ * 1パスで自然に処理される（上流の結果が消えれば下流スロットも未確定に戻る）。
+ *
+ * 勝者の進出先: round R / position P の勝者は round R+1 / position ⌊P/2⌋ の
+ *   P が偶数なら上スロット(teamA)、奇数なら下スロット(teamB) へ入る（generateBracket と同規則）。
+ *
+ * 結果の無効化判定（壁打ち確定「チームが変わったら削除」）:
+ *   結果のある試合について、再計算後の {teamA, teamB} に winner_team_id が含まれない、
+ *   または両スロットが埋まっていない場合、その結果は別チームのもの＝無効として shouldClearResult=true。
+ *
+ * @param matches 全トーナメント試合（round/position 付き）。
+ * @param results 既存の結果（match_id → 勝者）。
+ * @returns 各試合の「あるべき」状態（round→position 順）。
+ */
+export function recomputeBracket(
+  matches: StoredMatch[],
+  results: StoredResult[],
+): RecomputedMatch[] {
+  if (matches.length === 0) return [];
+
+  const winnerByMatch = new Map<string, string | null>();
+  for (const r of results) winnerByMatch.set(r.matchId, r.winnerTeamId);
+  const hasResult = (matchId: string) => winnerByMatch.has(matchId);
+
+  const rounds = Math.max(...matches.map((m) => m.round));
+  // round → position → 試合 で引けるようにする。
+  const byRoundPos = new Map<string, StoredMatch>();
+  for (const m of matches) byRoundPos.set(`${m.round}:${m.position}`, m);
+
+  // 再計算後のスロット（round:position → {teamA, teamB}）。round 昇順で確定させる。
+  const slots = new Map<string, { teamAId: string | null; teamBId: string | null }>();
+
+  // 1回戦はシード確定（DB の配置をそのまま採用）。
+  for (const m of matches.filter((m) => m.round === 1)) {
+    slots.set(`1:${m.position}`, { teamAId: m.teamAId, teamBId: m.teamBId });
+  }
+
+  /** その試合の勝者を返す。結果があれば winner、BYE（片側のみ）なら自動進出、なければ null。 */
+  const winnerOf = (round: number, position: number): string | null => {
+    const key = `${round}:${position}`;
+    const slot = slots.get(key);
+    if (!slot) return null;
+    const m = byRoundPos.get(key);
+    if (m && hasResult(m.matchId)) {
+      // 結果あり: winner がいまの両スロットに含まれるときだけ有効な勝者として伝播。
+      const w = winnerByMatch.get(m.matchId) ?? null;
+      if (w !== null && (w === slot.teamAId || w === slot.teamBId)) return w;
+      return null; // 引分 or 矛盾（無効化対象）は伝播しない
+    }
+    // 結果なし: BYE（片側だけ確定）なら自動進出、両方埋まっている実試合は未確定。
+    const { teamAId, teamBId } = slot;
+    if (teamAId !== null && teamBId === null) return teamAId;
+    if (teamBId !== null && teamAId === null) return teamBId;
+    return null;
+  };
+
+  // round 2 以降を上流から順に確定（上流が確定してから下流の勝者を引くため round 昇順）。
+  for (let round = 2; round <= rounds; round++) {
+    const count = matches.filter((m) => m.round === round).length;
+    for (let pos = 0; pos < count; pos++) {
+      const teamAId = winnerOf(round - 1, pos * 2);
+      const teamBId = winnerOf(round - 1, pos * 2 + 1);
+      slots.set(`${round}:${pos}`, { teamAId, teamBId });
+    }
+  }
+
+  // 各試合の最終状態 + 結果無効化判定を組み立てる。
+  return matches
+    .slice()
+    .sort((a, b) => a.round - b.round || a.position - b.position)
+    .map((m) => {
+      const slot = slots.get(`${m.round}:${m.position}`) ?? {
+        teamAId: null,
+        teamBId: null,
+      };
+      let shouldClearResult = false;
+      if (hasResult(m.matchId)) {
+        const w = winnerByMatch.get(m.matchId) ?? null;
+        const bothSet = slot.teamAId !== null && slot.teamBId !== null;
+        const winnerInSlot =
+          w !== null && (w === slot.teamAId || w === slot.teamBId);
+        // 両スロット未確定に戻った or 勝者が今のスロットに居ない = チームが変わった → 削除。
+        if (!bothSet || !winnerInSlot) shouldClearResult = true;
+      }
+      return {
+        matchId: m.matchId,
+        round: m.round,
+        position: m.position,
+        teamAId: slot.teamAId,
+        teamBId: slot.teamBId,
+        shouldClearResult,
+      };
+    });
+}
+
+/**
+ * トーナメント用に BO を奇数へ補正する（引分を構造的に出さない＝壁打ち確定）。
+ * 偶数や 1 未満は直近の妥当な奇数へ寄せる（2→3, 4→5 のように切り上げ。0/1→1）。
+ * 上限 15 は CHECK と整合。
+ */
+export function toOddBestOf(bestOf: number): number {
+  let n = Math.floor(bestOf);
+  if (n < 1) return 1;
+  if (n % 2 === 0) n += 1; // 偶数は1つ上の奇数へ
+  if (n > 15) n = 15;
+  return n;
+}

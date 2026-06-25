@@ -269,3 +269,38 @@ export async function replaceTournamentMatches(params: {
   const { error } = await supabase.from("matches").insert(rows);
   if (error) throw error;
 }
+
+/**
+ * 再計算結果（本戦-5b）を DB へ反映する。
+ * - shouldClearResult の試合の結果を削除する。
+ * - 各試合の team_a_id/team_b_id を「あるべきスロット」へ更新する。
+ * matches と match_results の更新をまとめて行う（呼び出し側＝Server Action が再計算済みを渡す）。
+ */
+export async function applyBracketRecompute(params: {
+  updates: {
+    matchId: string;
+    teamAId: string | null;
+    teamBId: string | null;
+  }[];
+  clearResultMatchIds: string[];
+}): Promise<void> {
+  const supabase = await createClient();
+
+  // 1) 無効化される結果を先に削除する。
+  if (params.clearResultMatchIds.length > 0) {
+    const { error } = await supabase
+      .from("match_results")
+      .delete()
+      .in("match_id", params.clearResultMatchIds);
+    if (error) throw error;
+  }
+
+  // 2) 各試合のスロットを更新する。teamA/teamB の組が試合ごとに異なるため1行ずつ。
+  for (const u of params.updates) {
+    const { error } = await supabase
+      .from("matches")
+      .update({ team_a_id: u.teamAId, team_b_id: u.teamBId })
+      .eq("id", u.matchId);
+    if (error) throw error;
+  }
+}
