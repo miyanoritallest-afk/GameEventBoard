@@ -6,6 +6,7 @@ import {
   extractSeededTeams,
   recomputeBracket,
   toOddBestOf,
+  tournamentPodium,
   type SeedTeam,
   type BracketMatch,
   type StoredMatch,
@@ -340,5 +341,144 @@ describe("toOddBestOf — トーナメントは奇数BO強制", () => {
     expect(toOddBestOf(-2)).toBe(1);
     expect(toOddBestOf(14)).toBe(15);
     expect(toOddBestOf(16)).toBe(15);
+  });
+});
+
+describe("generateBracket — 3位決定戦オプション", () => {
+  it("thirdPlace=true で最終roundに position=1 の3位決定戦を追加", () => {
+    const b = generateBracket(["s1", "s2", "s3", "s4"], { thirdPlace: true });
+    // 4チーム: round1=2試合(準決勝), round2=決勝(pos0)＋3位決定戦(pos1)。
+    const r2 = b.filter((m) => m.round === 2);
+    expect(r2.length).toBe(2);
+    expect(r2.find((m) => m.position === 0)).toBeTruthy(); // 決勝
+    const third = r2.find((m) => m.position === 1)!; // 3位決定戦
+    expect(third.teamAId).toBeNull();
+    expect(third.teamBId).toBeNull();
+  });
+
+  it("thirdPlace 未指定なら3位決定戦は作らない（従来どおり）", () => {
+    const b = generateBracket(["s1", "s2", "s3", "s4"]);
+    expect(b.filter((m) => m.round === 2).length).toBe(1); // 決勝のみ
+  });
+
+  it("2チーム（準決勝なし）は thirdPlace=true でも作らない", () => {
+    const b = generateBracket(["a", "b"], { thirdPlace: true });
+    expect(b).toEqual([
+      { round: 1, position: 0, teamAId: "a", teamBId: "b" },
+    ]);
+  });
+});
+
+describe("recomputeBracket — 3位決定戦への敗者進出", () => {
+  /** 4チーム＋3位決定戦のブラケット。準決勝 sf1/sf2, 決勝 f, 3位決定戦 tp。 */
+  function bracketWithThird(): StoredMatch[] {
+    return [
+      { matchId: "sf1", round: 1, position: 0, teamAId: "a", teamBId: "b" },
+      { matchId: "sf2", round: 1, position: 1, teamAId: "c", teamBId: "d" },
+      { matchId: "f", round: 2, position: 0, teamAId: null, teamBId: null },
+      { matchId: "tp", round: 2, position: 1, teamAId: null, teamBId: null },
+    ];
+  }
+
+  it("準決勝の勝者は決勝、敗者は3位決定戦へ", () => {
+    const results: StoredResult[] = [
+      { matchId: "sf1", winnerTeamId: "a" }, // 敗者 b
+      { matchId: "sf2", winnerTeamId: "c" }, // 敗者 d
+    ];
+    const out = recomputeBracket(bracketWithThird(), results);
+    const f = out.find((m) => m.matchId === "f")!;
+    const tp = out.find((m) => m.matchId === "tp")!;
+    expect(f.teamAId).toBe("a");
+    expect(f.teamBId).toBe("c");
+    expect(tp.teamAId).toBe("b"); // sf1 の敗者
+    expect(tp.teamBId).toBe("d"); // sf2 の敗者
+  });
+
+  it("準決勝の修正で勝者が変わると決勝・3位決定戦の両方が連鎖無効化", () => {
+    // 既存: sf1=a,sf2=c → 決勝(a vs c)=a, 3位決定戦(b vs d)=b。
+    // 修正: sf1 を b 勝ちに。決勝は b vs c、3位決定戦は a vs d になり、両方の旧結果が無効。
+    const results: StoredResult[] = [
+      { matchId: "sf1", winnerTeamId: "b" }, // 修正（敗者が a に）
+      { matchId: "sf2", winnerTeamId: "c" },
+      { matchId: "f", winnerTeamId: "a" }, // 旧決勝(a vs c)の記録
+      { matchId: "tp", winnerTeamId: "b" }, // 旧3位決定戦(b vs d)の記録
+    ];
+    const out = recomputeBracket(bracketWithThird(), results);
+    const f = out.find((m) => m.matchId === "f")!;
+    const tp = out.find((m) => m.matchId === "tp")!;
+    expect(f.teamAId).toBe("b");
+    expect(f.teamBId).toBe("c");
+    expect(f.shouldClearResult).toBe(true); // a は新スロットに居ない
+    expect(tp.teamAId).toBe("a"); // 新しい sf1 敗者
+    expect(tp.teamBId).toBe("d");
+    expect(tp.shouldClearResult).toBe(true); // b は新スロットに居ない
+  });
+
+  it("準決勝が片方未入力なら3位決定戦のスロットは片側だけ確定", () => {
+    const results: StoredResult[] = [{ matchId: "sf1", winnerTeamId: "a" }];
+    const out = recomputeBracket(bracketWithThird(), results);
+    const tp = out.find((m) => m.matchId === "tp")!;
+    expect(tp.teamAId).toBe("b"); // sf1 敗者
+    expect(tp.teamBId).toBeNull(); // sf2 未確定
+  });
+});
+
+describe("tournamentPodium — 表彰台", () => {
+  function bracketWithThird(): StoredMatch[] {
+    return [
+      { matchId: "sf1", round: 1, position: 0, teamAId: "a", teamBId: "b" },
+      { matchId: "sf2", round: 1, position: 1, teamAId: "c", teamBId: "d" },
+      { matchId: "f", round: 2, position: 0, teamAId: "a", teamBId: "c" },
+      { matchId: "tp", round: 2, position: 1, teamAId: "b", teamBId: "d" },
+    ];
+  }
+
+  it("決勝確定で優勝・準優勝、3位決定戦勝者が3位", () => {
+    const results: StoredResult[] = [
+      { matchId: "sf1", winnerTeamId: "a" },
+      { matchId: "sf2", winnerTeamId: "c" },
+      { matchId: "f", winnerTeamId: "a" },
+      { matchId: "tp", winnerTeamId: "d" },
+    ];
+    const podium = tournamentPodium(bracketWithThird(), results);
+    expect(podium.champion).toBe("a");
+    expect(podium.runnerUp).toBe("c");
+    expect(podium.third).toEqual(["d"]); // 3位決定戦の勝者
+  });
+
+  it("3位決定戦なしなら準決勝敗者2チームが3位タイ", () => {
+    // 3位決定戦カードを持たない4チームブラケット。
+    const matches: StoredMatch[] = [
+      { matchId: "sf1", round: 1, position: 0, teamAId: "a", teamBId: "b" },
+      { matchId: "sf2", round: 1, position: 1, teamAId: "c", teamBId: "d" },
+      { matchId: "f", round: 2, position: 0, teamAId: "a", teamBId: "c" },
+    ];
+    const results: StoredResult[] = [
+      { matchId: "sf1", winnerTeamId: "a" }, // 敗者 b
+      { matchId: "sf2", winnerTeamId: "c" }, // 敗者 d
+      { matchId: "f", winnerTeamId: "a" },
+    ];
+    const podium = tournamentPodium(matches, results);
+    expect(podium.champion).toBe("a");
+    expect(podium.runnerUp).toBe("c");
+    expect(podium.third.sort()).toEqual(["b", "d"]); // 3位タイ
+  });
+
+  it("決勝未確定なら優勝・準優勝は null", () => {
+    const matches: StoredMatch[] = [
+      { matchId: "f", round: 1, position: 0, teamAId: "a", teamBId: "b" },
+    ];
+    const podium = tournamentPodium(matches, []);
+    expect(podium.champion).toBeNull();
+    expect(podium.runnerUp).toBeNull();
+    expect(podium.third).toEqual([]);
+  });
+
+  it("空配列は全て null/空", () => {
+    expect(tournamentPodium([], [])).toEqual({
+      champion: null,
+      runnerUp: null,
+      third: [],
+    });
   });
 });

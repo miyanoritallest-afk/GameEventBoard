@@ -54,6 +54,8 @@ export type EventFormDefaults = {
   tiebreakers?: TiebreakerKey[];
   /** 予選BO（総当たり1試合のマップ数。生成時に全試合へ一括セット）。 */
   groupBestOf?: number;
+  /** 決勝トーナメントで3位決定戦を行うか（本戦-5c）。 */
+  tournamentThirdPlace?: boolean;
 };
 
 /** タイブレーク基準（優先順位を D&D で並べ替え）。 */
@@ -357,6 +359,20 @@ export function EventForm({
             対戦表を生成すると全試合に反映されます。偶数は引分けあり。
           </p>
         </Field>
+
+        {/* 3位決定戦の有無（本戦-5c）。決勝トーナメントで準決勝の敗者2チームが戦う。 */}
+        <label className="mt-4 flex items-center gap-2 text-sm">
+          <input
+            name="tournamentThirdPlace"
+            type="checkbox"
+            defaultChecked={d.tournamentThirdPlace ?? false}
+            className="size-4"
+          />
+          決勝トーナメントで3位決定戦を行う
+        </label>
+        <p className="mt-1 pl-6 text-xs text-muted-foreground">
+          準決勝で敗れた2チームが3位を懸けて対戦します（4チーム以上のトーナメントで有効）。
+        </p>
       </fieldset>
 
       {/* 順位設定（本戦-3b） */}

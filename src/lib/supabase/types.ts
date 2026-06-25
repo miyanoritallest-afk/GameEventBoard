@@ -161,6 +161,7 @@ export type Database = {
           tiebreakers: string[]
           title: string
           tournament_advance_count: number
+          tournament_third_place: boolean
           uncertified_handling: Database["public"]["Enums"]["uncertified_handling"]
           updated_at: string
           version: number
@@ -202,6 +203,7 @@ export type Database = {
           tiebreakers?: string[]
           title: string
           tournament_advance_count?: number
+          tournament_third_place?: boolean
           uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string
           version?: number
@@ -243,6 +245,7 @@ export type Database = {
           tiebreakers?: string[]
           title?: string
           tournament_advance_count?: number
+          tournament_third_place?: boolean
           uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string
           version?: number

@@ -270,6 +270,45 @@ export async function replaceTournamentMatches(params: {
   if (error) throw error;
 }
 
+/** 1回戦 swap（本戦-5c）の検証用に、トーナメント試合の round/teams/event を取得する。無ければ null。 */
+export async function findTournamentMatchSlots(matchId: string): Promise<{
+  id: string;
+  eventId: string;
+  round: number | null;
+  teamAId: string | null;
+  teamBId: string | null;
+} | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("matches")
+    .select("id, event_id, round, team_a_id, team_b_id, phase")
+    .eq("id", matchId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || data.phase !== "tournament") return null;
+  return {
+    id: data.id,
+    eventId: data.event_id,
+    round: data.round,
+    teamAId: data.team_a_id,
+    teamBId: data.team_b_id,
+  };
+}
+
+/** 1試合のチームスロット（team_a_id / team_b_id）を上書きする（swap 反映用）。 */
+export async function updateMatchSlots(params: {
+  matchId: string;
+  teamAId: string | null;
+  teamBId: string | null;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("matches")
+    .update({ team_a_id: params.teamAId, team_b_id: params.teamBId })
+    .eq("id", params.matchId);
+  if (error) throw error;
+}
+
 /**
  * 再計算結果（本戦-5b）を DB へ反映する。
  * - shouldClearResult の試合の結果を削除する。
