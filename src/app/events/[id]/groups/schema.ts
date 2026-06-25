@@ -21,5 +21,18 @@ export const assignTeamSchema = z.object({
   teamId: z.string().uuid("不正なチームIDです"),
 });
 
+/**
+ * 自動ブロック分け（PR-4）の入力。ブロック数のみ受理（対象チームはサーバー側で全 approved を取得）。
+ * 上限はサーバー側で「承認チーム数」と突き合わせて最終検証する（ここは粗い値域チェック）。
+ */
+export const autoDraftSchema = z.object({
+  blockCount: z
+    .number({ message: "ブロック数を入力してください" })
+    .int("ブロック数は整数で入力してください")
+    .min(1, "ブロック数は1以上で入力してください")
+    .max(100, "ブロック数が多すぎます"),
+});
+
 export type GroupNameInput = z.infer<typeof groupNameSchema>;
 export type AssignTeamInput = z.infer<typeof assignTeamSchema>;
+export type AutoDraftInput = z.infer<typeof autoDraftSchema>;

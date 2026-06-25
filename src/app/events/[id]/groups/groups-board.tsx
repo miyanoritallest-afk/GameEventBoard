@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -16,11 +17,22 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   createGroup,
   renameGroup,
   deleteGroup,
   assignTeam,
   unassignTeam,
+  autoAssignGroups,
 } from "./actions";
 
 /** ボード用のチーム表現（page.tsx で DB から整形して渡す）。 */
@@ -76,6 +88,7 @@ export function GroupsBoard({
 }) {
   // 編集可否: 応募者の閲覧（readOnly）か、対戦表生成済み（locked）なら不可。
   const editable = !readOnly && !locked;
+  const router = useRouter();
   const [groups, setGroups] = useState<BoardGroup[]>(initialGroups);
   const [unassigned, setUnassigned] = useState<BoardTeam[]>(initialUnassigned);
   const [activeTeam, setActiveTeam] = useState<BoardTeam | null>(null);
@@ -84,6 +97,11 @@ export function GroupsBoard({
   const [saved, setSaved] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const [isPending, startTransition] = useTransition();
+
+  // 自動ブロック分け（PR-4）の入力と確認ダイアログの開閉。
+  const totalTeams = groups.reduce((n, g) => n + g.teams.length, 0) + unassigned.length;
+  const [draftBlockCount, setDraftBlockCount] = useState(2);
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
 
   function flashSaved() {
     setSaved(true);
@@ -237,6 +255,25 @@ export function GroupsBoard({
     });
   }
 
+  /**
+   * 自動ブロック分けを実行する（確認ダイアログで承諾後）。
+   * 既存ブロック・割当を全削除して N ブロックへ配り直すため、楽観更新ではなく
+   * サーバーが正の状態を返す router.refresh() で画面全体を再取得する。
+   */
+  function handleAutoDraft() {
+    setDraftDialogOpen(false);
+    setError(null);
+    startTransition(async () => {
+      const r = await autoAssignGroups(eventId, draftBlockCount);
+      if (r.error) {
+        setError(r.error);
+        return;
+      }
+      flashSaved();
+      router.refresh();
+    });
+  }
+
   return (
     <DndContext
       id="groups-board-dnd"
@@ -276,6 +313,52 @@ export function GroupsBoard({
 
         {/* 右: ブロック群 */}
         <div className="space-y-4">
+          {/* 自動でブロック分け（PR-4）。承認チームをスコア降順スネークドラフトで配り直す。 */}
+          {editable && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h2 className="text-sm font-semibold">自動でブロック分け</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                承認済みの全チーム（{totalTeams}）を強さが偏らないように指定数のブロックへ自動で振り分けます。
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label className="text-sm text-muted-foreground" htmlFor="draft-block-count">
+                  ブロック数
+                </label>
+                <input
+                  id="draft-block-count"
+                  type="number"
+                  min={1}
+                  max={Math.max(1, totalTeams)}
+                  value={draftBlockCount}
+                  onChange={(e) =>
+                    setDraftBlockCount(
+                      Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                    )
+                  }
+                  className="w-20 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setDraftDialogOpen(true)}
+                  disabled={
+                    isPending ||
+                    totalTeams === 0 ||
+                    draftBlockCount < 1 ||
+                    draftBlockCount > totalTeams
+                  }
+                  className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                >
+                  自動で振り分ける
+                </button>
+              </div>
+              {totalTeams === 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  承認済みのチームがありません。
+                </p>
+              )}
+            </div>
+          )}
+
           {editable && (
             <div className="flex items-center gap-2">
               <input
@@ -326,6 +409,26 @@ export function GroupsBoard({
           <TeamCard team={activeTeam} showScore={showScore} overlay />
         ) : null}
       </DragOverlay>
+
+      {/* 自動ブロック分けの確認（破壊的操作の警告）。 */}
+      <AlertDialog open={draftDialogOpen} onOpenChange={setDraftDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>自動でブロック分けしますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              現在のブロックと割り当てがすべて削除され、承認済みの全チーム（{totalTeams}）が
+              {draftBlockCount}個のブロックへ自動で振り分けられます。この操作は元に戻せません。
+              振り分け後はドラッグ＆ドロップで手動調整できます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAutoDraft}>
+              振り分ける
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DndContext>
   );
 }
