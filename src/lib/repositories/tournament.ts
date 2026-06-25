@@ -140,10 +140,15 @@ export async function fetchTournamentForRecompute(
       teamAId: m.team_a_id,
       teamBId: m.team_b_id,
     });
-    // match_results は1試合1件（PK match_id）。結果があれば勝者を結果集合へ。
-    const mr = m.match_results as { winner_team_id: string | null }[] | null;
-    if (Array.isArray(mr) && mr.length > 0) {
-      results.push({ matchId: m.id, winnerTeamId: mr[0].winner_team_id });
+    // match_results は match_id が PK の 1:1 関係のため、Supabase は配列ではなく
+    // 単一オブジェクト（結果なしは null）で返す。両方の形に念のため対応する。
+    const mrRaw = m.match_results as
+      | { winner_team_id: string | null }
+      | { winner_team_id: string | null }[]
+      | null;
+    const mr = Array.isArray(mrRaw) ? (mrRaw[0] ?? null) : mrRaw;
+    if (mr) {
+      results.push({ matchId: m.id, winnerTeamId: mr.winner_team_id });
     }
   }
 
