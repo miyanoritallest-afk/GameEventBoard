@@ -14,4 +14,33 @@ export const generateTournamentSchema = z.object({
     .max(99, "進出数が多すぎます"),
 });
 
+/**
+ * トーナメント結果の入力（本戦-5b）。スコアは取マップ数（非負整数・上限あり）。
+ * winner_team_id / reported_by は入力から取らずサーバーで固定（マスアサインメント対策）。
+ * confirmed=true は「下流の結果削除を承諾済み」のときだけ true（条件付き確認）。
+ */
+const mapScore = z
+  .number()
+  .int("マップ数は整数で入力してください")
+  .min(0, "マップ数は0以上で入力してください")
+  .max(20, "マップ数が大きすぎます");
+
+const potgCount = z
+  .number()
+  .int("POTG数は整数で入力してください")
+  .min(0, "POTG数は0以上で入力してください")
+  .max(99, "POTG数が大きすぎます")
+  .default(0);
+
+export const reportTournamentResultSchema = z.object({
+  matchId: z.string().uuid("不正な試合IDです"),
+  teamAScore: mapScore,
+  teamBScore: mapScore,
+  potgA: potgCount,
+  potgB: potgCount,
+});
+
 export type GenerateTournamentInput = z.infer<typeof generateTournamentSchema>;
+export type ReportTournamentResultInput = z.infer<
+  typeof reportTournamentResultSchema
+>;

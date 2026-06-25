@@ -4,8 +4,12 @@ import {
   seedOrder,
   generateBracket,
   extractSeededTeams,
+  recomputeBracket,
+  toOddBestOf,
   type SeedTeam,
   type BracketMatch,
+  type StoredMatch,
+  type StoredResult,
 } from "../bracket";
 
 /**
@@ -194,5 +198,147 @@ describe("extractSeededTeams — 進出抽出とシード順", () => {
   it("進出数を満たすチームがいなければ空", () => {
     const teams = [team("A3", "A", 3, 1)];
     expect(extractSeededTeams(teams, 2)).toEqual([]);
+  });
+});
+
+describe("recomputeBracket — 勝者の自動進出と下流リセット", () => {
+  /** 4チーム（BYEなし）のブラケット試合を作る。round1: m1=(a vs b), m2=(c vs d) / 決勝 m3。 */
+  function bracket4(): StoredMatch[] {
+    return [
+      { matchId: "m1", round: 1, position: 0, teamAId: "a", teamBId: "b" },
+      { matchId: "m2", round: 1, position: 1, teamAId: "c", teamBId: "d" },
+      { matchId: "m3", round: 2, position: 0, teamAId: null, teamBId: null },
+    ];
+  }
+
+  it("結果なしなら決勝スロットは未確定のまま", () => {
+    const out = recomputeBracket(bracket4(), []);
+    const final = out.find((m) => m.matchId === "m3")!;
+    expect(final.teamAId).toBeNull();
+    expect(final.teamBId).toBeNull();
+    expect(out.every((m) => !m.shouldClearResult)).toBe(true);
+  });
+
+  it("1回戦の勝者が決勝の上/下スロットへ進出する", () => {
+    const results: StoredResult[] = [
+      { matchId: "m1", winnerTeamId: "a" }, // position0 の勝者 → 決勝 teamA
+      { matchId: "m2", winnerTeamId: "d" }, // position1 の勝者 → 決勝 teamB
+    ];
+    const out = recomputeBracket(bracket4(), results);
+    const final = out.find((m) => m.matchId === "m3")!;
+    expect(final.teamAId).toBe("a");
+    expect(final.teamBId).toBe("d");
+  });
+
+  it("1回戦を修正して勝者が変わると決勝スロットも変わる（決勝に結果なし）", () => {
+    const results: StoredResult[] = [
+      { matchId: "m1", winnerTeamId: "b" }, // a→b に修正
+      { matchId: "m2", winnerTeamId: "c" },
+    ];
+    const out = recomputeBracket(bracket4(), results);
+    const final = out.find((m) => m.matchId === "m3")!;
+    expect(final.teamAId).toBe("b");
+    expect(final.teamBId).toBe("c");
+    expect(final.shouldClearResult).toBe(false); // 決勝に結果はないので削除なし
+  });
+
+  it("修正で決勝のチームが変わったら決勝の結果は無効化（削除指示）", () => {
+    // 既存: m1勝者=a, m2勝者=c → 決勝 a vs c、決勝結果 winner=a。
+    // 修正: m1勝者を b に変更 → 決勝スロットが b vs c になり、winner=a は居なくなる。
+    const matches = bracket4();
+    const results: StoredResult[] = [
+      { matchId: "m1", winnerTeamId: "b" },
+      { matchId: "m2", winnerTeamId: "c" },
+      { matchId: "m3", winnerTeamId: "a" }, // 旧スロット(a vs c)で a が勝った記録
+    ];
+    const out = recomputeBracket(matches, results);
+    const final = out.find((m) => m.matchId === "m3")!;
+    expect(final.teamAId).toBe("b");
+    expect(final.teamBId).toBe("c");
+    expect(final.shouldClearResult).toBe(true); // a は新スロットに居ない → 無効化
+  });
+
+  it("勝者が決勝スロットに残っていれば決勝結果は保持", () => {
+    // m1勝者=a のまま、m2勝者を c→d に変更。決勝は a vs d。決勝winner=a は残るので保持。
+    const matches = bracket4();
+    const results: StoredResult[] = [
+      { matchId: "m1", winnerTeamId: "a" },
+      { matchId: "m2", winnerTeamId: "d" },
+      { matchId: "m3", winnerTeamId: "a" },
+    ];
+    const out = recomputeBracket(matches, results);
+    const final = out.find((m) => m.matchId === "m3")!;
+    expect(final.shouldClearResult).toBe(false);
+  });
+
+  it("多段連鎖: 準々決勝の修正で準決勝・決勝の結果が連鎖無効化", () => {
+    // 8チーム3ラウンド。準々(r1)4試合, 準決(r2)2試合, 決勝(r3)1試合。
+    const matches: StoredMatch[] = [
+      { matchId: "q1", round: 1, position: 0, teamAId: "a", teamBId: "b" },
+      { matchId: "q2", round: 1, position: 1, teamAId: "c", teamBId: "d" },
+      { matchId: "q3", round: 1, position: 2, teamAId: "e", teamBId: "f" },
+      { matchId: "q4", round: 1, position: 3, teamAId: "g", teamBId: "h" },
+      { matchId: "s1", round: 2, position: 0, teamAId: null, teamBId: null },
+      { matchId: "s2", round: 2, position: 1, teamAId: null, teamBId: null },
+      { matchId: "f1", round: 3, position: 0, teamAId: null, teamBId: null },
+    ];
+    // 既存: q1=a,q2=c,q3=e,q4=g → s1(a vs c), s2(e vs g)。s1=a,s2=e → f1(a vs e), f1=a。
+    // 修正: q1 を b 勝ちに。s1 は b vs c になり、s1結果winner=a は無効 → s1削除。
+    //       s1が消えると f1 の上スロットが未確定 → f1結果winner=a も無効 → f1削除。
+    const results: StoredResult[] = [
+      { matchId: "q1", winnerTeamId: "b" }, // 修正
+      { matchId: "q2", winnerTeamId: "c" },
+      { matchId: "q3", winnerTeamId: "e" },
+      { matchId: "q4", winnerTeamId: "g" },
+      { matchId: "s1", winnerTeamId: "a" }, // 旧スロットの記録（無効になる）
+      { matchId: "s2", winnerTeamId: "e" },
+      { matchId: "f1", winnerTeamId: "a" }, // 旧スロットの記録（連鎖で無効）
+    ];
+    const out = recomputeBracket(matches, results);
+    const byId = (id: string) => out.find((m) => m.matchId === id)!;
+
+    expect(byId("s1").teamAId).toBe("b");
+    expect(byId("s1").teamBId).toBe("c");
+    expect(byId("s1").shouldClearResult).toBe(true); // a が居ない
+    // s1の結果が無効化される＝f1上スロットは未確定に戻る。
+    expect(byId("f1").teamAId).toBeNull();
+    expect(byId("f1").teamBId).toBe("e"); // s2側は健在
+    expect(byId("f1").shouldClearResult).toBe(true); // 両スロット未確定 → 無効
+  });
+
+  it("BYE: 1回戦で相手がいないチームは結果なしで次ラウンドへ自動進出", () => {
+    // 3チーム4枠。m1=(s1 vs BYE), m2=(s2 vs s3), 決勝f。
+    const matches: StoredMatch[] = [
+      { matchId: "m1", round: 1, position: 0, teamAId: "s1", teamBId: null },
+      { matchId: "m2", round: 1, position: 1, teamAId: "s2", teamBId: "s3" },
+      { matchId: "f", round: 2, position: 0, teamAId: null, teamBId: null },
+    ];
+    // m1 は BYE（結果なし）、m2 に s2 勝ちを入力。
+    const out = recomputeBracket(matches, [{ matchId: "m2", winnerTeamId: "s2" }]);
+    const final = out.find((m) => m.matchId === "f")!;
+    expect(final.teamAId).toBe("s1"); // BYE 自動進出
+    expect(final.teamBId).toBe("s2"); // m2 の勝者
+  });
+
+  it("空配列は空を返す", () => {
+    expect(recomputeBracket([], [])).toEqual([]);
+  });
+});
+
+describe("toOddBestOf — トーナメントは奇数BO強制", () => {
+  it("奇数はそのまま", () => {
+    expect(toOddBestOf(3)).toBe(3);
+    expect(toOddBestOf(5)).toBe(5);
+    expect(toOddBestOf(1)).toBe(1);
+  });
+  it("偶数は1つ上の奇数へ", () => {
+    expect(toOddBestOf(2)).toBe(3);
+    expect(toOddBestOf(4)).toBe(5);
+  });
+  it("0以下は1、上限15", () => {
+    expect(toOddBestOf(0)).toBe(1);
+    expect(toOddBestOf(-2)).toBe(1);
+    expect(toOddBestOf(14)).toBe(15);
+    expect(toOddBestOf(16)).toBe(15);
   });
 });

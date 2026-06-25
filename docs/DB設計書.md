@@ -343,7 +343,7 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | id | uuid | PK | |
 | event_id | uuid | FK→events, NOT NULL | |
 | phase | match_phase | NOT NULL | group / tournament |
-| best_of | int | NOT NULL DEFAULT 3 | この試合のBO（最大マップ数）。奇数=過半数先取で引分なし、偶数=引分あり。予選は生成時に events.group_best_of を一括セット、決勝Tは試合ごと（本戦-5）。スコア入力上限に連動。CHECK 1〜15。0018で追加 |
+| best_of | int | NOT NULL DEFAULT 3 | この試合のBO（最大マップ数）。奇数=過半数先取で引分なし、偶数=引分あり。予選は生成時に events.group_best_of を一括セット。**決勝Tは引分を構造的に出さないため生成時に奇数へ補正（toOddBestOf・本戦-5b）**。スコア入力上限に連動。CHECK 1〜15。0018で追加 |
 | group_id | uuid | FK→groups | 予選時のグループ |
 | round | int | | トーナメントのラウンド（1=1回戦…最大ラウンド=決勝）。本戦-5aで使用 |
 | bracket_position | int | | トーナメント表上の位置（同一ラウンド内の0始まり）。本戦-5aで使用 |

@@ -1,8 +1,9 @@
+import { createClient } from "@/lib/supabase/server";
 import { listGroupsWithTeams } from "@/lib/repositories/groups";
 import { listGroupMatches } from "@/lib/repositories/matches";
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { computeStandings, type TiebreakerKey } from "@/lib/services/standings";
-import type { SeedTeam } from "@/lib/services/bracket";
+import type { SeedTeam, StoredMatch, StoredResult } from "@/lib/services/bracket";
 
 /**
  * 決勝トーナメント（本戦-5a）の進出シード算出に必要なデータをまとめて取得し、
@@ -110,4 +111,41 @@ export async function computeBlockSeeds(params: {
   }
 
   return { seeds, teamNameById };
+}
+
+/**
+ * 再計算（本戦-5b）の入力に使う、トーナメント全試合＋結果（勝者）を取得する。
+ * recomputeBracket の StoredMatch / StoredResult に整形して返す。
+ */
+export async function fetchTournamentForRecompute(
+  eventId: string,
+): Promise<{ matches: StoredMatch[]; results: StoredResult[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("matches")
+    .select(
+      "id, round, bracket_position, team_a_id, team_b_id, match_results(winner_team_id)",
+    )
+    .eq("event_id", eventId)
+    .eq("phase", "tournament");
+  if (error) throw error;
+
+  const matches: StoredMatch[] = [];
+  const results: StoredResult[] = [];
+  for (const m of data ?? []) {
+    matches.push({
+      matchId: m.id,
+      round: m.round ?? 1,
+      position: m.bracket_position ?? 0,
+      teamAId: m.team_a_id,
+      teamBId: m.team_b_id,
+    });
+    // match_results は1試合1件（PK match_id）。結果があれば勝者を結果集合へ。
+    const mr = m.match_results as { winner_team_id: string | null }[] | null;
+    if (Array.isArray(mr) && mr.length > 0) {
+      results.push({ matchId: m.id, winnerTeamId: mr[0].winner_team_id });
+    }
+  }
+
+  return { matches, results };
 }
