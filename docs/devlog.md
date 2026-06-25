@@ -7,6 +7,34 @@
 
 ---
 
+## 2026-06-25 — 本戦-5a: 決勝トーナメント（ブラケット生成基盤）
+
+決勝トーナメント（シングルエリミネーション）の土台。各ブロック上位N をシードに、シングルエリミのブラケットを生成・永続化・表示する。結果入力・勝者の自動進出は本戦-5b。
+
+### やったこと
+- **マイグレーション** `0019_tournament_advance_count.sql`: events に `tournament_advance_count`（各ブロック上位N・0〜99・default 0）。**SQL Editor で手動適用が必要**。
+- **Service** `bracket.ts`（純粋関数・テスト17件）:
+  - `bracketSize`（進出数以上の最小2の累乗）/ `seedOrder`（標準シード並び。上位シードが反対の山）/ `generateBracket`（全ラウンドのカード生成・BYEは上位シードに割当→自動進出）/ `extractSeededTeams`（各ブロック上位N抽出＋シード群→群内横断ソート）。
+- **Repository**: `tournament.ts` `computeBlockSeeds`（groups/matches/results を取り `computeStandings` でブロック順位→SeedTeam[]。生成と表示で共用）。matches.ts に `listTournamentMatches`/`replaceTournamentMatches`/`deleteTournamentMatches`。events.ts に `updateTournamentAdvanceCount`。
+- **Server Action** `generateTournament(eventId, advanceCount)`: ログイン→主催者→順位機能ON確認→Zod→シード抽出→ブラケット生成→既存T全削除して一括 insert→進出数保存。
+- **UI**: `/events/[id]/tournament` 新設。生成エリア（上位N入力＋進出予定プレビュー）＋shadcn AlertDialog（作り直しは結果消去を警告）＋ブラケット表示（ラウンドごとに横並び・準決勝/決勝ラベル）。対戦表画面からの導線追加。
+- lint/typecheck/test(260緑・新規17)/build 通過。
+
+### 決めたこと（なぜ・壁打ち済み）
+- **シングルエリミ＋3位決定戦**を対象（ダブルエリミは将来）。まずブラケット描画・自動進出の土台を確実に。3位決定戦・手動微調整は5c。
+- **進出は各ブロック上位N（主催者がN設定）**。ブロック数×Nで進出総数→2の累乗ブラケット＋BYE。参加チーム数で進出数が変わるため設定可能に。
+- **シード順=ブロック同順位をシード群に**（A1,B1…=1群）。群内は勝点→得失→POTGで横断比較。全体順位テーブルは作らず軽量に。
+- **生成＝DB永続化**（matches に phase='tournament' 行を insert）。5bの結果入力がそのまま乗る。予選の対戦表生成と同じ構造。
+- **再生成は結果リセット＋警告**（本戦-4と同じ流儀）。順位機能OFFのイベントは進出抽出不可なので生成をブロック。
+- **DBはトーナメント織り込み済み**（phase/round/bracket_position/nullable team）を活用。新規列は進出数Nの1列のみ。
+
+### 次にやること
+- [ ] **マイグレーション0019を Supabase SQL Editor で手動適用**（適用前は実機でT画面がエラー）。
+- [ ] 本戦-5b: 結果入力＋勝者の自動進出＋修正時の下流連鎖リセット（警告付き）。
+- [ ] 本戦-5c: 3位決定戦＋進出チームの手動微調整＋優勝者確定表示。
+
+---
+
 ## 2026-06-25 — 本戦-4: 自動ブロック分け（スネークドラフト）
 
 ブロック分け画面に「自動でブロック分け」を追加。主催者がブロック数を指定すると、承認済み全チームをスコア降順スネークドラフトで配り直す。手動 D&D 振り分け（本戦-1）を土台にした便利機能。

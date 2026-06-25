@@ -201,3 +201,71 @@ export async function deleteMatch(matchId: string) {
   if (error) throw error;
   return data; // null なら対象なし（RLS で弾かれた・既に削除済み）
 }
+
+// --- 決勝トーナメント（phase='tournament'・本戦-5a〜） ---
+
+/** 1試合のトーナメント生成入力（bracket.ts の出力を DB 行に対応させる）。 */
+export type TournamentMatchInput = {
+  round: number;
+  bracketPosition: number;
+  teamAId: string | null;
+  teamBId: string | null;
+};
+
+/** 決勝トーナメントの試合（phase='tournament'）を取得する。round→bracket_position 順。 */
+export async function listTournamentMatches(eventId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("matches")
+    .select(
+      "id, team_a_id, team_b_id, best_of, round, bracket_position, created_at",
+    )
+    .eq("event_id", eventId)
+    .eq("phase", "tournament")
+    .order("round", { ascending: true })
+    .order("bracket_position", { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+/** 決勝トーナメントの試合をすべて削除する（再生成時の作り直し）。 */
+export async function deleteTournamentMatches(eventId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("matches")
+    .delete()
+    .eq("event_id", eventId)
+    .eq("phase", "tournament");
+  if (error) throw error;
+}
+
+/**
+ * 決勝トーナメントを一括生成する（既存T試合を全削除してから insert）。
+ * phase='tournament' 固定。best_of はイベント既定 BO（group_best_of）を流用（試合ごと個別BOは後続）。
+ */
+export async function replaceTournamentMatches(params: {
+  eventId: string;
+  bestOf: number;
+  matches: TournamentMatchInput[];
+}): Promise<void> {
+  const supabase = await createClient();
+
+  // 1) 既存のトーナメント試合を全削除（match_results は cascade で連動）。
+  await deleteTournamentMatches(params.eventId);
+
+  if (params.matches.length === 0) return;
+
+  // 2) ブラケットの全カードを insert。
+  const rows = params.matches.map((m) => ({
+    event_id: params.eventId,
+    phase: "tournament" as const,
+    round: m.round,
+    bracket_position: m.bracketPosition,
+    team_a_id: m.teamAId,
+    team_b_id: m.teamBId,
+    best_of: params.bestOf,
+  }));
+  const { error } = await supabase.from("matches").insert(rows);
+  if (error) throw error;
+}
