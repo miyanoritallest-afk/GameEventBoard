@@ -32,12 +32,19 @@ const potgCount = z
   .max(99, "POTG数が大きすぎます")
   .default(0);
 
+/** リプレイコード（マップ別・任意）。各要素は空可・16文字以内。配列長は最大15（BO上限）。 */
+const replayCodes = z
+  .array(z.string().trim().max(16, "リプレイコードは16文字以内で入力してください"))
+  .max(15, "リプレイコードが多すぎます")
+  .default([]);
+
 export const reportTournamentResultSchema = z.object({
   matchId: z.string().uuid("不正な試合IDです"),
   teamAScore: mapScore,
   teamBScore: mapScore,
   potgA: potgCount,
   potgB: potgCount,
+  replayCodes,
 });
 
 /**

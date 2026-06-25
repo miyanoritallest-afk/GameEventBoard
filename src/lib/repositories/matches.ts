@@ -14,7 +14,9 @@ export async function listGroupMatches(eventId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("matches")
-    .select("id, group_id, team_a_id, team_b_id, best_of, created_at")
+    .select(
+      "id, group_id, team_a_id, team_b_id, best_of, scheduled_at, stream_url, streamer_name, created_at",
+    )
     .eq("event_id", eventId)
     .eq("phase", "group")
     .order("created_at", { ascending: true });
@@ -218,7 +220,7 @@ export async function listTournamentMatches(eventId: string) {
   const { data, error } = await supabase
     .from("matches")
     .select(
-      "id, team_a_id, team_b_id, best_of, round, bracket_position, created_at",
+      "id, team_a_id, team_b_id, best_of, round, bracket_position, scheduled_at, stream_url, streamer_name, created_at",
     )
     .eq("event_id", eventId)
     .eq("phase", "tournament")
@@ -293,6 +295,36 @@ export async function findTournamentMatchSlots(matchId: string): Promise<{
     teamAId: data.team_a_id,
     teamBId: data.team_b_id,
   };
+}
+
+/** 試合日時（scheduled_at）を更新する（フェーズA・主催者or代表）。null でクリア可。 */
+export async function updateMatchSchedule(params: {
+  matchId: string;
+  scheduledAt: string | null;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("matches")
+    .update({ scheduled_at: params.scheduledAt })
+    .eq("id", params.matchId);
+  if (error) throw error;
+}
+
+/** 配信情報（stream_url / streamer_name）を更新する（フェーズA・主催者のみ）。空文字は null 化して保存。 */
+export async function updateMatchStream(params: {
+  matchId: string;
+  streamUrl: string | null;
+  streamerName: string | null;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("matches")
+    .update({
+      stream_url: params.streamUrl,
+      streamer_name: params.streamerName,
+    })
+    .eq("id", params.matchId);
+  if (error) throw error;
 }
 
 /** 1試合のチームスロット（team_a_id / team_b_id）を上書きする（swap 反映用）。 */

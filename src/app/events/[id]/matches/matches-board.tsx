@@ -7,12 +7,16 @@ import {
   deleteMatch,
   reportResult,
   clearResult,
+  updateSchedule,
+  updateStream,
 } from "./actions";
 import {
   validateBoScore,
   validatePotg,
   describeBestOf,
+  mapsPlayed,
 } from "@/lib/services/match-result";
+import { formatLocalInputForDisplay } from "@/lib/datetime-local";
 
 /** ブロック所属チーム（プルダウン用）。 */
 export type BoardTeam = { id: string; name: string };
@@ -36,6 +40,15 @@ export type BoardMatch = {
   hasResult: boolean;
   /** この閲覧者がこの試合の結果を入力できるか（主催者 or 対戦両チーム代表）。 */
   canReport: boolean;
+  /** マップ別リプレイコード（フェーズA）。未入力は空配列。 */
+  replayCodes: string[];
+  /** 試合日時（JST の datetime-local 文字列）。未設定は ""。 */
+  scheduledAtLocal: string;
+  /** 配信URL・配信者名（主催者が設定）。未設定は null。 */
+  streamUrl: string | null;
+  streamerName: string | null;
+  /** 閲覧者が主催者か（配信編集の出し分け）。 */
+  isOrganizer: boolean;
 };
 
 /** 順位表の1行（Service standings.ts の結果＋チーム名）。 */
@@ -160,12 +173,25 @@ export function MatchesBoard({
                 run(() => addMatch({ groupId: group.id, teamAId, teamBId }))
               }
               onDelete={(matchId) => run(() => deleteMatch(matchId))}
-              onReport={(matchId, teamAScore, teamBScore, potgA, potgB) =>
+              onReport={(matchId, teamAScore, teamBScore, potgA, potgB, replayCodes) =>
                 run(() =>
-                  reportResult({ matchId, teamAScore, teamBScore, potgA, potgB }),
+                  reportResult({
+                    matchId,
+                    teamAScore,
+                    teamBScore,
+                    potgA,
+                    potgB,
+                    replayCodes,
+                  }),
                 )
               }
               onClear={(matchId) => run(() => clearResult(matchId))}
+              onSchedule={(matchId, scheduledAtLocal) =>
+                run(() => updateSchedule({ matchId, scheduledAtLocal }))
+              }
+              onStream={(matchId, streamUrl, streamerName) =>
+                run(() => updateStream({ matchId, streamUrl, streamerName }))
+              }
             />
           ))}
         </div>
@@ -186,6 +212,8 @@ function GroupMatches({
   onDelete,
   onReport,
   onClear,
+  onSchedule,
+  onStream,
 }: {
   group: BoardGroup;
   readOnly: boolean;
@@ -201,8 +229,11 @@ function GroupMatches({
     teamBScore: number,
     potgA: number,
     potgB: number,
+    replayCodes: string[],
   ) => void;
   onClear: (matchId: string) => void;
+  onSchedule: (matchId: string, scheduledAtLocal: string) => void;
+  onStream: (matchId: string, streamUrl: string, streamerName: string) => void;
 }) {
   const [teamAId, setTeamAId] = useState("");
   const [teamBId, setTeamBId] = useState("");
@@ -302,8 +333,10 @@ function GroupMatches({
               usePotg={usePotg}
               isPending={isPending}
               onDelete={() => onDelete(m.id)}
-              onReport={(a, b, pa, pb) => onReport(m.id, a, b, pa, pb)}
+              onReport={(a, b, pa, pb, rc) => onReport(m.id, a, b, pa, pb, rc)}
               onClear={() => onClear(m.id)}
+              onSchedule={(local) => onSchedule(m.id, local)}
+              onStream={(url, name) => onStream(m.id, url, name)}
             />
           ))
         )}
@@ -325,6 +358,8 @@ function MatchCard({
   onDelete,
   onReport,
   onClear,
+  onSchedule,
+  onStream,
 }: {
   match: BoardMatch;
   index: number;
@@ -337,8 +372,11 @@ function MatchCard({
     teamBScore: number,
     potgA: number,
     potgB: number,
+    replayCodes: string[],
   ) => void;
   onClear: () => void;
+  onSchedule: (scheduledAtLocal: string) => void;
+  onStream: (streamUrl: string, streamerName: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   // 未入力時の初期値は 0（空欄だと先頭にカーソルを置いて消す手間がある・⑪）。
@@ -350,12 +388,27 @@ function MatchCard({
   );
   const [potgA, setPotgA] = useState(String(match.potgA));
   const [potgB, setPotgB] = useState(String(match.potgB));
+  // マップ別リプレイコード（行われたマップ数分の欄をスコアに連動して出す）。
+  const [replayCodes, setReplayCodes] = useState<string[]>(match.replayCodes);
   // 入力が BO/POTG ルールに反するときの説明（保存前にその場で示す）。
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // 詳細（日時・配信）編集の開閉と入力。
+  const [editingDetail, setEditingDetail] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState(match.scheduledAtLocal);
+  const [streamUrl, setStreamUrl] = useState(match.streamUrl ?? "");
+  const [streamerName, setStreamerName] = useState(match.streamerName ?? "");
 
   const bothTeams = match.teamAId != null && match.teamBId != null;
   // 結果入力できる: 編集権あり・両チーム確定・主催者/代表。
   const canInput = !readOnly && match.canReport && bothTeams;
+  // 日時編集は主催者or代表（canReport）。配信編集は主催者のみ。
+  const canEditSchedule = !readOnly && match.canReport;
+  const canEditStream = !readOnly && match.isOrganizer;
+  const canEditDetail = canEditSchedule || canEditStream;
+
+  // リプレイ欄数＝現在のスコア合計（行われたマップ数）。
+  const replayCount = mapsPlayed(Number(scoreA) || 0, Number(scoreB) || 0);
 
   function handleSave() {
     const a = Number(scoreA);
@@ -390,8 +443,19 @@ function MatchCard({
       }
     }
     setValidationError(null);
-    onReport(a, b, pa, pb);
+    // リプレイコードは行われたマップ数分だけ送る（多い分は捨てる）。
+    onReport(a, b, pa, pb, replayCodes.slice(0, mapsPlayed(a, b)));
     setEditing(false);
+  }
+
+  /** リプレイコードの i 番目を更新する。 */
+  function setReplayAt(i: number, value: string) {
+    setReplayCodes((prev) => {
+      const next = [...prev];
+      while (next.length <= i) next.push("");
+      next[i] = value;
+      return next;
+    });
   }
 
   const winA = match.winnerTeamId !== null && match.winnerTeamId === match.teamAId;
@@ -537,6 +601,29 @@ function MatchCard({
             </span>
           )}
 
+          {/* マップ別リプレイコード（行われたマップ数分。任意入力）。 */}
+          {replayCount > 0 && (
+            <div className="w-full">
+              <span className="text-xs text-muted-foreground">
+                リプレイコード（マップ別・任意）
+              </span>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {Array.from({ length: replayCount }, (_, i) => (
+                  <input
+                    key={i}
+                    type="text"
+                    maxLength={16}
+                    value={replayCodes[i] ?? ""}
+                    onChange={(e) => setReplayAt(i, e.target.value)}
+                    placeholder={`M${i + 1}`}
+                    aria-label={`マップ${i + 1}のリプレイコード`}
+                    className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleSave}
@@ -568,6 +655,159 @@ function MatchCard({
           {validationError && (
             <p className="w-full text-xs text-destructive">{validationError}</p>
           )}
+        </div>
+      )}
+
+      {/* 試合の付随情報（日時・配信）。表示は常時、編集は権限がある人だけ。 */}
+      <MatchDetail
+        match={match}
+        canEditDetail={canEditDetail}
+        canEditSchedule={canEditSchedule}
+        canEditStream={canEditStream}
+        isPending={isPending}
+        editing={editingDetail}
+        setEditing={setEditingDetail}
+        scheduledAt={scheduledAt}
+        setScheduledAt={setScheduledAt}
+        streamUrl={streamUrl}
+        setStreamUrl={setStreamUrl}
+        streamerName={streamerName}
+        setStreamerName={setStreamerName}
+        onSchedule={onSchedule}
+        onStream={onStream}
+      />
+    </div>
+  );
+}
+
+/**
+ * 試合の付随情報（日時・配信）の表示＋編集（フェーズA）。
+ * 表示は誰でも（観戦導線）。編集は日時＝主催者or代表、配信＝主催者のみ。
+ */
+function MatchDetail({
+  match,
+  canEditDetail,
+  canEditSchedule,
+  canEditStream,
+  isPending,
+  editing,
+  setEditing,
+  scheduledAt,
+  setScheduledAt,
+  streamUrl,
+  setStreamUrl,
+  streamerName,
+  setStreamerName,
+  onSchedule,
+  onStream,
+}: {
+  match: BoardMatch;
+  canEditDetail: boolean;
+  canEditSchedule: boolean;
+  canEditStream: boolean;
+  isPending: boolean;
+  editing: boolean;
+  setEditing: (v: boolean) => void;
+  scheduledAt: string;
+  setScheduledAt: (v: string) => void;
+  streamUrl: string;
+  setStreamUrl: (v: string) => void;
+  streamerName: string;
+  setStreamerName: (v: string) => void;
+  onSchedule: (scheduledAtLocal: string) => void;
+  onStream: (streamUrl: string, streamerName: string) => void;
+}) {
+  const hasSchedule = match.scheduledAtLocal !== "";
+  const hasStream = !!match.streamUrl;
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      {/* 表示（観戦者にも見える）。 */}
+      {hasSchedule && (
+        <span>🕒 {formatLocalInputForDisplay(match.scheduledAtLocal)}</span>
+      )}
+      {hasStream && (
+        <a
+          href={match.streamUrl ?? "#"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          📺 {match.streamerName || "配信"}
+        </a>
+      )}
+      {!hasSchedule && !hasStream && !canEditDetail && (
+        <span className="text-muted-foreground/60">日時・配信は未設定</span>
+      )}
+
+      {/* 編集トグル（権限者のみ）。 */}
+      {canEditDetail && !editing && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-primary hover:underline"
+        >
+          詳細を編集
+        </button>
+      )}
+
+      {/* 編集フォーム。 */}
+      {canEditDetail && editing && (
+        <div className="mt-1 w-full space-y-2 border-t border-border pt-2">
+          {canEditSchedule && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-16 text-muted-foreground">日時</span>
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => onSchedule(scheduledAt)}
+                disabled={isPending}
+                className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                日時を保存
+              </button>
+            </div>
+          )}
+          {canEditStream && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-16 text-muted-foreground">配信</span>
+              <input
+                type="url"
+                value={streamUrl}
+                onChange={(e) => setStreamUrl(e.target.value)}
+                placeholder="https://twitch.tv/..."
+                className="w-56 rounded-md border border-border bg-background px-2 py-1 text-sm"
+              />
+              <input
+                type="text"
+                value={streamerName}
+                onChange={(e) => setStreamerName(e.target.value)}
+                placeholder="配信者名"
+                maxLength={100}
+                className="w-32 rounded-md border border-border bg-background px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => onStream(streamUrl, streamerName)}
+                disabled={isPending}
+                className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                配信を保存
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            閉じる
+          </button>
         </div>
       )}
     </div>

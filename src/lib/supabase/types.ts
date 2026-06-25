@@ -438,6 +438,7 @@ export type Database = {
           match_id: string
           potg_a: number
           potg_b: number
+          replay_codes: string[]
           reported_by: string | null
           team_a_score: number
           team_b_score: number
@@ -449,6 +450,7 @@ export type Database = {
           match_id: string
           potg_a?: number
           potg_b?: number
+          replay_codes?: string[]
           reported_by?: string | null
           team_a_score: number
           team_b_score: number
@@ -460,6 +462,7 @@ export type Database = {
           match_id?: string
           potg_a?: number
           potg_b?: number
+          replay_codes?: string[]
           reported_by?: string | null
           team_a_score?: number
           team_b_score?: number

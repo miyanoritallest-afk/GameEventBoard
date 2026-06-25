@@ -16,7 +16,7 @@ export async function listMatchResultsByEvent(eventId: string) {
   const { data, error } = await supabase
     .from("match_results")
     .select(
-      "match_id, team_a_score, team_b_score, winner_team_id, potg_a, potg_b, matches!inner(event_id)",
+      "match_id, team_a_score, team_b_score, winner_team_id, potg_a, potg_b, replay_codes, matches!inner(event_id)",
     )
     .eq("matches.event_id", eventId);
 
@@ -36,6 +36,8 @@ export async function upsertMatchResult(params: {
   reportedBy: string;
   potgA: number;
   potgB: number;
+  /** マップ別リプレイコード（任意・空配列可。フェーズA）。 */
+  replayCodes: string[];
 }): Promise<{ ok: true } | { ok: false }> {
   const supabase = await createClient();
   const { error } = await supabase.from("match_results").upsert(
@@ -47,6 +49,7 @@ export async function upsertMatchResult(params: {
       reported_by: params.reportedBy,
       potg_a: params.potgA,
       potg_b: params.potgB,
+      replay_codes: params.replayCodes,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "match_id" },

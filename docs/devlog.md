@@ -7,6 +7,34 @@
 
 ---
 
+## 2026-06-25 — フェーズA: 試合の付随情報（日時・配信・リプレイコード）
+
+試合に「日時・配信URL/配信者・マップ別リプレイコード」を入力できるようにした。予選・決勝Tの両画面に対応。次フェーズB（観戦者への閲覧全面公開）の前段＝「見せる中身を入れる」。
+
+### やったこと
+- **マイグレーション（手動適用要）**:
+  - `0021_match_replay_codes.sql`: match_results に `replay_codes text[]`（マップ別・1マップ1コード）。
+  - `0022_matches_update_reporter.sql`: matches UPDATE を `can_report_match`（主催者or対戦両チーム代表）に拡張（日時を代表も編集可にするため）。
+- **Service** match-result.ts: `mapsPlayed`（=両者スコア合計＝行われたマップ数）/ `normalizeReplayCodes`（マップ数に長さを揃える）。テスト+5=286。
+- **datetime-local.ts**: `jstLocalToUtcIso` / `utcIsoToJstLocal` を共有ヘルパ化（JST入力↔UTC保存）。
+- **Repository**: `upsertMatchResult` に replayCodes 追加。matches.ts に `updateMatchSchedule`（日時）/ `updateMatchStream`（配信）。list系の select に scheduled_at/stream_url/streamer_name/replay_codes を追加。
+- **Server Action**（matches/actions.ts・予選決勝T共用）: `reportResult`/`reportTournamentResult` にリプレイコード保存を追加。`updateSchedule`（主催者or代表・JST→UTC・recompute無し）/ `updateStream`（主催者のみ）を新設。
+- **UI**: 結果入力フォームに**スコア合計に連動するマップ別リプレイコード欄**。試合カードに「詳細を編集」（日時＝権限者・配信＝主催者のみ）＋表示（🕒日時・📺配信リンク）。matches-board / tournament-board 両方に実装。
+- lint/typecheck/test(286緑)/build 通過。
+
+### 決めたこと（なぜ・壁打ち済み）
+- **閲覧体験が主役**という方針を確認（観戦者＝非参加者も巻き込むのが盛り上げポリシー）。それを踏まえ**A→B分割**: まず付随情報を入れて「見せる中身」を作り（A・今回）、次に観戦者への全面公開（B）。
+- **項目ごとに権限が違う**: 結果・日時・リプレイ＝主催者or代表 / 配信＝主催者のみ。日時と配信は **Action を分けて**認可を明快に（代表が配信を送り込めない）。
+- **リプレイは1マップ1コード**＝行われたマップ数（スコア合計・奇数BOは可変）分だけ欄を出す。任意入力（空可）・各16文字・配列長上限15。
+- **日時・配信は recompute を呼ばない**（ブラケット構造に無関係）。結果（リプレイ含む）は従来どおり。
+
+### 次にやること
+- [ ] **マイグレーション0021・0022を Supabase SQL Editor で手動適用**（適用前は実機で付随情報の保存がエラー）。
+- [ ] 実機確認（リプレイ欄のスコア連動・日時/配信の権限差・予選決勝T両方）。
+- [ ] フェーズB: 閲覧の全面公開（対戦表・結果・順位・トーナメント表・配信を観戦者＝非ログインに開放。RLSをanon開放＋各page認可ガード見直し）。
+
+---
+
 ## 2026-06-25 — 本戦-5 実機確認FB: 結果入力導線＋自動進出の修正
 
 決勝トーナメント（5a〜5c）を Playwright で通し実機確認し、自動テストでは拾えない3件のバグを発見・修正。

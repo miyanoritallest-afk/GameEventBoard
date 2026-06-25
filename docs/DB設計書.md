@@ -365,6 +365,7 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | team_b_score | int | NOT NULL | 取マップ数 |
 | potg_a | int | NOT NULL DEFAULT 0 | team_a の POTG 取得数（0016/0017・タイブレーク用。CHECK 0〜99）。POTG使用イベントは「POTG合計＝総マップ数」をアプリ層で検証 |
 | potg_b | int | NOT NULL DEFAULT 0 | team_b の POTG 取得数 |
+| replay_codes | text[] | NOT NULL DEFAULT '{}' | マップ別リプレイコード（OW独自・1マップ1コード）。行われたマップ数（=両者スコア合計）分。任意入力（空可）。0021で追加・フェーズA |
 | winner_team_id | uuid | FK→teams | 引分null可。スコアからサーバーが算出して固定 |
 | reported_by | uuid | FK→users | 入力者（主催者 or 対戦両チーム代表） |
 | created_at | timestamptz | DEFAULT now() | |

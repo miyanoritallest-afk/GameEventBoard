@@ -16,6 +16,8 @@ import {
   listGroupMatchesWithResult,
   deleteMatchesByIds,
   findMatchForReport,
+  updateMatchSchedule,
+  updateMatchStream,
 } from "@/lib/repositories/matches";
 import {
   upsertMatchResult,
@@ -31,11 +33,16 @@ import {
   decideWinner,
   validateBoScore,
   validatePotg,
+  mapsPlayed,
+  normalizeReplayCodes,
 } from "@/lib/services/match-result";
+import { jstLocalToUtcIso } from "@/lib/datetime-local";
 import {
   generateMatchesSchema,
   addMatchSchema,
   reportResultSchema,
+  updateScheduleSchema,
+  updateStreamSchema,
 } from "./schema";
 
 /**
@@ -248,6 +255,7 @@ export async function reportResult(input: {
   teamBScore: number;
   potgA?: number;
   potgB?: number;
+  replayCodes?: string[];
 }): Promise<MatchActionState> {
   const userId = await currentUserId();
   if (!userId) return { error: "ログインが必要です。" };
@@ -257,6 +265,11 @@ export async function reportResult(input: {
     return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
   }
   const { matchId, teamAScore, teamBScore, potgA, potgB } = parsed.data;
+  // リプレイコードは行われたマップ数（=スコア合計）に長さを揃えて保存する。
+  const replayCodes = normalizeReplayCodes(
+    parsed.data.replayCodes,
+    mapsPlayed(teamAScore, teamBScore),
+  );
 
   const match = await requireReporter(matchId, userId);
   if (!match) return { error: "この試合の結果を入力する権限がありません。" };
@@ -307,6 +320,7 @@ export async function reportResult(input: {
     reportedBy: userId,
     potgA,
     potgB,
+    replayCodes,
   });
   if (!result.ok) {
     return { error: "結果の保存に失敗しました。画面を更新してからお試しください。" };
@@ -330,5 +344,67 @@ export async function clearResult(matchId: string): Promise<MatchActionState> {
   }
 
   revalidatePath(`/events/${match.eventId}/matches`);
+  return {};
+}
+
+/* ========================================================================== *
+ * 試合の付随情報（フェーズA）。日時＝主催者 or 対戦両チーム代表 / 配信＝主催者のみ。
+ * 予選・決勝Tの両画面から使う（phase 非依存で matchId で更新する）。
+ * 日時・配信はブラケット構造に無関係なので recompute は呼ばない。
+ * ========================================================================== */
+
+/** 試合日時を更新する（主催者 or 対戦両チーム代表）。JST 入力 → UTC 保存。空でクリア。 */
+export async function updateSchedule(input: {
+  matchId: string;
+  scheduledAtLocal?: string;
+}): Promise<MatchActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const parsed = updateScheduleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
+  }
+
+  // 日時は「主催者 or 対戦両チーム代表」。結果入力と同じ requireReporter で判定。
+  const match = await requireReporter(parsed.data.matchId, userId);
+  if (!match) return { error: "この試合の日時を変更する権限がありません。" };
+
+  const scheduledAt = jstLocalToUtcIso(parsed.data.scheduledAtLocal || null);
+  await updateMatchSchedule({ matchId: parsed.data.matchId, scheduledAt });
+
+  revalidatePath(`/events/${match.eventId}/matches`);
+  revalidatePath(`/events/${match.eventId}/tournament`);
+  return {};
+}
+
+/** 配信情報を更新する（主催者のみ）。空文字は null 化して保存。 */
+export async function updateStream(input: {
+  matchId: string;
+  streamUrl?: string;
+  streamerName?: string;
+}): Promise<MatchActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const parsed = updateStreamSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
+  }
+
+  // 配信は主催者のみ。試合の所属イベント主催者を確認する。
+  const m = await findMatchById(parsed.data.matchId);
+  if (!m) return { error: "この試合を操作する権限がありません。" };
+  const event = await requireOrganizer(m.event_id, userId);
+  if (!event) return { error: "配信情報を編集できるのは主催者のみです。" };
+
+  await updateMatchStream({
+    matchId: parsed.data.matchId,
+    streamUrl: parsed.data.streamUrl ? parsed.data.streamUrl : null,
+    streamerName: parsed.data.streamerName ? parsed.data.streamerName : null,
+  });
+
+  revalidatePath(`/events/${event.id}/matches`);
+  revalidatePath(`/events/${event.id}/tournament`);
   return {};
 }
