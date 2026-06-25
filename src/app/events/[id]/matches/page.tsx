@@ -217,6 +217,12 @@ export default async function EventMatchesPage({
               </Link>
             )}
             <Link
+              href={`/events/${event.id}/tournament`}
+              className="text-sm text-primary hover:underline"
+            >
+              決勝トーナメントへ →
+            </Link>
+            <Link
               href={`/events/${event.slug ?? event.id}`}
               className="text-sm text-muted-foreground hover:underline"
             >

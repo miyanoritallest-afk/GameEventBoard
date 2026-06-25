@@ -231,6 +231,8 @@ owner/admin の2段階権限。検索招待 → 本人承認のフローを stat
 | points_draw | int | NOT NULL DEFAULT 1 | 引分点（CHECK 0〜99） |
 | points_loss | int | NOT NULL DEFAULT 0 | 負け点（CHECK 0〜99） |
 | tiebreakers | text[] | NOT NULL DEFAULT '{}' | 同着の優先順位（先頭ほど優先）。値は head_to_head/map_diff/potg（CHECK で許可値のみ）。集計・表示はPR-3c |
+| **— 決勝トーナメント設定（本戦・3.4.1） —** | | | 0019で追加 |
+| tournament_advance_count | int | NOT NULL DEFAULT 0 | 各ブロック上位N（決勝T進出数）。0=未使用。ブロック数×Nで進出総数、進出数以上の最小2の累乗をブラケットサイズにし不足枠はBYE。CHECK 0〜99。生成・表示はPR-5a |
 | **— Discord連携（全体告知 3.5.2） —** | | | |
 | discord_webhook_url | text | | 告知チャンネル。未設定なら series 側を使う |
 | auto_announce | boolean | NOT NULL DEFAULT true | 公開/更新時に告知チャンネルへ自動投稿するか |
@@ -343,8 +345,8 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | phase | match_phase | NOT NULL | group / tournament |
 | best_of | int | NOT NULL DEFAULT 3 | この試合のBO（最大マップ数）。奇数=過半数先取で引分なし、偶数=引分あり。予選は生成時に events.group_best_of を一括セット、決勝Tは試合ごと（本戦-5）。スコア入力上限に連動。CHECK 1〜15。0018で追加 |
 | group_id | uuid | FK→groups | 予選時のグループ |
-| round | int | | トーナメントのラウンド |
-| bracket_position | int | | トーナメント表上の位置 |
+| round | int | | トーナメントのラウンド（1=1回戦…最大ラウンド=決勝）。本戦-5aで使用 |
+| bracket_position | int | | トーナメント表上の位置（同一ラウンド内の0始まり）。本戦-5aで使用 |
 | team_a_id | uuid | FK→teams | 対戦カード |
 | team_b_id | uuid | FK→teams | |
 | scheduled_at | timestamptz | | 試合日時 |
@@ -600,5 +602,5 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
 - [ ] standings をビューにするかテーブル実体にするか（リアルタイム更新との兼ね合い）
 - [ ] season_label の入力方法（自由入力 or マスタ化）
 - [ ] notifications と Discord通知の送り分け詳細
-- [ ] トーナメント表の bracket 構造（round/bracket_position で足りるか）
+- [x] トーナメント表の bracket 構造（round/bracket_position で足りる）→ **本戦-5aで確定**。シングルエリミは round（1始まり）＋bracket_position（ラウンド内0始まり）＋nullable team_a/b（未確定・BYE）で表現可。生成は Service `bracket.ts`（標準シード・BYE・2の累乗）。3位決定戦・敗者ブラケットは後続で round 体系を拡張する想定
 - [x] capacity（チーム数）の排他制御 = **主催者の承認（self チームの pending→approved）時に current_count を +1**（PR-3b で確定・実装）。pending は枠を確保しない。却下・取り下げはカウント不変。individual応募の参加表明自体は定員カウント対象外（チーム成立時にカウント）。排他は events の version 条件付きUPDATE（5章）。organizer 振り分けチームのカウント連動は本戦運用で再検討（現状 organizer 作成チームは即approvedだが current_count は未連動）。

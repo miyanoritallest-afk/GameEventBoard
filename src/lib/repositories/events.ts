@@ -61,6 +61,22 @@ export async function findEventById(id: string) {
   return data;
 }
 
+/**
+ * 決勝トーナメントの進出数 N（events.tournament_advance_count）を更新する（本戦-5a）。
+ * 所有権確認は呼び出し側＋RLS が担保。生成時にだけ呼ぶ専用更新（編集フォームの whitelist とは分離）。
+ */
+export async function updateTournamentAdvanceCount(params: {
+  eventId: string;
+  advanceCount: number;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("events")
+    .update({ tournament_advance_count: params.advanceCount })
+    .eq("id", params.eventId);
+  if (error) throw error;
+}
+
 /** slug でイベントを1件取得する。存在しなければ null。 */
 export async function findEventBySlug(slug: string) {
   const supabase = await createClient();

@@ -160,6 +160,7 @@ export type Database = {
           team_score_cap: number | null
           tiebreakers: string[]
           title: string
+          tournament_advance_count: number
           uncertified_handling: Database["public"]["Enums"]["uncertified_handling"]
           updated_at: string
           version: number
@@ -200,6 +201,7 @@ export type Database = {
           team_score_cap?: number | null
           tiebreakers?: string[]
           title: string
+          tournament_advance_count?: number
           uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string
           version?: number
@@ -240,6 +242,7 @@ export type Database = {
           team_score_cap?: number | null
           tiebreakers?: string[]
           title?: string
+          tournament_advance_count?: number
           uncertified_handling?: Database["public"]["Enums"]["uncertified_handling"]
           updated_at?: string
           version?: number
