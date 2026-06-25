@@ -346,7 +346,8 @@ export function TournamentBoard({
 
 /**
  * ブラケットの1試合カード。未確定スロットは「未定」と表示。
- * - swappable（1回戦・結果なし）: スロットを D&D で入れ替え可能にする（結果入力は出さない）。
+ * - swappable（1回戦・結果なし）: スロットを D&D で入れ替え可能にしつつ、
+ *   両チーム確定なら「結果を入力」ボタン（試合に1個）で結果入力もできる。
  * - それ以外: 両チーム確定かつ入力権限があればクリックで結果入力フォームを展開。
  */
 function BracketCard({
@@ -380,45 +381,56 @@ function BracketCard({
         </div>
       )}
 
-      {swappable ? (
-        // 1回戦の入れ替え用: 各スロットを draggable＋droppable にする。
-        <div className="p-3">
-          <SwapSlot
-            matchId={match.id}
-            slot="a"
-            name={match.teamAName}
-            teamId={match.teamAId}
-          />
-          <div className="my-1 border-t border-dashed border-border" />
-          <SwapSlot
-            matchId={match.id}
-            slot="b"
-            name={match.teamBName}
-            teamId={match.teamBId}
-          />
-        </div>
-      ) : (
-        <button
-          type="button"
-          disabled={!canInput}
-          onClick={() => canInput && setOpen((v) => !v)}
-          className={`w-full p-3 text-left ${canInput ? "hover:bg-muted/40" : ""}`}
-        >
-          <ScoreSlot
-            name={match.teamAName}
-            score={match.teamAScore}
-            winner={winnerA}
-          />
-          <div className="my-1 border-t border-dashed border-border" />
-          <ScoreSlot
-            name={match.teamBName}
-            score={match.teamBScore}
-            winner={winnerB}
-          />
-        </button>
-      )}
+      {/*
+        スロット表示は D&D 可否で出し分けるが、結果入力の導線（「結果を入力」ボタン）は
+        D&D 可否に関わらず常に同じにする。結果が1件入って全体が D&D 不可に変わっても、
+        入力ボタンが消えて導線が変わらないようにするため（実機FB）。
+      */}
+      <div className="p-3">
+        {swappable ? (
+          <>
+            <SwapSlot
+              matchId={match.id}
+              slot="a"
+              name={match.teamAName}
+              teamId={match.teamAId}
+            />
+            <div className="my-1 border-t border-dashed border-border" />
+            <SwapSlot
+              matchId={match.id}
+              slot="b"
+              name={match.teamBName}
+              teamId={match.teamBId}
+            />
+          </>
+        ) : (
+          <>
+            <ScoreSlot
+              name={match.teamAName}
+              score={match.teamAScore}
+              winner={winnerA}
+            />
+            <div className="my-1 border-t border-dashed border-border" />
+            <ScoreSlot
+              name={match.teamBName}
+              score={match.teamBScore}
+              winner={winnerB}
+            />
+          </>
+        )}
 
-      {!swappable && open && canInput && (
+        {canInput && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="mt-2 w-full rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          >
+            {open ? "閉じる" : match.hasResult ? "結果を修正" : "結果を入力"}
+          </button>
+        )}
+      </div>
+
+      {open && canInput && (
         <ResultForm
           match={match}
           usePotg={usePotg}
