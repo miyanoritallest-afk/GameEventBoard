@@ -71,8 +71,10 @@ export default async function EventTeamsPage({
     const u = reg.users;
     return {
       registrationId: reg.id,
-      // 登録名（公開表示名）優先。未設定なら Discord 名にフォールバック。
-      discordName: reg.display_name ?? u?.discord_name ?? "-",
+      // 公開表示名（登録名 ?? Discord名）。全立場で主表示。
+      displayName: reg.display_name ?? u?.discord_name ?? "-",
+      // 素のDiscord名は運営（主催者）のみに渡す（内部識別。観戦者・応募者には null）。
+      discordName: isOrganizer ? (u?.discord_name ?? null) : null,
       battleTag: u?.battle_tag ?? null,
       preferredRoles: [
         reg.preferred_role_1,
