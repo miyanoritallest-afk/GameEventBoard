@@ -42,6 +42,13 @@ export const createDraftEventSchema = z
       z.string().uuid("ゲームを選択してください"),
     ),
 
+    // 主催者の登録名（イベント詳細の「主催」に出す公開表示名）。
+    // フォームのデフォルトは Discord 名。任意・空可（空ならフォールバックで Discord 名表示）。
+    organizerDisplayName: optionalText(
+      32,
+      "登録名は32文字以内で入力してください",
+    ),
+
     // 以下はすべて任意（下書きなので未入力で保存できる）。
     description: optionalText(2000, "説明は2000文字以内で入力してください"),
 

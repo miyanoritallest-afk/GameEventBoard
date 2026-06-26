@@ -83,11 +83,13 @@ function RoleRow({
 
 export function ApplyForm({
   eventId,
+  defaultDisplayName,
   roleSwapAllowed,
   declaredSeasons,
   useBonus,
 }: {
   eventId: string;
+  defaultDisplayName: string;
   roleSwapAllowed: boolean;
   declaredSeasons: number;
   useBonus: boolean;
@@ -116,6 +118,27 @@ export function ApplyForm({
           {state.error}
         </p>
       )}
+
+      {/* 登録名（このイベントでの公開表示名。既定は Discord 名） */}
+      <fieldset className="rounded-xl border border-border bg-card p-4">
+        <legend className="px-1 text-sm font-semibold">
+          登録名<span className="ml-1 text-destructive">*</span>
+        </legend>
+        <p className="mt-1 mb-3 text-xs text-muted-foreground">
+          応募者一覧やチーム表に表示される名前です。既定は Discord
+          名です。必要なら書き換えてください。
+        </p>
+        <input
+          type="text"
+          name="displayName"
+          defaultValue={defaultDisplayName}
+          maxLength={32}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        />
+        {fe.displayName && (
+          <p className="mt-1 text-xs text-destructive">{fe.displayName}</p>
+        )}
+      </fieldset>
 
       {/* 希望ロール（第1・第2を選択、第3は自動） */}
       <fieldset className="rounded-xl border border-border bg-card p-4">

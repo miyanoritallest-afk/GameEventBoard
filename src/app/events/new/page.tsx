@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listGames } from "@/lib/repositories/games";
+import { findDiscordName } from "@/lib/repositories/users";
 import { EventForm } from "../event-form";
 import { createEvent } from "../actions";
 
@@ -16,7 +17,10 @@ export default async function NewEventPage() {
     redirect(`/login?redirect=${encodeURIComponent("/events/new")}`);
   }
 
-  const games = await listGames();
+  const [games, discordName] = await Promise.all([
+    listGames(),
+    findDiscordName(user.id),
+  ]);
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
@@ -28,6 +32,7 @@ export default async function NewEventPage() {
         <EventForm
           games={games}
           action={createEvent}
+          discordName={discordName ?? ""}
           submitLabel="この内容で作成する（下書き）"
           pendingLabel="作成中..."
         />

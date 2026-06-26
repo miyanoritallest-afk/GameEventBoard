@@ -137,6 +137,7 @@ erDiagram
         uuid series_id FK "単発はnull"
         uuid game_id FK
         uuid organizer_id FK
+        text organizer_display_name "主催者の登録名(nullでdiscord_nameにフォールバック)"
         text slug UK
         enum status
         int capacity "=チーム数"
@@ -168,6 +169,7 @@ erDiagram
         uuid id PK
         uuid event_id FK
         uuid user_id FK
+        text display_name "応募者の登録名(nullでdiscord_nameにフォールバック)"
         enum preferred_role
         enum assigned_role
         boolean wants_matching "mixed時の分岐"

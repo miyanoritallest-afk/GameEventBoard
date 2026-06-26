@@ -81,6 +81,8 @@ function withRoles(
 ) {
   const order = ["tank", "dps", "support"].filter((r) => r !== first);
   return form({
+    // 登録名は必須項目。既定で有効値を入れておく（個別テストは extra で上書き）。
+    displayName: "のり",
     preferredRole1: first,
     preferredRole2: order[0],
     preferredRole3: order[1],
@@ -138,6 +140,15 @@ describe("registerWithScore — 認可・前提", () => {
     expect(r.fieldErrors?.preferredRole1).toBeDefined();
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
+
+  it("登録名が空は fieldErrors（必須）", async () => {
+    loginAs(APPLICANT);
+    mocks.findEventById.mockResolvedValue(scoredEvent());
+    const fd = withRoles("dps", { displayName: "   " }); // trim 後に空
+    const r = await registerWithScore(EVENT_ID, {}, fd);
+    expect(r.fieldErrors?.displayName).toBeDefined();
+    expect(mocks.insertRegistration).not.toHaveBeenCalled();
+  });
 });
 
 describe("registerWithScore — 算出とスナップショット", () => {
@@ -156,6 +167,7 @@ describe("registerWithScore — 算出とスナップショット", () => {
     );
     const passed = mocks.insertRegistration.mock.calls[0][0];
     expect(passed.userId).toBe(APPLICANT);
+    expect(passed.displayName).toBe("のり"); // 登録名が trim されてスナップショット保存
     expect(passed.preferredRole1).toBe("dps");
     expect(passed.individualScore).toBe(25);
     expect(passed.finalScore).toBe(25);

@@ -141,6 +141,7 @@ export type Database = {
           game_id: string
           group_best_of: number
           id: string
+          organizer_display_name: string | null
           organizer_id: string
           points_draw: number
           points_loss: number
@@ -183,6 +184,7 @@ export type Database = {
           game_id: string
           group_best_of?: number
           id?: string
+          organizer_display_name?: string | null
           organizer_id: string
           points_draw?: number
           points_loss?: number
@@ -225,6 +227,7 @@ export type Database = {
           game_id?: string
           group_best_of?: number
           id?: string
+          organizer_display_name?: string | null
           organizer_id?: string
           points_draw?: number
           points_loss?: number
@@ -770,6 +773,7 @@ export type Database = {
         Row: {
           assigned_role: Database["public"]["Enums"]["role"] | null
           created_at: string
+          display_name: string | null
           event_id: string
           final_score: number | null
           id: string
@@ -788,6 +792,7 @@ export type Database = {
         Insert: {
           assigned_role?: Database["public"]["Enums"]["role"] | null
           created_at?: string
+          display_name?: string | null
           event_id: string
           final_score?: number | null
           id?: string
@@ -806,6 +811,7 @@ export type Database = {
         Update: {
           assigned_role?: Database["public"]["Enums"]["role"] | null
           created_at?: string
+          display_name?: string | null
           event_id?: string
           final_score?: number | null
           id?: string
