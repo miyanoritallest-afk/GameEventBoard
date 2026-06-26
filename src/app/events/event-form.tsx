@@ -32,6 +32,8 @@ export type EventFormState = {
 export type EventFormDefaults = {
   title?: string;
   gameId?: string;
+  /** 主催者の登録名（イベント詳細の「主催」に出す）。未設定なら fallback を初期表示。 */
+  organizerDisplayName?: string;
   description?: string;
   startsAt?: string; // "YYYY-MM-DDTHH:mm"（JST ローカル）
   endsAt?: string;
@@ -86,12 +88,15 @@ export function EventForm({
   games,
   action,
   defaultValues = {},
+  discordName = "",
   submitLabel,
   pendingLabel,
 }: {
   games: GameOption[];
   action: EventFormAction;
   defaultValues?: EventFormDefaults;
+  /** 登録名欄の初期値フォールバック（認証時の Discord 名）。作成時に既定で入れる。 */
+  discordName?: string;
   submitLabel: string;
   pendingLabel: string;
 }) {
@@ -124,6 +129,20 @@ export function EventForm({
           {state.error}
         </p>
       )}
+
+      {/* 登録名（主催者としての公開表示名。既定は Discord 名） */}
+      <Field label="登録名（主催者として表示される名前）" error={fe.organizerDisplayName}>
+        <input
+          name="organizerDisplayName"
+          type="text"
+          maxLength={32}
+          defaultValue={d.organizerDisplayName ?? discordName}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          イベント詳細の「主催」に表示されます。既定は Discord 名です。
+        </p>
+      </Field>
 
       {/* 基本情報 */}
       <Field label="タイトル" required error={fe.title}>

@@ -197,6 +197,7 @@ owner/admin の2段階権限。検索招待 → 本人承認のフローを stat
 | series_id | uuid | FK→event_series | 所属シリーズ（単発はnull） |
 | game_id | uuid | FK→games, NOT NULL | |
 | organizer_id | uuid | FK→users, NOT NULL | 主催者（series未使用時の運営主体） |
+| organizer_display_name | text | | 主催者の登録名（イベント詳細「主催」に表示）。nullなら organizer.discord_name にフォールバック。0024で追加 |
 | title | text | NOT NULL | |
 | description | text | | |
 | slug | text | UNIQUE | 公開URL用 |
@@ -269,6 +270,7 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | id | uuid | PK | |
 | event_id | uuid | FK→events, NOT NULL | |
 | user_id | uuid | FK→users, NOT NULL | |
+| display_name | text | | 応募者の登録名（このイベントでの公開表示名・応募時点のスナップショット）。nullなら user.discord_name にフォールバック。0024で追加 |
 | preferred_role | role | | 希望ロール（require_role時） |
 | assigned_role | role | | そのイベントで担当するロール（確定後） |
 | wants_matching | boolean | | mixed時: 運営あっせん希望か(true)/自分でチーム(false) |

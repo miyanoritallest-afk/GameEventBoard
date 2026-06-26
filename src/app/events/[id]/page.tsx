@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById, findEventBySlug } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
+import { findDiscordName } from "@/lib/repositories/users";
 import { canViewEvent } from "@/lib/services/event-status";
 import { isValidEventSlug } from "@/lib/services/event-slug";
 import { PublishButton } from "./publish-button";
@@ -68,11 +69,24 @@ export default async function EventDetailPage({
   const isOrganizer = viewerId !== null && viewerId === event.organizer_id;
   const statusLabel = STATUS_LABEL[event.status] ?? event.status;
 
+  // 主催者の表示名。登録名（organizer_display_name）優先・未設定なら Discord 名。
+  const organizerName =
+    event.organizer_display_name ??
+    (event.organizer as { discord_name: string } | null)?.discord_name ??
+    "-";
+
   // 応募の状態（ログイン済み・非主催者・公開中のときだけ意味を持つ）。
   const canApply = viewerId !== null && !isOrganizer && event.status !== "draft";
   const myRegistration = canApply
     ? await findRegistration(event.id, viewerId)
     : null;
+
+  // スコアなし即時応募の登録名欄デフォルト（認証時の Discord 名）。
+  // 未応募・スコアなしイベントのときだけ意味を持つ。
+  const discordName =
+    canApply && !myRegistration && !event.require_score
+      ? ((await findDiscordName(viewerId)) ?? "")
+      : "";
 
   // 本戦ページ（ブロック分け/対戦表・順位表/トーナメント）への導線を出す条件。
   // フェーズB: 公開済みなら観戦者（非ログイン・非参加者）にも導線を出す（閲覧の全面公開）。
@@ -93,9 +107,10 @@ export default async function EventDetailPage({
         )}
 
         <h1 className="mt-6 text-2xl font-bold">{event.title}</h1>
-        <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span className="rounded bg-muted px-2 py-0.5">{gameName}</span>
           <span className="rounded bg-muted px-2 py-0.5">状態: {statusLabel}</span>
+          <span className="rounded bg-muted px-2 py-0.5">主催: {organizerName}</span>
         </div>
 
         {event.description && (
@@ -164,7 +179,10 @@ export default async function EventDetailPage({
               </Link>
             </div>
           ) : (
-            <ApplyButton eventId={event.id} />
+            <ApplyButton
+              eventId={event.id}
+              defaultDisplayName={discordName}
+            />
           ))}
 
         {/* 本戦セクション（ブロック分け・対戦表・順位表への導線）。

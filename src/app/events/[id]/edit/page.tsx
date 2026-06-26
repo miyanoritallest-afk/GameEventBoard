@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
 import { listGames } from "@/lib/repositories/games";
+import { findDiscordName } from "@/lib/repositories/users";
 import type { EventFormDefaults } from "../../event-form";
 import { EditEventForm } from "./edit-event-form";
 
@@ -46,11 +47,16 @@ export default async function EditEventPage({
     notFound();
   }
 
-  const games = await listGames();
+  const [games, discordName] = await Promise.all([
+    listGames(),
+    findDiscordName(user.id),
+  ]);
 
   const defaults: EventFormDefaults = {
     title: event.title,
     gameId: event.game_id,
+    // 保存済みの登録名。未設定（null）なら EventForm 側で discordName を初期表示。
+    organizerDisplayName: event.organizer_display_name ?? undefined,
     description: event.description ?? "",
     startsAt: utcIsoToJstLocal(event.starts_at),
     endsAt: utcIsoToJstLocal(event.ends_at),
@@ -88,6 +94,7 @@ export default async function EditEventPage({
           eventId={event.id}
           games={games}
           defaultValues={defaults}
+          discordName={discordName ?? ""}
         />
       </div>
     </div>

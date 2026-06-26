@@ -9,6 +9,7 @@ type EventEditableColumns = Pick<
   EventUpdate,
   | "title"
   | "game_id"
+  | "organizer_display_name"
   | "description"
   | "starts_at"
   | "ends_at"
@@ -54,7 +55,10 @@ export async function findEventById(id: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("events")
-    .select("*, games(name, team_size)")
+    // 主催者表示名のフォールバック用に organizer の discord_name も引く（1:1）。
+    .select(
+      "*, games(name, team_size), organizer:users!events_organizer_id_fkey(discord_name)",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -83,7 +87,10 @@ export async function findEventBySlug(slug: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("events")
-    .select("*, games(name)")
+    // 主催者表示名のフォールバック用に organizer の discord_name も引く（1:1）。
+    .select(
+      "*, games(name), organizer:users!events_organizer_id_fkey(discord_name)",
+    )
     .eq("slug", slug)
     .maybeSingle();
 

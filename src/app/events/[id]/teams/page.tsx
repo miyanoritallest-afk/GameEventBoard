@@ -55,6 +55,7 @@ export default async function EventTeamsPage({
   // DB の戻りをボード用の素直な型へ整形する（クライアントへ渡す最小データ）。
   type RegJoin = {
     id: string;
+    display_name: string | null;
     preferred_role_1: string | null;
     preferred_role_2: string | null;
     preferred_role_3: string | null;
@@ -70,7 +71,8 @@ export default async function EventTeamsPage({
     const u = reg.users;
     return {
       registrationId: reg.id,
-      discordName: u?.discord_name ?? "-",
+      // 登録名（公開表示名）優先。未設定なら Discord 名にフォールバック。
+      discordName: reg.display_name ?? u?.discord_name ?? "-",
       battleTag: u?.battle_tag ?? null,
       preferredRoles: [
         reg.preferred_role_1,

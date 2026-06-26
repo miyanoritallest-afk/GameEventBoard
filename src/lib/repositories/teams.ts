@@ -535,7 +535,7 @@ export async function listTeamsWithMembers(eventId: string) {
        team_members(
          id, role, position, is_representative, registration_id,
          registrations(
-           id, preferred_role_1, preferred_role_2, preferred_role_3,
+           id, display_name, preferred_role_1, preferred_role_2, preferred_role_3,
            final_score, organizer_override_score, score_breakdown,
            users(discord_name, battle_tag)
          )
@@ -577,7 +577,7 @@ export async function listUnassignedApproved(eventId: string) {
   let query = supabase
     .from("registrations")
     .select(
-      `id, preferred_role_1, preferred_role_2, preferred_role_3,
+      `id, display_name, preferred_role_1, preferred_role_2, preferred_role_3,
        final_score, organizer_override_score, score_breakdown,
        users(discord_name, battle_tag)`,
     )

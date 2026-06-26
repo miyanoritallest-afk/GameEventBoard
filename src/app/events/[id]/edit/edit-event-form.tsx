@@ -14,10 +14,12 @@ export function EditEventForm({
   eventId,
   games,
   defaultValues,
+  discordName,
 }: {
   eventId: string;
   games: GameOption[];
   defaultValues: EventFormDefaults;
+  discordName: string;
 }) {
   const action = updateEvent.bind(null, eventId);
   return (
@@ -25,6 +27,7 @@ export function EditEventForm({
       games={games}
       action={action}
       defaultValues={defaultValues}
+      discordName={discordName}
       submitLabel="変更を保存する"
       pendingLabel="保存中..."
     />

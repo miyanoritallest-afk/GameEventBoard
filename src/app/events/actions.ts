@@ -33,7 +33,10 @@ import {
   type Role,
 } from "@/lib/services/scored-application";
 import { createDraftEventSchema, publishEventSchema } from "./schema";
-import { scoredApplicationSchema } from "./apply-schema";
+import {
+  scoredApplicationSchema,
+  simpleApplicationSchema,
+} from "./apply-schema";
 
 /**
  * イベント「下書き作成」 Server Action（Controller。薄く保つ）。
@@ -77,6 +80,7 @@ function parseEventFormData(
   const parsed = createDraftEventSchema.safeParse({
     title: formData.get("title"),
     gameId: formData.get("gameId"),
+    organizerDisplayName: formData.get("organizerDisplayName"),
     description: formData.get("description"),
     startsAt: formData.get("startsAt"),
     endsAt: formData.get("endsAt"),
@@ -118,6 +122,10 @@ function parseEventFormData(
     values: {
       title: v.title,
       game_id: v.gameId,
+      // 空文字＝未設定 → null（表示側で discord_name にフォールバック）。
+      organizer_display_name: v.organizerDisplayName
+        ? v.organizerDisplayName
+        : null,
       description: v.description ? v.description : null,
       starts_at: jstLocalToUtcIso(v.startsAt),
       ends_at: jstLocalToUtcIso(v.endsAt),
@@ -147,6 +155,7 @@ function parseEventFormData(
 type EventEditableValues = {
   title: string;
   game_id: string;
+  organizer_display_name: string | null;
   description: string | null;
   starts_at: string | null;
   ends_at: string | null;
@@ -387,11 +396,13 @@ export type RegisterState = {
  * 3. 主催者本人は応募不可（自分のイベントには応募させない）。
  * 4. canRegister(status)：公開中のみ応募可。
  * 5. 重複判定（1ユーザー1応募）。応募済みなら戻り値エラー。
- * 6. insert（**user_id はセッション固定＝なりすまし防止／マスアサインメント対策**。
+ * 6. 登録名を検証（このイベントでの公開表示名。trim 1〜32文字必須）。
+ * 7. insert（**user_id はセッション固定＝なりすまし防止／マスアサインメント対策**。
  *    status は Repository で 'pending' 固定）。UNIQUE は DB 層の最終防衛。
  */
 export async function registerForEvent(
   eventId: string,
+  displayName: string,
 ): Promise<RegisterState> {
   // 1. ログイン確認
   const supabase = await createClient();
@@ -424,8 +435,20 @@ export async function registerForEvent(
     return { error: "このイベントにはすでに応募済みです。" };
   }
 
-  // 6. 応募作成（user_id はセッション固定）。競合時は UNIQUE が最終防衛。
-  const result = await insertRegistration({ eventId, userId: user.id });
+  // 6. 登録名の検証（空欄・長すぎは弾く）。
+  const parsed = simpleApplicationSchema.safeParse({ displayName });
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "登録名を確認してください。",
+    };
+  }
+
+  // 7. 応募作成（user_id はセッション固定）。競合時は UNIQUE が最終防衛。
+  const result = await insertRegistration({
+    eventId,
+    userId: user.id,
+    displayName: parsed.data.displayName,
+  });
   if (!result.ok) {
     return { error: "このイベントにはすでに応募済みです。" };
   }
@@ -491,6 +514,7 @@ export async function registerWithScore(
 
   // 7. 離散項目の検証（希望ロール第1〜第3・peak）。
   const parsed = scoredApplicationSchema.safeParse({
+    displayName: formData.get("displayName"),
     preferredRole1: formData.get("preferredRole1"),
     preferredRole2: formData.get("preferredRole2"),
     preferredRole3: formData.get("preferredRole3"),
@@ -504,7 +528,8 @@ export async function registerWithScore(
     }
     return { error: "入力内容を確認してください。", fieldErrors };
   }
-  const { preferredRole1, preferredRole2, preferredRole3, peak } = parsed.data;
+  const { displayName, preferredRole1, preferredRole2, preferredRole3, peak } =
+    parsed.data;
 
   // 8. ランクグリッドを parse（対象ロール × declared_seasons）。
   // フォームのセル名は rank_<role>_<seasonIndex>。値は score 文字列 or "uncertified"。
@@ -538,6 +563,7 @@ export async function registerWithScore(
   const inserted = await insertRegistration({
     eventId,
     userId: user.id,
+    displayName,
     preferredRole: preferredRole1 as Role,
     preferredRole1: preferredRole1 as Role,
     preferredRole2: preferredRole2 as Role,

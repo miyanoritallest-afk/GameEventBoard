@@ -23,6 +23,7 @@ type Json = Database["public"]["Tables"]["registrations"]["Insert"]["score_break
 export async function insertRegistration(params: {
   eventId: string;
   userId: string;
+  displayName?: string | null;
   preferredRole?: Role | null;
   preferredRole1?: Role | null;
   preferredRole2?: Role | null;
@@ -38,6 +39,7 @@ export async function insertRegistration(params: {
       event_id: params.eventId,
       user_id: params.userId,
       status: "pending",
+      display_name: params.displayName ?? null,
       preferred_role: params.preferredRole ?? null,
       preferred_role_1: params.preferredRole1 ?? null,
       preferred_role_2: params.preferredRole2 ?? null,
@@ -79,7 +81,7 @@ export async function listRegistrationsByEvent(eventId: string) {
   const { data, error } = await supabase
     .from("registrations")
     .select(
-      "id, status, created_at, preferred_role, preferred_role_1, preferred_role_2, preferred_role_3, individual_score, final_score, organizer_override_score, score_breakdown, users(discord_name, discord_avatar_url, battle_tag)",
+      "id, status, created_at, display_name, preferred_role, preferred_role_1, preferred_role_2, preferred_role_3, individual_score, final_score, organizer_override_score, score_breakdown, users(discord_name, discord_avatar_url, battle_tag)",
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });

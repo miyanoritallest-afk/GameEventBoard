@@ -1,6 +1,28 @@
 import { z } from "zod";
 
 /**
+ * 登録名（このイベントでの公開表示名）の検証。スコアあり/なし応募で共有する。
+ * フォームのデフォルトは Discord 名。trim 後 1〜32 文字必須
+ * （空欄送信は弾く＝フォールバックでなくユーザーが見た値を保存する）。
+ */
+export const displayNameSchema = z.preprocess(
+  (v) => (v == null ? "" : typeof v === "string" ? v.trim() : v),
+  z
+    .string()
+    .min(1, "登録名を入力してください")
+    .max(32, "登録名は32文字以内で入力してください"),
+);
+
+/**
+ * スコアなし即時応募の検証（登録名のみ）。
+ */
+export const simpleApplicationSchema = z.object({
+  displayName: displayNameSchema,
+});
+
+export type SimpleApplicationInput = z.infer<typeof simpleApplicationSchema>;
+
+/**
  * スコアあり応募フォームの離散項目の検証（希望ロール第1〜第3・peak）。
  * ランクグリッドは可変長（イベントの declared_seasons / role_swap で形が変わる）ため、
  * ここでは検証せず Action 側でイベント設定に基づき parse する。
@@ -9,6 +31,8 @@ import { z } from "zod";
  */
 export const scoredApplicationSchema = z
   .object({
+    // 登録名（このイベントでの公開表示名）。スコアなし応募と共有のスキーマを使う。
+    displayName: displayNameSchema,
     preferredRole1: z.enum(["tank", "dps", "support"], {
       message: "第1希望ロールを選択してください",
     }),
