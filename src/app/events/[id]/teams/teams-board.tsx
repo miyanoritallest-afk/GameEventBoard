@@ -42,7 +42,10 @@ type RoleKey = (typeof ROLE_ORDER)[number];
 /** ボード用のメンバー表現（page.tsx で DB から整形して渡す）。 */
 export type BoardMember = {
   registrationId: string;
-  discordName: string;
+  /** 公開表示名（登録名 ?? Discord名）。全立場で主表示。 */
+  displayName: string;
+  /** 素のDiscord名（内部識別）。運営のみに渡す（観戦者・応募者には null）。 */
+  discordName: string | null;
   battleTag: string | null;
   preferredRoles: (string | null)[]; // [第1, 第2, 第3]
   finalScore: number | null;
@@ -766,7 +769,7 @@ export function TeamsBoard({
                         )}
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {team.members.map((m) => m.discordName).join("、")}
+                        {team.members.map((m) => m.displayName).join("、")}
                       </p>
                       {showScore && (
                         <p className="mt-0.5 text-xs">
@@ -1228,7 +1231,7 @@ function TeamCard({
       {showScore && selectedReserve && (
         <div className="mt-3 rounded-lg border border-border bg-background p-3">
           <p className="text-xs">
-            <span className="font-semibold">{selectedReserve.discordName}</span>{" "}
+            <span className="font-semibold">{selectedReserve.displayName}</span>{" "}
             を出す場合の交代候補:
           </p>
           {candidates.length === 0 ? (
@@ -1247,7 +1250,7 @@ function TeamCard({
                     className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5"
                   >
                     <span className="text-xs">
-                      {out?.discordName ?? "?"} と交代 → 平均{" "}
+                      {out?.displayName ?? "?"} と交代 → 平均{" "}
                       <span className="font-semibold tabular-nums">
                         {c.newTeamScore === null
                           ? "—"
@@ -1450,13 +1453,21 @@ function MemberCard({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">
-          {member.discordName}
+          {member.displayName}
           {isCaptain && (
             <span
               title="代表（試合結果を入力できます）"
               className="ml-1.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary align-middle"
             >
               ★代表
+            </span>
+          )}
+          {/* 補助: バトルタグ（全立場）＋ Discord名（運営のみ・内部識別）。 */}
+          {(member.battleTag || member.discordName) && (
+            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground align-middle">
+              {[member.battleTag, member.discordName]
+                .filter(Boolean)
+                .join(" ／ ")}
             </span>
           )}
         </span>
@@ -1516,7 +1527,7 @@ function MemberCard({
             if (teamId) onAssign(teamId);
             e.currentTarget.value = "";
           }}
-          aria-label={`${member.discordName} をチームへ送る`}
+          aria-label={`${member.displayName} をチームへ送る`}
           className="mt-1.5 w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
         >
           <option value="">▾ チームへ送る…</option>

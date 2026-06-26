@@ -40,7 +40,10 @@ export type RegistrationRowData = {
   id: string;
   status: string;
   createdAtLabel: string;
-  discordName: string;
+  /** 公開表示名（登録名 ?? Discord名）。全立場で主表示。 */
+  displayName: string;
+  /** 素のDiscord名（内部識別）。運営のみに渡す（観戦者・応募者には null）。 */
+  discordName: string | null;
   battleTag: string | null;
   preferredRole: string | null;
   preferredRoles: (string | null)[]; // [第1, 第2, 第3]
@@ -97,8 +100,10 @@ export function RegistrationRow({
     <li className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="font-medium">{reg.discordName}</p>
+          <p className="font-medium">{reg.displayName}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
+            {/* Discord名は運営のみ（観戦者・応募者には渡らない）。 */}
+            {reg.discordName ? `${reg.discordName} ／ ` : ""}
             {reg.battleTag ? `${reg.battleTag} ／ ` : ""}
             {(() => {
               // 希望ロール: 第1〜第3を「タンク→DPS→サポート」のように表示。
@@ -175,7 +180,14 @@ export function RegistrationRow({
             className="w-full max-w-md rounded-xl border border-border bg-card p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold">{reg.discordName} の応募</h2>
+            <h2 className="text-lg font-bold">
+              {reg.displayName} の応募
+              {reg.discordName ? (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  ({reg.discordName})
+                </span>
+              ) : null}
+            </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {reg.preferredRole
                 ? `${ROLE_LABEL[reg.preferredRole] ?? reg.preferredRole}希望`
