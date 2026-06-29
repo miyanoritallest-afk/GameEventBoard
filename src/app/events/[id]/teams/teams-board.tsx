@@ -1162,7 +1162,7 @@ function TeamCard({
       {/* 出場ゾーン（レギュラー）。平均はここのメンバーで算出。 */}
       <div className="mt-3">
         <p className="text-xs font-medium">
-          出場{" "}
+          regular{" "}
           <span className={overSize ? "text-destructive" : "text-muted-foreground"}>
             {regulars.length}/{teamSize}
             {overSize && " ⚠"}
@@ -1212,7 +1212,7 @@ function TeamCard({
       <Zone
         teamId={team.id}
         position="reserve"
-        title={<span className="text-muted-foreground">リザーブ（控え）</span>}
+        title={<span className="text-muted-foreground">reserve</span>}
         members={reserves}
         readOnly={readOnly}
         membersDraggable={membersDraggable}
