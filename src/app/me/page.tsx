@@ -1,9 +1,11 @@
-// ログイン確認用のページ。ログインしていれば Discord のユーザー情報を表示する。
-// （Battle Tag 登録や users テーブル保存は次の段階で実装。今は認証の動作確認用）
+// マイページ: 自分のプロフィール管理（表示＋バトルタグ編集）。
+// 参加/主催イベント一覧はトップ（ダッシュボード）の役割なのでここには出さない。
 
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { findMyProfile } from "@/lib/repositories/users";
 import { LogoutButton } from "./logout-button";
+import { BattleTagForm } from "./battle-tag-form";
 
 export const dynamic = "force-dynamic";
 
@@ -12,50 +14,57 @@ export default async function MePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // マイページは本人専用。未ログインは /login へ（戻り先を持ち回る）。
+  if (!user) {
+    redirect(`/login?redirect=${encodeURIComponent("/me")}`);
+  }
+
+  const profile = await findMyProfile(user.id);
+  const discordName = profile?.discord_name ?? "(取得できず)";
+  const avatarUrl = profile?.discord_avatar_url ?? null;
+  const battleTag = profile?.battle_tag ?? "";
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-lg px-6 py-16">
-        <h1 className="text-2xl font-bold">ログイン状態の確認</h1>
+      <div className="mx-auto max-w-lg px-6 py-10">
+        <h1 className="text-2xl font-bold">マイページ</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          プロフィールの確認とバトルタグの登録ができます。
+        </p>
 
-        {user ? (
-          <div className="mt-6 rounded-xl border border-primary/50 bg-primary/10 p-6">
-            <p className="text-sm text-primary">✓ ログイン成功</p>
-            <dl className="mt-4 space-y-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">表示名</dt>
-                <dd className="font-medium">
-                  {(user.user_metadata?.full_name as string) ??
-                    (user.user_metadata?.name as string) ??
-                    "(取得できず)"}
-                </dd>
+        {/* プロフィール表示（Discord 由来は編集不可） */}
+        <section className="mt-6 rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center gap-4">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt=""
+                className="size-14 rounded-full border border-border"
+              />
+            ) : (
+              <div className="flex size-14 items-center justify-center rounded-full border border-border bg-muted text-lg font-bold">
+                {discordName.charAt(0).toUpperCase()}
               </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">プロバイダー</dt>
-                <dd className="font-medium">{user.app_metadata?.provider}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">ユーザーID</dt>
-                <dd className="font-mono text-xs">{user.id}</dd>
-              </div>
-            </dl>
-            <div className="mt-6">
-              <LogoutButton />
+            )}
+            <div>
+              <p className="text-lg font-semibold">{discordName}</p>
+              <p className="text-xs text-muted-foreground">
+                Discord アカウント（変更不可）
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="mt-6 rounded-xl border border-border bg-card p-6">
-            <p className="text-sm text-muted-foreground">
-              ログインしていません。
-            </p>
-            <Link
-              href="/login"
-              className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
-            >
-              ログインページへ
-            </Link>
-          </div>
-        )}
+        </section>
+
+        {/* バトルタグ編集 */}
+        <section className="mt-4 rounded-xl border border-border bg-card p-6">
+          <BattleTagForm defaultBattleTag={battleTag} />
+        </section>
+
+        {/* アカウント操作 */}
+        <div className="mt-6">
+          <LogoutButton />
+        </div>
       </div>
     </div>
   );

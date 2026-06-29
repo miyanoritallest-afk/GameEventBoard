@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById, findEventBySlug } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
-import { findDiscordName } from "@/lib/repositories/users";
+import { findDiscordName, findBattleTag } from "@/lib/repositories/users";
 import { canViewEvent } from "@/lib/services/event-status";
 import { isValidEventSlug } from "@/lib/services/event-slug";
 import { PublishButton } from "./publish-button";
@@ -81,12 +81,13 @@ export default async function EventDetailPage({
     ? await findRegistration(event.id, viewerId)
     : null;
 
-  // スコアなし即時応募の登録名欄デフォルト（認証時の Discord 名）。
+  // スコアなし即時応募フォームの既定値（登録名=Discord名・バトルタグ=保存済み値）。
   // 未応募・スコアなしイベントのときだけ意味を持つ。
-  const discordName =
-    canApply && !myRegistration && !event.require_score
-      ? ((await findDiscordName(viewerId)) ?? "")
-      : "";
+  const showInlineApply =
+    canApply && !myRegistration && !event.require_score && viewerId !== null;
+  const [discordName, battleTag] = showInlineApply
+    ? await Promise.all([findDiscordName(viewerId), findBattleTag(viewerId)])
+    : [null, null];
 
   // 本戦ページ（ブロック分け/対戦表・順位表/トーナメント）への導線を出す条件。
   // フェーズB: 公開済みなら観戦者（非ログイン・非参加者）にも導線を出す（閲覧の全面公開）。
@@ -181,7 +182,8 @@ export default async function EventDetailPage({
           ) : (
             <ApplyButton
               eventId={event.id}
-              defaultDisplayName={discordName}
+              defaultDisplayName={discordName ?? ""}
+              defaultBattleTag={battleTag ?? ""}
             />
           ))}
 

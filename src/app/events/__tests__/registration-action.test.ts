@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   insertRegistration: vi.fn(),
   findRegistrationWithEvent: vi.fn(),
   decideRegistrationRepo: vi.fn(),
+  updateBattleTag: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -40,6 +41,10 @@ vi.mock("@/lib/repositories/registrations", () => ({
   insertRegistration: mocks.insertRegistration,
   findRegistrationWithEvent: mocks.findRegistrationWithEvent,
   decideRegistration: mocks.decideRegistrationRepo,
+}));
+
+vi.mock("@/lib/repositories/users", () => ({
+  updateBattleTag: mocks.updateBattleTag,
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -80,7 +85,7 @@ beforeEach(() => {
 describe("registerForEvent — 認証・認可・状態", () => {
   it("未ログインなら DB に触れずエラー", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } });
-    const result = await registerForEvent(EVENT_ID, "のり");
+    const result = await registerForEvent(EVENT_ID, "のり", "Player#1");
     expect(result.error).toBe("ログインが必要です。");
     expect(mocks.findEventById).not.toHaveBeenCalled();
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
@@ -89,7 +94,7 @@ describe("registerForEvent — 認証・認可・状態", () => {
   it("主催者本人は自分のイベントに応募できない", async () => {
     loginAs(ORGANIZER);
     mocks.findEventById.mockResolvedValue(publishedEvent());
-    const result = await registerForEvent(EVENT_ID, "のり");
+    const result = await registerForEvent(EVENT_ID, "のり", "Player#1");
     expect(result.error).toContain("主催者は");
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
@@ -97,7 +102,7 @@ describe("registerForEvent — 認証・認可・状態", () => {
   it("下書きイベントには応募できない", async () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(publishedEvent({ status: "draft" }));
-    const result = await registerForEvent(EVENT_ID, "のり");
+    const result = await registerForEvent(EVENT_ID, "のり", "Player#1");
     expect(result.error).toBeDefined();
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
@@ -105,16 +110,25 @@ describe("registerForEvent — 認証・認可・状態", () => {
   it("存在しないイベントはエラー", async () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(null);
-    const result = await registerForEvent(EVENT_ID, "のり");
+    const result = await registerForEvent(EVENT_ID, "のり", "Player#1");
     expect(result.error).toContain("見つかりません");
   });
 
   it("登録名が空なら弾き、insert しない（必須）", async () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(publishedEvent());
-    const result = await registerForEvent(EVENT_ID, "   "); // trim 後に空
+    const result = await registerForEvent(EVENT_ID, "   ", "Player#1"); // 登録名が trim 後に空
     expect(result.error).toContain("登録名");
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
+  });
+
+  it("バトルタグが空なら弾き、insert しない（応募は必須）", async () => {
+    loginAs(APPLICANT);
+    mocks.findEventById.mockResolvedValue(publishedEvent());
+    const result = await registerForEvent(EVENT_ID, "のり", "   "); // バトルタグが trim 後に空
+    expect(result.error).toContain("バトルタグ");
+    expect(mocks.insertRegistration).not.toHaveBeenCalled();
+    expect(mocks.updateBattleTag).not.toHaveBeenCalled();
   });
 });
 
@@ -123,7 +137,7 @@ describe("registerForEvent — 重複・なりすまし・成功", () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(publishedEvent());
     mocks.findRegistration.mockResolvedValue({ id: REG_ID, status: "pending" });
-    const result = await registerForEvent(EVENT_ID, "のり");
+    const result = await registerForEvent(EVENT_ID, "のり", "Player#1");
     expect(result.error).toContain("応募済み");
     expect(mocks.insertRegistration).not.toHaveBeenCalled();
   });
@@ -131,12 +145,17 @@ describe("registerForEvent — 重複・なりすまし・成功", () => {
   it("insert に渡る user_id はセッションの user.id（なりすまし防止）・登録名も保存", async () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(publishedEvent());
-    const result = await registerForEvent(EVENT_ID, "  のり  ");
+    const result = await registerForEvent(EVENT_ID, "  のり  ", "  Player#1  ");
     expect(result.error).toBeUndefined();
     expect(mocks.insertRegistration).toHaveBeenCalledWith({
       eventId: EVENT_ID,
       userId: APPLICANT,
       displayName: "のり", // trim されてスナップショット保存
+    });
+    // バトルタグは trim されて users に保存（user_id はセッション固定）。
+    expect(mocks.updateBattleTag).toHaveBeenCalledWith({
+      userId: APPLICANT,
+      battleTag: "Player#1",
     });
     expect(mocks.revalidatePath).toHaveBeenCalled();
   });
@@ -145,7 +164,7 @@ describe("registerForEvent — 重複・なりすまし・成功", () => {
     loginAs(APPLICANT);
     mocks.findEventById.mockResolvedValue(publishedEvent());
     mocks.insertRegistration.mockResolvedValue({ ok: false, duplicate: true });
-    const result = await registerForEvent(EVENT_ID, "のり");
+    const result = await registerForEvent(EVENT_ID, "のり", "Player#1");
     expect(result.error).toContain("応募済み");
   });
 });

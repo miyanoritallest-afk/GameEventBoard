@@ -11,18 +11,21 @@ import { registerForEvent } from "../actions";
 export function ApplyButton({
   eventId,
   defaultDisplayName,
+  defaultBattleTag,
 }: {
   eventId: string;
   defaultDisplayName: string;
+  defaultBattleTag: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(defaultDisplayName);
+  const [battleTag, setBattleTag] = useState(defaultBattleTag);
 
   function onApply() {
     setError(null);
     startTransition(async () => {
-      const result = await registerForEvent(eventId, displayName);
+      const result = await registerForEvent(eventId, displayName, battleTag);
       if (result.error) setError(result.error);
     });
   }
@@ -43,6 +46,19 @@ export function ApplyButton({
         value={displayName}
         onChange={(e) => setDisplayName(e.target.value)}
         maxLength={32}
+        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+      />
+
+      <label className="mt-4 block text-sm font-medium">バトルタグ</label>
+      <p className="mt-0.5 mb-1 text-xs text-muted-foreground">
+        ゲーム内で対戦相手と合流するために使います。マイページに保存され、次回以降は自動で入力されます。
+      </p>
+      <input
+        type="text"
+        value={battleTag}
+        onChange={(e) => setBattleTag(e.target.value)}
+        maxLength={32}
+        placeholder="例: Player#12345"
         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
       />
 

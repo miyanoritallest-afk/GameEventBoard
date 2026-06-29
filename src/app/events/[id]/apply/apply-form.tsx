@@ -84,12 +84,14 @@ function RoleRow({
 export function ApplyForm({
   eventId,
   defaultDisplayName,
+  defaultBattleTag,
   roleSwapAllowed,
   declaredSeasons,
   useBonus,
 }: {
   eventId: string;
   defaultDisplayName: string;
+  defaultBattleTag: string;
   roleSwapAllowed: boolean;
   declaredSeasons: number;
   useBonus: boolean;
@@ -137,6 +139,27 @@ export function ApplyForm({
         />
         {fe.displayName && (
           <p className="mt-1 text-xs text-destructive">{fe.displayName}</p>
+        )}
+      </fieldset>
+
+      {/* バトルタグ（応募は必須。既定は登録済みの値） */}
+      <fieldset className="rounded-xl border border-border bg-card p-4">
+        <legend className="px-1 text-sm font-semibold">
+          バトルタグ<span className="ml-1 text-destructive">*</span>
+        </legend>
+        <p className="mt-1 mb-3 text-xs text-muted-foreground">
+          ゲーム内で対戦相手と合流するために使います。マイページに保存され、次回以降は自動で入力されます。
+        </p>
+        <input
+          type="text"
+          name="battleTag"
+          defaultValue={defaultBattleTag}
+          maxLength={32}
+          placeholder="例: Player#12345"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        />
+        {fe.battleTag && (
+          <p className="mt-1 text-xs text-destructive">{fe.battleTag}</p>
         )}
       </fieldset>
 

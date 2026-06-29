@@ -580,6 +580,7 @@ on 出来事発生(type, source_type, source_id, payload):
 ## 6. RLS（Row Level Security）方針メモ
 Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
 - users: 本人のみ更新可、参照は公開情報のみ。
+  - 実装状況: SELECT は「ログインユーザーは参照可」を 0009 で設定（応募者一覧の表示用）。UPDATE は「本人のみ（id = auth.uid()）」を 0025 で設定（マイページのバトルタグ登録/編集）。列レベルの制限（battle_tag のみ）はアプリ層（Repository updateBattleTag）で担保＝マスアサインメント対策の二層目。
 - event_series / series_members: series_members(active) のみ更新可。owner のみ運営追加削除・シリーズ削除。参照は公開。
 - events: 該当シリーズの運営（series_members active）または organizer のみ更新可、published は全員参照可。
   - 実装状況: SELECT は「公開済み（status≠draft）は全員 / 下書きは organizer 本人のみ」を 0005 で設定。INSERT/UPDATE/DELETE は organizer 本人を 0004 で設定（series 運営による更新は未実装・後続）。

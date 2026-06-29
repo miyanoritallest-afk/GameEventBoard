@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   findEventById: vi.fn(),
   findRegistration: vi.fn(),
   insertRegistration: vi.fn(),
+  updateBattleTag: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
 }));
@@ -35,6 +36,10 @@ vi.mock("@/lib/repositories/registrations", () => ({
   insertRegistration: mocks.insertRegistration,
   findRegistrationWithEvent: vi.fn(),
   decideRegistration: vi.fn(),
+}));
+
+vi.mock("@/lib/repositories/users", () => ({
+  updateBattleTag: mocks.updateBattleTag,
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -81,8 +86,9 @@ function withRoles(
 ) {
   const order = ["tank", "dps", "support"].filter((r) => r !== first);
   return form({
-    // 登録名は必須項目。既定で有効値を入れておく（個別テストは extra で上書き）。
+    // 登録名・バトルタグは必須項目。既定で有効値を入れておく（個別テストは extra で上書き）。
     displayName: "のり",
+    battleTag: "Player#1",
     preferredRole1: first,
     preferredRole2: order[0],
     preferredRole3: order[1],
