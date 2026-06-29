@@ -39,7 +39,7 @@ function LoginInner() {
     <div className="dark flex min-h-screen items-center justify-center bg-background text-foreground">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 text-center">
         <p className="text-sm font-medium tracking-widest text-primary/80">
-          GAMEEVENTBOARD
+          MATCHPOINT
         </p>
         <h1 className="mt-2 text-2xl font-bold">ログイン</h1>
         <p className="mt-2 text-sm text-muted-foreground">
