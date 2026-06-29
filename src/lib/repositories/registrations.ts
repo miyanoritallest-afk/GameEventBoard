@@ -73,6 +73,34 @@ export async function findRegistration(eventId: string, userId: string) {
 }
 
 /**
+ * 自分が参加（応募）しているイベント一覧（トップのダッシュボード用）。
+ * registrations から本人の応募を引き、イベント本体を埋め込む。
+ * - rejected / withdrawn は除外（pending=承認待ち・approved=参加確定のみ）。
+ * - 並びは開催日時の降順（新しい開催が上・古いイベントが下）。starts_at が null は末尾。
+ * - events は registrations.event_id への多対一参照なので埋め込みは単一オブジェクト
+ *   （1:N の配列ではない。[[supabase-embed-cardinality]] の罠に注意）。
+ * RLS（0011）で本人の応募行のみ返る。
+ */
+export async function listMyParticipatingEvents(userId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("registrations")
+    .select(
+      "id, status, events(id, slug, title, status, starts_at, recruit_deadline, games(name))",
+    )
+    .eq("user_id", userId)
+    .in("status", ["pending", "approved"])
+    .order("starts_at", {
+      ascending: false,
+      nullsFirst: false,
+      referencedTable: "events",
+    });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
  * イベントの応募者一覧（主催者用）。表示に必要な応募者情報を JOIN する。
  * 新しい順。RLS（0006）で主催者本人のイベントのみ返る。
  */
