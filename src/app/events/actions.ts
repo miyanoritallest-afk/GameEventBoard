@@ -37,6 +37,7 @@ import {
   scoredApplicationSchema,
   simpleApplicationSchema,
 } from "./apply-schema";
+import { updateBattleTag } from "@/lib/repositories/users";
 
 /**
  * イベント「下書き作成」 Server Action（Controller。薄く保つ）。
@@ -396,13 +397,15 @@ export type RegisterState = {
  * 3. 主催者本人は応募不可（自分のイベントには応募させない）。
  * 4. canRegister(status)：公開中のみ応募可。
  * 5. 重複判定（1ユーザー1応募）。応募済みなら戻り値エラー。
- * 6. 登録名を検証（このイベントでの公開表示名。trim 1〜32文字必須）。
+ * 6. 登録名＋バトルタグを検証（登録名=公開表示名・バトルタグ=応募必須）。
  * 7. insert（**user_id はセッション固定＝なりすまし防止／マスアサインメント対策**。
  *    status は Repository で 'pending' 固定）。UNIQUE は DB 層の最終防衛。
+ * 8. バトルタグで users.battle_tag を更新（人単位・次回応募で自動補完される）。
  */
 export async function registerForEvent(
   eventId: string,
   displayName: string,
+  battleTag: string,
 ): Promise<RegisterState> {
   // 1. ログイン確認
   const supabase = await createClient();
@@ -435,11 +438,11 @@ export async function registerForEvent(
     return { error: "このイベントにはすでに応募済みです。" };
   }
 
-  // 6. 登録名の検証（空欄・長すぎは弾く）。
-  const parsed = simpleApplicationSchema.safeParse({ displayName });
+  // 6. 登録名＋バトルタグの検証（空欄・長すぎは弾く。どちらも必須）。
+  const parsed = simpleApplicationSchema.safeParse({ displayName, battleTag });
   if (!parsed.success) {
     return {
-      error: parsed.error.issues[0]?.message ?? "登録名を確認してください。",
+      error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。",
     };
   }
 
@@ -452,6 +455,9 @@ export async function registerForEvent(
   if (!result.ok) {
     return { error: "このイベントにはすでに応募済みです。" };
   }
+
+  // 8. バトルタグを users に保存（人単位・次回応募で自動補完）。battle_tag のみ更新。
+  await updateBattleTag({ userId: user.id, battleTag: parsed.data.battleTag });
 
   revalidatePath(`/events/${event.slug ?? event.id}`);
   return {};
@@ -515,6 +521,7 @@ export async function registerWithScore(
   // 7. 離散項目の検証（希望ロール第1〜第3・peak）。
   const parsed = scoredApplicationSchema.safeParse({
     displayName: formData.get("displayName"),
+    battleTag: formData.get("battleTag"),
     preferredRole1: formData.get("preferredRole1"),
     preferredRole2: formData.get("preferredRole2"),
     preferredRole3: formData.get("preferredRole3"),
@@ -528,8 +535,14 @@ export async function registerWithScore(
     }
     return { error: "入力内容を確認してください。", fieldErrors };
   }
-  const { displayName, preferredRole1, preferredRole2, preferredRole3, peak } =
-    parsed.data;
+  const {
+    displayName,
+    battleTag,
+    preferredRole1,
+    preferredRole2,
+    preferredRole3,
+    peak,
+  } = parsed.data;
 
   // 8. ランクグリッドを parse（対象ロール × declared_seasons）。
   // フォームのセル名は rank_<role>_<seasonIndex>。値は score 文字列 or "uncertified"。
@@ -575,6 +588,9 @@ export async function registerWithScore(
   if (!inserted.ok) {
     return { error: "このイベントにはすでに応募済みです。" };
   }
+
+  // バトルタグを users に保存（人単位・次回応募で自動補完）。battle_tag のみ更新。
+  await updateBattleTag({ userId: user.id, battleTag });
 
   revalidatePath(`/events/${event.slug ?? event.id}`);
   redirect(`/events/${event.slug ?? event.id}`);

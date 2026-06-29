@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById, findEventBySlug } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
-import { findDiscordName } from "@/lib/repositories/users";
+import { findDiscordName, findBattleTag } from "@/lib/repositories/users";
 import { canViewEvent } from "@/lib/services/event-status";
 import { isValidEventSlug } from "@/lib/services/event-slug";
 import { ApplyForm } from "./apply-form";
@@ -43,8 +43,12 @@ export default async function ApplyPage({
   const existing = await findRegistration(event.id, user.id);
   if (existing) redirect(detailHref);
 
-  // 登録名欄のデフォルト値＝認証時の Discord 名（導線: 既定で入っている）。
-  const discordName = (await findDiscordName(user.id)) ?? "";
+  // 登録名欄の既定＝Discord名、バトルタグ欄の既定＝保存済み battle_tag
+  // （登録済みなら自動で埋まる）。
+  const [discordName, battleTag] = await Promise.all([
+    findDiscordName(user.id),
+    findBattleTag(user.id),
+  ]);
 
   const useBonus =
     event.bonus_master > 0 || event.bonus_gm > 0 || event.bonus_champion > 0;
@@ -65,7 +69,8 @@ export default async function ApplyPage({
 
         <ApplyForm
           eventId={event.id}
-          defaultDisplayName={discordName}
+          defaultDisplayName={discordName ?? ""}
+          defaultBattleTag={battleTag ?? ""}
           roleSwapAllowed={event.role_swap_allowed}
           declaredSeasons={event.declared_seasons}
           useBonus={useBonus}

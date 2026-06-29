@@ -14,10 +14,24 @@ export const displayNameSchema = z.preprocess(
 );
 
 /**
- * スコアなし即時応募の検証（登録名のみ）。
+ * 応募時のバトルタグ検証。**応募では必須**（対戦相手とゲーム内で会うため）。
+ * trim 後 1〜32 文字。応募時に入力された値は users.battle_tag を上書き更新する
+ * （人単位・イベントごとに変えるものではない）。
+ */
+export const applyBattleTagSchema = z.preprocess(
+  (v) => (v == null ? "" : typeof v === "string" ? v.trim() : v),
+  z
+    .string()
+    .min(1, "バトルタグを入力してください")
+    .max(32, "バトルタグは32文字以内で入力してください"),
+);
+
+/**
+ * スコアなし即時応募の検証（登録名＋バトルタグ）。
  */
 export const simpleApplicationSchema = z.object({
   displayName: displayNameSchema,
+  battleTag: applyBattleTagSchema,
 });
 
 export type SimpleApplicationInput = z.infer<typeof simpleApplicationSchema>;
@@ -33,6 +47,8 @@ export const scoredApplicationSchema = z
   .object({
     // 登録名（このイベントでの公開表示名）。スコアなし応募と共有のスキーマを使う。
     displayName: displayNameSchema,
+    // バトルタグ（応募は必須）。users.battle_tag を上書き更新する。
+    battleTag: applyBattleTagSchema,
     preferredRole1: z.enum(["tank", "dps", "support"], {
       message: "第1希望ロールを選択してください",
     }),
