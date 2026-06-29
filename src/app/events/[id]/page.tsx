@@ -199,6 +199,12 @@ export default async function EventDetailPage({
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
+                href={`/events/${event.id}/watch`}
+                className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                観戦ビューでまとめて見る →
+              </Link>
+              <Link
                 href={`/events/${event.id}/groups`}
                 className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
               >
