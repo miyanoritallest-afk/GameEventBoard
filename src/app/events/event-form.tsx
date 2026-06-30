@@ -12,6 +12,11 @@ import {
 } from "@dnd-kit/core";
 import { DateTimePicker } from "@/components/datetime-picker";
 import { scoreToRankAbbrev } from "@/lib/services/overwatch-ranks";
+import {
+  hasGroupStage,
+  hasTournamentStage,
+  type EventFormat,
+} from "@/lib/services/event-format";
 
 type GameOption = { id: string; name: string };
 
@@ -123,6 +128,12 @@ export function EventForm({
   );
   // 親トグル: 順位機能を使うか（OFF なら勝点・タイブレークを隠す）。
   const [rankingEnabled, setRankingEnabled] = useState(d.rankingEnabled ?? false);
+  // イベント形式。形式に応じて本戦設定（総当たりBO・3位決定戦）を出し分ける（PR-2）。
+  const [format, setFormat] = useState<EventFormat>(
+    d.format ?? "round_robin_then_tournament",
+  );
+  const showGroupConfig = hasGroupStage(format); // 総当たりBO は予選を持つ形式のみ
+  const showTournamentConfig = hasTournamentStage(format); // 3位決定戦は決勝Tを持つ形式のみ
 
   return (
     <form action={formAction} className="mt-6 space-y-6">
@@ -372,7 +383,8 @@ export function EventForm({
         <Field label="イベント形式" error={fe.format}>
           <select
             name="format"
-            defaultValue={d.format ?? "round_robin_then_tournament"}
+            value={format}
+            onChange={(e) => setFormat(e.target.value as EventFormat)}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           >
             <option value="round_robin_then_tournament">
@@ -386,36 +398,45 @@ export function EventForm({
           </p>
         </Field>
 
-        <div className="mt-4">
-        <Field label="BO（1試合のマップ数）" error={fe.groupBestOf}>
-          <input
-            name="groupBestOf"
-            type="number"
-            min={1}
-            max={15}
-            defaultValue={d.groupBestOf ?? 3}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。
-            対戦表を生成すると全試合に反映されます。偶数は引分けあり。
-          </p>
-        </Field>
-        </div>
+        {/* 総当たりBO は予選（総当たり）を持つ形式でのみ。トーナメントのみでは出さない。 */}
+        {showGroupConfig && (
+          <div className="mt-4">
+            <Field label="BO（1試合のマップ数）" error={fe.groupBestOf}>
+              <input
+                name="groupBestOf"
+                type="number"
+                min={1}
+                max={15}
+                defaultValue={d.groupBestOf ?? 3}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。
+                対戦表を生成すると全試合に反映されます。偶数は引分けあり。
+              </p>
+            </Field>
+          </div>
+        )}
 
-        {/* 3位決定戦の有無（本戦-5c）。決勝トーナメントで準決勝の敗者2チームが戦う。 */}
-        <label className="mt-4 flex items-center gap-2 text-sm">
-          <input
-            name="tournamentThirdPlace"
-            type="checkbox"
-            defaultChecked={d.tournamentThirdPlace ?? false}
-            className="size-4"
-          />
-          決勝トーナメントで3位決定戦を行う
-        </label>
-        <p className="mt-1 pl-6 text-xs text-muted-foreground">
-          準決勝で敗れた2チームが3位を懸けて対戦します（4チーム以上のトーナメントで有効）。
-        </p>
+        {/* 3位決定戦の有無（本戦-5c）。決勝Tを持つ形式でのみ出す（総当たりのみでは不要）。 */}
+        {showTournamentConfig && (
+          <>
+            <label className="mt-4 flex items-center gap-2 text-sm">
+              <input
+                name="tournamentThirdPlace"
+                type="checkbox"
+                defaultChecked={d.tournamentThirdPlace ?? false}
+                className="size-4"
+              />
+              {hasGroupStage(format)
+                ? "決勝トーナメントで3位決定戦を行う"
+                : "トーナメントで3位決定戦を行う"}
+            </label>
+            <p className="mt-1 pl-6 text-xs text-muted-foreground">
+              準決勝で敗れた2チームが3位を懸けて対戦します（4チーム以上のトーナメントで有効）。
+            </p>
+          </>
+        )}
       </fieldset>
 
       {/* 順位設定（本戦-3b） */}

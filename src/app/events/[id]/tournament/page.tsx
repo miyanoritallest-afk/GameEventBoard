@@ -14,6 +14,11 @@ import {
 } from "@/lib/services/bracket";
 import type { TiebreakerKey } from "@/lib/services/standings";
 import { canViewEvent } from "@/lib/services/event-status";
+import {
+  hasGroupStage,
+  hasTournamentStage,
+  tournamentStageLabel,
+} from "@/lib/services/event-format";
 import { utcIsoToJstLocal } from "@/lib/datetime-local";
 import {
   TournamentBoard,
@@ -50,6 +55,13 @@ export default async function EventTournamentPage({
   if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
   }
+  // 形式による出し分け（PR-2）。決勝Tを持たない形式（総当たりのみ）では
+  // 決勝トーナメントページ自体が存在しないものとして 404。
+  if (!hasTournamentStage(event.format)) notFound();
+  // 予選を持つ形式のときだけ「対戦表・順位表へ」の導線を出す。
+  const showMatchesLink = hasGroupStage(event.format);
+  // トーナメントの呼称（単独なら「トーナメント」・予選ありなら「決勝トーナメント」）。
+  const tournamentLabel = tournamentStageLabel(event.format);
   const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
   const myRegistration =
     isOrganizer || viewerId === null
@@ -180,15 +192,17 @@ export default async function EventTournamentPage({
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">決勝トーナメント</h1>
+          <h1 className="text-2xl font-bold">{tournamentLabel}</h1>
           <div className="flex items-center gap-4">
             {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
-            <Link
-              href={`/events/${event.id}/matches`}
-              className="text-sm text-primary hover:underline"
-            >
-              ← 対戦表・順位表へ
-            </Link>
+            {showMatchesLink && (
+              <Link
+                href={`/events/${event.id}/matches`}
+                className="text-sm text-primary hover:underline"
+              >
+                ← 対戦表・順位表へ
+              </Link>
+            )}
             <Link
               href={`/events/${event.id}/watch`}
               className="text-sm text-muted-foreground hover:underline"
