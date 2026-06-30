@@ -19,14 +19,17 @@ import {
 } from "@/lib/repositories/match-results";
 import {
   computeBlockSeeds,
+  computeTournamentOnlySeeds,
   fetchTournamentForRecompute,
 } from "@/lib/repositories/tournament";
 import {
   extractSeededTeams,
+  seedTournamentOnly,
   generateBracket,
   recomputeBracket,
   toOddBestOf,
 } from "@/lib/services/bracket";
+import { hasGroupStage } from "@/lib/services/event-format";
 import {
   decideWinner,
   validateBoScore,
@@ -101,29 +104,44 @@ export async function generateTournament(
     return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
   }
 
-  // 順位設定（events 由来）。順位機能 OFF だとブロック内順位が出ず抽出できない。
-  if (!event.ranking_enabled) {
-    return {
-      error:
-        "決勝トーナメントには順位機能が必要です。イベント編集で順位設定を有効にしてください。",
+  // シード順 team_id 配列の作り方を形式で分岐する（PR-3）。
+  // - 予選を持つ形式（round_robin_then_tournament）: 予選順位から各ブロック上位N を抽出。
+  //   順位機能 OFF だとブロック内順位が出ず抽出できない。
+  // - トーナメントのみ形式: 予選が無いので approved チーム全員を母集団とし、
+  //   スコアあり=teamScore降順 / スコアなし=作成順 でシードする（順位機能は不要）。
+  let seededTeamIds: string[];
+  if (hasGroupStage(event.format)) {
+    if (!event.ranking_enabled) {
+      return {
+        error:
+          "決勝トーナメントには順位機能が必要です。イベント編集で順位設定を有効にしてください。",
+      };
+    }
+    const config = {
+      pointsWin: event.points_win,
+      pointsDraw: event.points_draw,
+      pointsLoss: event.points_loss,
+      tiebreakers: (event.tiebreakers ?? []) as TiebreakerKey[],
     };
-  }
+    const { seeds } = await computeBlockSeeds({ eventId, config });
+    seededTeamIds = extractSeededTeams(seeds, parsed.data.advanceCount);
 
-  const config = {
-    pointsWin: event.points_win,
-    pointsDraw: event.points_draw,
-    pointsLoss: event.points_loss,
-    tiebreakers: (event.tiebreakers ?? []) as TiebreakerKey[],
-  };
+    if (seededTeamIds.length < 2) {
+      return {
+        error:
+          "進出チームが2チーム未満です。進出数を増やすか、予選の結果を入力してから生成してください。",
+      };
+    }
+  } else {
+    const { seeds } = await computeTournamentOnlySeeds(eventId);
+    seededTeamIds = seedTournamentOnly(seeds);
 
-  const { seeds } = await computeBlockSeeds({ eventId, config });
-  const seededTeamIds = extractSeededTeams(seeds, parsed.data.advanceCount);
-
-  if (seededTeamIds.length < 2) {
-    return {
-      error:
-        "進出チームが2チーム未満です。進出数を増やすか、予選の結果を入力してから生成してください。",
-    };
+    if (seededTeamIds.length < 2) {
+      return {
+        error:
+          "トーナメントに必要なチームが2チーム未満です。参加チームを承認してから生成してください。",
+      };
+    }
   }
 
   const bracket = generateBracket(seededTeamIds, {

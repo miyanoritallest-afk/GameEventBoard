@@ -4,10 +4,12 @@ import {
   seedOrder,
   generateBracket,
   extractSeededTeams,
+  seedTournamentOnly,
   recomputeBracket,
   toOddBestOf,
   tournamentPodium,
   type SeedTeam,
+  type TournamentSeedTeam,
   type BracketMatch,
   type StoredMatch,
   type StoredResult,
@@ -199,6 +201,46 @@ describe("extractSeededTeams — 進出抽出とシード順", () => {
   it("進出数を満たすチームがいなければ空", () => {
     const teams = [team("A3", "A", 3, 1)];
     expect(extractSeededTeams(teams, 2)).toEqual([]);
+  });
+});
+
+describe("seedTournamentOnly — トーナメントのみ形式のシード順", () => {
+  const t = (
+    teamId: string,
+    score: number | null,
+    order: number,
+  ): TournamentSeedTeam => ({ teamId, score, order });
+
+  it("スコアあり: score 降順（強い順）", () => {
+    const teams = [t("A", 20, 0), t("B", 30, 1), t("C", 25, 2)];
+    expect(seedTournamentOnly(teams)).toEqual(["B", "C", "A"]);
+  });
+
+  it("スコアなし（全て null）: 作成順（order 昇順）", () => {
+    const teams = [t("C", null, 2), t("A", null, 0), t("B", null, 1)];
+    expect(seedTournamentOnly(teams)).toEqual(["A", "B", "C"]);
+  });
+
+  it("同スコアは作成順で安定化", () => {
+    const teams = [t("B", 25, 1), t("A", 25, 0), t("C", 25, 2)];
+    expect(seedTournamentOnly(teams)).toEqual(["A", "B", "C"]);
+  });
+
+  it("スコアあり・なし混在: スコアありを上位、なしは作成順で後ろ", () => {
+    const teams = [t("X", null, 0), t("Y", 30, 3), t("Z", null, 1)];
+    // Y(スコアあり)が先頭、残り X,Z はスコアなしなので作成順 X(0) < Z(1)。
+    expect(seedTournamentOnly(teams)).toEqual(["Y", "X", "Z"]);
+  });
+
+  it("空配列は空", () => {
+    expect(seedTournamentOnly([])).toEqual([]);
+  });
+
+  it("元配列を破壊しない（純粋）", () => {
+    const teams = [t("A", 10, 0), t("B", 20, 1)];
+    const snapshot = teams.map((x) => x.teamId);
+    seedTournamentOnly(teams);
+    expect(teams.map((x) => x.teamId)).toEqual(snapshot);
   });
 });
 

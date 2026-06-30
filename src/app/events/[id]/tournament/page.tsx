@@ -6,9 +6,13 @@ import { findRegistration } from "@/lib/repositories/registrations";
 import { listTournamentMatches } from "@/lib/repositories/matches";
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { listCaptainTeamIds } from "@/lib/repositories/teams";
-import { computeBlockSeeds } from "@/lib/repositories/tournament";
+import {
+  computeBlockSeeds,
+  computeTournamentOnlySeeds,
+} from "@/lib/repositories/tournament";
 import {
   extractSeededTeams,
+  seedTournamentOnly,
   tournamentPodium,
   type SeedTeam,
 } from "@/lib/services/bracket";
@@ -77,21 +81,33 @@ export default async function EventTournamentPage({
 
   const usePotg = config.tiebreakers.includes("potg");
 
-  const [tournamentRaw, resultsRaw, captainTeamIds, seedData] = await Promise.all([
-    listTournamentMatches(event.id),
-    listMatchResultsByEvent(event.id),
-    // 結果入力の出し分け用: 閲覧者が代表のチーム id（主催者は空でよい）。
-    myRegistration
-      ? listCaptainTeamIds({ eventId: event.id, registrationId: myRegistration.id })
-      : Promise.resolve<string[]>([]),
-    event.ranking_enabled
-      ? computeBlockSeeds({ eventId: event.id, config })
-      : Promise.resolve<{ seeds: SeedTeam[]; teamNameById: Map<string, string> }>(
-          { seeds: [], teamNameById: new Map() },
-        ),
-  ]);
+  // シードのプレビューと teamNameById は形式で取得経路が変わる（PR-3）。
+  // - 予選を持つ形式: 予選順位（computeBlockSeeds）→ extractSeededTeams。順位機能 OFF は空。
+  // - トーナメントのみ形式: approved チーム全員（computeTournamentOnlySeeds）→ seedTournamentOnly。
+  const groupStage = hasGroupStage(event.format);
+  const [tournamentRaw, resultsRaw, captainTeamIds, blockSeedData, tournamentOnlyData] =
+    await Promise.all([
+      listTournamentMatches(event.id),
+      listMatchResultsByEvent(event.id),
+      // 結果入力の出し分け用: 閲覧者が代表のチーム id（主催者は空でよい）。
+      myRegistration
+        ? listCaptainTeamIds({ eventId: event.id, registrationId: myRegistration.id })
+        : Promise.resolve<string[]>([]),
+      groupStage && event.ranking_enabled
+        ? computeBlockSeeds({ eventId: event.id, config })
+        : Promise.resolve<{ seeds: SeedTeam[]; teamNameById: Map<string, string> }>(
+            { seeds: [], teamNameById: new Map() },
+          ),
+      groupStage
+        ? Promise.resolve({ seeds: [], teamNameById: new Map<string, string>() })
+        : computeTournamentOnlySeeds(event.id),
+    ]);
 
-  const { seeds, teamNameById } = seedData;
+  // teamNameById は両経路を合算（ブラケット表示・表彰台で id→name 解決に使う）。
+  const teamNameById = new Map<string, string>([
+    ...blockSeedData.teamNameById,
+    ...tournamentOnlyData.teamNameById,
+  ]);
   const captainTeamIdSet = new Set(captainTeamIds);
 
   // 試合 id → 結果（スコア・勝者・POTG・リプレイ）。
@@ -154,9 +170,14 @@ export default async function EventTournamentPage({
     },
   );
 
-  // 現在の進出数設定で抽出されるシード順チーム（生成前のプレビュー・主催者向け補助）。
+  // 生成前のシード順プレビュー（主催者向け補助）。形式で抽出方法が変わる（PR-3）。
+  // - 予選あり: 現在の進出数設定で各ブロック上位N を抽出。
+  // - トーナメントのみ: approved 全員を score 降順／作成順で並べる（進出数は使わない）。
   const currentAdvance = event.tournament_advance_count || 2;
-  const previewSeeded = extractSeededTeams(seeds, currentAdvance).map((teamId, i) => ({
+  const previewSeededIds = groupStage
+    ? extractSeededTeams(blockSeedData.seeds, currentAdvance)
+    : seedTournamentOnly(tournamentOnlyData.seeds);
+  const previewSeeded = previewSeededIds.map((teamId, i) => ({
     seed: i + 1,
     teamId,
     teamName: teamNameById.get(teamId) ?? "-",
@@ -223,6 +244,7 @@ export default async function EventTournamentPage({
           eventId={event.id}
           readOnly={!isOrganizer}
           rankingEnabled={event.ranking_enabled}
+          groupStage={groupStage}
           usePotg={usePotg}
           swapEnabled={swapEnabled}
           podium={podium}

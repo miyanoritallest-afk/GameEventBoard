@@ -7,6 +7,30 @@
 
 ---
 
+## 2026-06-30 — PR-3: トーナメントのみ形式のシード生成分岐
+
+PR-2 で出し分けた `events.format` のうち、**トーナメントのみ形式で実際にブラケットを生成できるようにする**。これまで決勝T生成は「予選順位（ranking_enabled）」前提だったのを、形式でシード経路を分岐する。
+
+### やったこと
+- **`bracket.ts` に純粋関数 `seedTournamentOnly` 追加**（テスト+6）。`TournamentSeedTeam[]`（teamId・score・order）を受け、**スコアあり=score降順／スコアなし・同スコア=作成順(order)昇順**でシード順 team_id 配列を返す。スコアあり・なし混在はスコアありを上位に。
+- **`tournament.ts` に `computeTournamentOnlySeeds` 追加**。予選が無いので **approved チーム全員**を母集団に、`listTeamsWithMembers`＋`teamScore()`（regular 実効 final_score 平均）でスコアを出し、配列添字を作成順(order)に使う。
+- **`generateTournament`（actions）のシード生成を形式で分岐**: 予選を持つ形式は従来どおり `computeBlockSeeds`→`extractSeededTeams`（ranking_enabled 必須・各ブロック上位N）。**トーナメントのみは `computeTournamentOnlySeeds`→`seedTournamentOnly`（順位機能不要・全approved）**。ブラケット生成（`generateBracket`/`seedOrder`）は全形式で共通再利用。
+- **`tournament/page.tsx` の teamNameById・プレビューを形式分岐**。トーナメントのみは `computeTournamentOnlySeeds` から名前解決とプレビューを作る（予選経路の空 teamNameById でブラケット名が出ない不具合を回避）。
+- **`tournament-board.tsx` に `groupStage` prop 追加**。トーナメントのみでは「順位機能が必要」警告を出さず・進出数入力を隠し・生成可（`canGenerate = groupStage ? rankingEnabled : true`）・コピーを「参加チーム全員をシード（スコア順／参加順）」に差し替え。確認ダイアログ文言も形式連動。
+- **PR-2 積み残し回収**: actions の「決勝トーナメントには順位機能が必要です」メッセージを `hasGroupStage` 分岐の内側へ移動（トーナメントのみでは出ない）。
+- lint / typecheck / test(307緑＝301+6) 通過。
+
+### 決めたこと（なぜ）
+- **トーナメントのみの母集団は approved チーム全員**（壁打ち確定）。予選が無く「上位N」の基準が無いため。進出数(advance_count)は予選形式専用。
+- **スコアなしの適当順は作成順(created_at)**（壁打ち確定）。決定的・再現可能・DB取得順そのまま。生成後に既存の1回戦 D&D swap で主催者が手動微調整できる前提。
+- **シード並べ替えは純粋関数に集約**: スコア降順・作成順・混在の規則をテストで固定（dev-flow-practice）。DB 取得（リポジトリ）と順序決定（サービス）を分離。
+
+### 次にやること
+- [ ] 実機確認: トーナメントのみイベント（スコアあり/なし）でブラケット生成→シード順が score降順/作成順になること・順位機能OFFでも生成できること。
+- [ ] PR-4: ラウンド別BO一括編集UI（決勝Tブラケット画面でラウンド単位の一括 best_of 編集）。
+
+---
+
 ## 2026-06-30 — PR-2: イベント形式に応じた画面分岐（予選/決勝Tの出し分け）
 
 PR-1 で保存できるようにした `events.format` を、実際の画面表示に効かせる。**形式の出し分けのみ（トーナメントのみ形式の実シード生成は PR-3）。**

@@ -51,6 +51,50 @@ export function extractSeededTeams(
   return sorted.map((t) => t.teamId);
 }
 
+/**
+ * トーナメントのみ形式（予選なし）のシード順入力。1チーム分。
+ * 予選順位が無いので、スコア（あれば）と作成順だけでシード順を決める（PR-3・壁打ち確定）。
+ */
+export type TournamentSeedTeam = {
+  teamId: string;
+  /**
+   * チームスコア（regular の実効 final_score 平均）。スコアなしイベント・
+   * 算出不能なチームは null。
+   */
+  score: number | null;
+  /** チーム作成順を表す連番（小さいほど先に作られた）。同スコア・スコアなし時の決定順に使う。 */
+  order: number;
+};
+
+/**
+ * トーナメントのみ形式のシード順 team_id 配列を作る（PR-3・純粋関数）。
+ *
+ * 仕様（壁打ち確定）:
+ * - スコアあり: `score` 降順（強い順）。`teamScore()`（regular 実効 final_score 平均）由来。
+ * - スコアなし or 同スコア: `order`（チーム作成順）昇順で決定的に並べる。
+ *   score=null は「スコアで比較できない」ため作成順だけで決まる（適当順）。
+ * - 並べた結果は generateBracket にそのまま渡せる「強い順」配列。標準シード配置（seedOrder）が
+ *   上位 vs 下位を散らす。
+ *
+ * 注: 母集団の選別（approved のみ等）は呼び出し側の責務。ここは順序付けのみ。
+ */
+export function seedTournamentOnly(teams: TournamentSeedTeam[]): string[] {
+  return [...teams]
+    .sort((a, b) => {
+      // スコアあり同士は降順。片方だけ null のときはスコアありを上位に置く。
+      if (a.score !== null && b.score !== null) {
+        if (b.score !== a.score) return b.score - a.score;
+      } else if (a.score !== null) {
+        return -1; // a にスコアあり → a を上に
+      } else if (b.score !== null) {
+        return 1; // b にスコアあり → b を上に
+      }
+      // 同スコア or 両方スコアなし → 作成順（昇順）で安定化。
+      return a.order - b.order;
+    })
+    .map((t) => t.teamId);
+}
+
 /** ブラケット上の1試合カード。round は 1 始まり（1=1回戦）。 */
 export type BracketMatch = {
   /** ラウンド番号（1=1回戦, 2=2回戦, ...）。決勝が最大ラウンド。 */
