@@ -9,6 +9,7 @@ import {
 import { listGroupMatches } from "@/lib/repositories/matches";
 import { teamScore, type MemberScore } from "@/lib/services/team-score";
 import { canViewEvent } from "@/lib/services/event-status";
+import { hasGroupStage } from "@/lib/services/event-format";
 import { GroupsBoard, type BoardGroup, type BoardTeam } from "./groups-board";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,9 @@ export default async function EventGroupsPage({
   if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
   }
+  // 形式による出し分け（PR-2）。予選を持たない形式（トーナメントのみ）では
+  // ブロック分けページ自体が存在しないものとして 404（URL直叩きの抑止）。
+  if (!hasGroupStage(event.format)) notFound();
   const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
 
   const [groupsRaw, unassignedRaw, matchesRaw] = await Promise.all([

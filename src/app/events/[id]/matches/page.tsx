@@ -9,6 +9,10 @@ import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { listCaptainTeamIds } from "@/lib/repositories/teams";
 import { computeStandings } from "@/lib/services/standings";
 import { canViewEvent } from "@/lib/services/event-status";
+import {
+  hasGroupStage,
+  hasTournamentStage,
+} from "@/lib/services/event-format";
 import { utcIsoToJstLocal } from "@/lib/datetime-local";
 import {
   MatchesBoard,
@@ -47,6 +51,11 @@ export default async function EventMatchesPage({
   if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
   }
+  // 形式による出し分け（PR-2）。予選を持たない形式（トーナメントのみ）では
+  // 予選対戦表ページ自体が存在しないものとして 404。
+  if (!hasGroupStage(event.format)) notFound();
+  // 決勝Tを持つ形式のときだけ「決勝トーナメントへ」の導線を出す。
+  const showTournamentLink = hasTournamentStage(event.format);
   const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
   const myRegistration =
     isOrganizer || viewerId === null
@@ -226,12 +235,14 @@ export default async function EventMatchesPage({
             >
               ← ブロック分けへ
             </Link>
-            <Link
-              href={`/events/${event.id}/tournament`}
-              className="text-sm text-primary hover:underline"
-            >
-              決勝トーナメントへ →
-            </Link>
+            {showTournamentLink && (
+              <Link
+                href={`/events/${event.id}/tournament`}
+                className="text-sm text-primary hover:underline"
+              >
+                決勝トーナメントへ →
+              </Link>
+            )}
             <Link
               href={`/events/${event.id}/watch`}
               className="text-sm text-muted-foreground hover:underline"

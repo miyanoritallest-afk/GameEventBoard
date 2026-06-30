@@ -8,6 +8,7 @@ import {
   listUnassignedApproved,
 } from "@/lib/repositories/teams";
 import { canViewEvent } from "@/lib/services/event-status";
+import { hasGroupStage } from "@/lib/services/event-format";
 import { TeamsBoard, type BoardMember, type BoardTeam } from "./teams-board";
 
 export const dynamic = "force-dynamic";
@@ -120,13 +121,23 @@ export default async function EventTeamsPage({
             {isOrganizer || myRegistration !== null ? "チーム編成" : "参加チーム"}
           </h1>
           <div className="flex items-center gap-4">
-            {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
-            <Link
-              href={`/events/${event.id}/groups`}
-              className="text-sm text-primary hover:underline"
-            >
-              ブロック分けへ →
-            </Link>
+            {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。
+                予選を持つ形式はブロック分けへ、トーナメントのみは決勝Tへ誘導する（PR-2）。 */}
+            {hasGroupStage(event.format) ? (
+              <Link
+                href={`/events/${event.id}/groups`}
+                className="text-sm text-primary hover:underline"
+              >
+                ブロック分けへ →
+              </Link>
+            ) : (
+              <Link
+                href={`/events/${event.id}/tournament`}
+                className="text-sm text-primary hover:underline"
+              >
+                決勝トーナメントへ →
+              </Link>
+            )}
             <Link
               href={`/events/${event.id}/watch`}
               className="text-sm text-muted-foreground hover:underline"

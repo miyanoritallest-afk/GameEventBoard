@@ -6,6 +6,11 @@ import { findRegistration } from "@/lib/repositories/registrations";
 import { findDiscordName, findBattleTag } from "@/lib/repositories/users";
 import { canViewEvent } from "@/lib/services/event-status";
 import { isValidEventSlug } from "@/lib/services/event-slug";
+import {
+  hasGroupStage,
+  hasTournamentStage,
+  eventFormatLabel,
+} from "@/lib/services/event-format";
 import { PublishButton } from "./publish-button";
 import { DeleteDraftButton } from "./delete-draft-button";
 import { ApplyButton } from "./apply-button";
@@ -93,6 +98,11 @@ export default async function EventDetailPage({
   // フェーズB: 公開済みなら観戦者（非ログイン・非参加者）にも導線を出す（閲覧の全面公開）。
   // 下書きでは本戦が始まらないので出さない。
   const canViewTournament = event.status !== "draft";
+  // 形式による出し分け（PR-2）。予選を持たない形式（トーナメントのみ）では
+  // ブロック分け・予選対戦表の導線を出さない。決勝Tを持たない形式（総当たりのみ）では
+  // 決勝T関連の導線を出さない。
+  const showGroupStage = hasGroupStage(event.format);
+  const showTournamentStage = hasTournamentStage(event.format);
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
@@ -112,6 +122,9 @@ export default async function EventDetailPage({
           <span className="rounded bg-muted px-2 py-0.5">{gameName}</span>
           <span className="rounded bg-muted px-2 py-0.5">状態: {statusLabel}</span>
           <span className="rounded bg-muted px-2 py-0.5">主催: {organizerName}</span>
+          <span className="rounded bg-muted px-2 py-0.5">
+            形式: {eventFormatLabel(event.format)}
+          </span>
         </div>
 
         {event.description && (
@@ -187,14 +200,19 @@ export default async function EventDetailPage({
             />
           ))}
 
-        {/* 本戦セクション（ブロック分け・対戦表・順位表への導線）。
+        {/* 本戦セクション（ブロック分け・対戦表・順位表・決勝Tへの導線）。
             主催者・応募者の双方に同じ導線を出して一元化する。各ページ側で
-            主催者=編集可 / 応募者=閲覧のみ（read-only）に出し分く。 */}
+            主催者=編集可 / 応募者=閲覧のみ（read-only）に出し分く。
+            導線はイベント形式（format）に応じて出し分ける（PR-2）。 */}
         {canViewTournament && (
           <section className="mt-6 rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold">本戦</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              ブロックの組み分けと、対戦表・順位表を確認できます。
+              {showGroupStage && showTournamentStage
+                ? "ブロックの組み分けと、対戦表・順位表・決勝トーナメントを確認できます。"
+                : showGroupStage
+                  ? "ブロックの組み分けと、対戦表・順位表を確認できます。"
+                  : "決勝トーナメントを確認できます。"}
               {!isOrganizer && "（閲覧のみ）"}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
@@ -204,18 +222,30 @@ export default async function EventDetailPage({
               >
                 観戦ビューでまとめて見る →
               </Link>
-              <Link
-                href={`/events/${event.id}/groups`}
-                className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
-              >
-                ブロック分けを見る →
-              </Link>
-              <Link
-                href={`/events/${event.id}/matches`}
-                className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
-              >
-                対戦表・順位表を見る →
-              </Link>
+              {showGroupStage && (
+                <>
+                  <Link
+                    href={`/events/${event.id}/groups`}
+                    className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
+                  >
+                    ブロック分けを見る →
+                  </Link>
+                  <Link
+                    href={`/events/${event.id}/matches`}
+                    className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
+                  >
+                    対戦表・順位表を見る →
+                  </Link>
+                </>
+              )}
+              {showTournamentStage && (
+                <Link
+                  href={`/events/${event.id}/tournament`}
+                  className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
+                >
+                  決勝トーナメントを見る →
+                </Link>
+              )}
             </div>
           </section>
         )}

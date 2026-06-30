@@ -11,6 +11,10 @@ import {
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
 import { computeStandings } from "@/lib/services/standings";
 import { canViewEvent } from "@/lib/services/event-status";
+import {
+  hasGroupStage,
+  hasTournamentStage,
+} from "@/lib/services/event-format";
 import { isValidEventSlug } from "@/lib/services/event-slug";
 
 export const dynamic = "force-dynamic";
@@ -298,12 +302,17 @@ export default async function EventWatchPage({
         })),
     }));
 
-  // セクションの表示判定（空は丸ごと非表示）。
+  // セクションの表示判定。
+  // 形式（format）でまず出せるステージを絞り、その中で空（未実施）なら丸ごと非表示にする（PR-2）。
+  // 予選を持たない形式（トーナメントのみ）ではブロック/予選順位/予選結果を一切出さず、
+  // 決勝Tを持たない形式（総当たりのみ）では決勝Tセクションを出さない。
+  const groupStage = hasGroupStage(event.format);
+  const tournamentStage = hasTournamentStage(event.format);
   const showTeams = teams.length > 0;
-  const showGroups = groups.length > 0;
-  const showStandings = standingsToShow.length > 0;
-  const showResults = finishedMatches.length > 0;
-  const showTournament = rounds.length > 0;
+  const showGroups = groupStage && groups.length > 0;
+  const showStandings = groupStage && standingsToShow.length > 0;
+  const showResults = groupStage && finishedMatches.length > 0;
+  const showTournament = tournamentStage && rounds.length > 0;
 
   const matchesHref = `/events/${event.id}/matches`;
 
