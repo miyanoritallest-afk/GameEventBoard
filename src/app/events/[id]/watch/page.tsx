@@ -24,6 +24,18 @@ const STATUS_LABEL: Record<string, string> = {
   finished: "終了",
 };
 
+/**
+ * ラウンド番号からラベルを作る（最終ラウンド=決勝, その前=準決勝…）。
+ * 決勝トーナメント詳細（tournament-board.tsx の roundLabel）と同じ規則。
+ */
+function tournamentRoundLabel(round: number, totalRounds: number): string {
+  const fromLast = totalRounds - round; // 0=決勝, 1=準決勝, 2=準々決勝
+  if (fromLast === 0) return "決勝";
+  if (fromLast === 1) return "準決勝";
+  if (fromLast === 2) return "準々決勝";
+  return `${round}回戦`;
+}
+
 /** UTC(ISO) を JST 表示に整形する。null は "未定"。 */
 function fmtJst(iso: string | null): string {
   if (!iso) return "未定";
@@ -140,6 +152,7 @@ export default async function EventWatchPage({
     winner_team_id: string | null;
     potg_a: number;
     potg_b: number;
+    updated_at: string | null;
   };
   const resultRows = (resultsRaw ?? []) as unknown as ResultRow[];
   const resultByMatch = new Map<string, ResultRow>();
@@ -155,7 +168,7 @@ export default async function EventWatchPage({
   const matchById = new Map<string, MatchRow>();
   for (const m of groupMatches) matchById.set(m.id, m);
 
-  // 消化済み試合（予選のうち結果あり）。最新数件をサマリーに出す。
+  // 消化済み試合（予選のうち結果あり）。
   const finishedMatches = groupMatches
     .filter((m) => resultByMatch.has(m.id))
     .map((m) => {
@@ -166,9 +179,14 @@ export default async function EventWatchPage({
         teamBName: m.team_b_id ? teamNameById.get(m.team_b_id) ?? "-" : "-",
         teamAScore: r.team_a_score,
         teamBScore: r.team_b_score,
+        finishedAt: r.updated_at,
       };
     });
-  const recentResults = finishedMatches.slice(-5).reverse();
+  // サマリーは「直近に結果が確定した試合」を最新5件。確定時刻（updated_at）降順で取り、
+  // ブロック単位の生成順ではなく実際の消化順に並べる（ブロック偏りを避ける）。
+  const recentResults = [...finishedMatches]
+    .sort((a, b) => (b.finishedAt ?? "").localeCompare(a.finishedAt ?? ""))
+    .slice(0, 5);
 
   // ── 予選順位（ランキング ON のときだけ。ブロックごとに集計） ────
   const rankingConfig = {
@@ -238,9 +256,15 @@ export default async function EventWatchPage({
     bracket_position: number | null;
   };
   const tournamentMatches = (tournamentRaw ?? []) as TMatchRow[];
+  // ラウンド名（決勝/準決勝/…）は最終ラウンドからの距離で決まるので、まず総ラウンド数を求める。
+  const totalTournamentRounds =
+    tournamentMatches.length > 0
+      ? Math.max(...tournamentMatches.map((m) => m.round ?? 1))
+      : 0;
   const roundsMap = new Map<
     number,
     {
+      position: number;
       teamAName: string | null;
       teamBName: string | null;
       teamAScore: number | null;
@@ -252,6 +276,7 @@ export default async function EventWatchPage({
     const r = resultByMatch.get(m.id) ?? null;
     const arr = roundsMap.get(round) ?? [];
     arr.push({
+      position: m.bracket_position ?? 0,
       teamAName: m.team_a_id ? teamNameById.get(m.team_a_id) ?? "未定" : "未定",
       teamBName: m.team_b_id ? teamNameById.get(m.team_b_id) ?? "未定" : "未定",
       teamAScore: r?.team_a_score ?? null,
@@ -261,7 +286,17 @@ export default async function EventWatchPage({
   }
   const rounds = [...roundsMap.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([round, matches]) => ({ round, matches }));
+    .map(([round, matches]) => ({
+      round,
+      label: tournamentRoundLabel(round, totalTournamentRounds),
+      // 最終ラウンドは [3位決定戦(position 1), 決勝(position 2)] の2枠。position 昇順で並べる。
+      matches: [...matches]
+        .sort((a, b) => a.position - b.position)
+        .map((m) => ({
+          ...m,
+          isThirdPlace: round === totalTournamentRounds && m.position === 1,
+        })),
+    }));
 
   // セクションの表示判定（空は丸ごと非表示）。
   const showTeams = teams.length > 0;
@@ -432,7 +467,7 @@ export default async function EventWatchPage({
               {rounds.map((r) => (
                 <div key={r.round} className="min-w-[200px] flex-1">
                   <p className="mb-2 text-xs font-medium text-muted-foreground">
-                    ラウンド {r.round}
+                    {r.label}
                   </p>
                   <div className="space-y-2">
                     {r.matches.map((m, i) => (
@@ -440,6 +475,11 @@ export default async function EventWatchPage({
                         key={i}
                         className="rounded-lg border border-border bg-card p-3 text-sm"
                       >
+                        {m.isThirdPlace && (
+                          <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                            3位決定戦
+                          </p>
+                        )}
                         <div className="flex items-center justify-between gap-2">
                           <span>{m.teamAName}</span>
                           <span className="tabular-nums text-muted-foreground">

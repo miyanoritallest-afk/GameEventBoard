@@ -16,7 +16,7 @@ export async function listMatchResultsByEvent(eventId: string) {
   const { data, error } = await supabase
     .from("match_results")
     .select(
-      "match_id, team_a_score, team_b_score, winner_team_id, potg_a, potg_b, replay_codes, matches!inner(event_id)",
+      "match_id, team_a_score, team_b_score, winner_team_id, potg_a, potg_b, replay_codes, updated_at, matches!inner(event_id)",
     )
     .eq("matches.event_id", eventId);
 

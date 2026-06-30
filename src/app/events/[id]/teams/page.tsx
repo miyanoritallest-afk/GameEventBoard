@@ -128,6 +128,12 @@ export default async function EventTeamsPage({
               ブロック分けへ →
             </Link>
             <Link
+              href={`/events/${event.id}/watch`}
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              観戦ビューへ
+            </Link>
+            <Link
               href={`/events/${event.slug ?? event.id}`}
               className="text-sm text-muted-foreground hover:underline"
             >
