@@ -2,8 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { listGroupsWithTeams } from "@/lib/repositories/groups";
 import { listGroupMatches } from "@/lib/repositories/matches";
 import { listMatchResultsByEvent } from "@/lib/repositories/match-results";
+import { listTeamsWithMembers } from "@/lib/repositories/teams";
 import { computeStandings, type TiebreakerKey } from "@/lib/services/standings";
-import type { SeedTeam, StoredMatch, StoredResult } from "@/lib/services/bracket";
+import { teamScore, type MemberScore } from "@/lib/services/team-score";
+import type {
+  SeedTeam,
+  TournamentSeedTeam,
+  StoredMatch,
+  StoredResult,
+} from "@/lib/services/bracket";
 
 /**
  * 決勝トーナメント（本戦-5a）の進出シード算出に必要なデータをまとめて取得し、
@@ -108,6 +115,53 @@ export async function computeBlockSeeds(params: {
         potg: row.potg,
       });
     }
+  }
+
+  return { seeds, teamNameById };
+}
+
+/**
+ * トーナメントのみ形式（予選なし）の進出シード母集団を取得する（PR-3）。
+ * 予選順位が無いので、approved チーム全員を母集団とし、各チームの
+ * チームスコア（regular 実効 final_score 平均・スコアなしは null）と作成順を持たせる。
+ *
+ * シード順の決定（スコア降順 / 作成順）は純粋関数 `seedTournamentOnly` 側で行う。
+ * ここは DB 取得とチームスコア算出だけを担う。
+ */
+export async function computeTournamentOnlySeeds(
+  eventId: string,
+): Promise<{ seeds: TournamentSeedTeam[]; teamNameById: Map<string, string> }> {
+  const teamsRaw = await listTeamsWithMembers(eventId);
+
+  type MemberJoin = {
+    position: string;
+    registrations: {
+      final_score: number | null;
+      organizer_override_score: number | null;
+    } | null;
+  };
+  type TeamJoin = {
+    id: string;
+    name: string;
+    status: string;
+    team_members: MemberJoin[] | null;
+  };
+
+  const teamNameById = new Map<string, string>();
+  const seeds: TournamentSeedTeam[] = [];
+  // listTeamsWithMembers は created_at 昇順で返るので、配列の添字をそのまま作成順に使う。
+  let order = 0;
+  for (const t of (teamsRaw ?? []) as unknown as TeamJoin[]) {
+    // 出場対象は承認済みチームのみ（pending/rejected は本戦に出さない）。
+    if (t.status !== "approved") continue;
+    teamNameById.set(t.id, t.name);
+    const members: MemberScore[] = (t.team_members ?? []).map((tm) => ({
+      id: "",
+      position: tm.position === "reserve" ? "reserve" : "regular",
+      finalScore: tm.registrations?.final_score ?? null,
+      overrideScore: tm.registrations?.organizer_override_score ?? null,
+    }));
+    seeds.push({ teamId: t.id, score: teamScore(members), order: order++ });
   }
 
   return { seeds, teamNameById };

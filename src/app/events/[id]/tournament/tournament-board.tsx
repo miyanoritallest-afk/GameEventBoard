@@ -101,6 +101,7 @@ export function TournamentBoard({
   eventId,
   readOnly,
   rankingEnabled,
+  groupStage,
   usePotg,
   swapEnabled,
   podium,
@@ -111,8 +112,10 @@ export function TournamentBoard({
   eventId: string;
   /** 応募者の閲覧（read-only）。生成操作を無効化する。 */
   readOnly: boolean;
-  /** 順位機能が有効か。無効だと進出抽出ができないので生成不可。 */
+  /** 順位機能が有効か。予選を持つ形式では無効だと進出抽出できず生成不可。 */
   rankingEnabled: boolean;
+  /** 予選を持つ形式か（PR-3）。false=トーナメントのみ＝順位機能なしでも全approvedで生成可。 */
+  groupStage: boolean;
   /** POTG を使うイベントか（結果入力に POTG 欄を出すか）。 */
   usePotg: boolean;
   /** 1回戦の手動入れ替え（D&D）を許可するか（主催者かつ結果が1件もないとき）。 */
@@ -137,6 +140,9 @@ export function TournamentBoard({
   const totalRounds = hasBracket
     ? Math.max(...initialMatches.map((m) => m.round))
     : 0;
+
+  // 生成可否（PR-3）。予選を持つ形式は順位機能必須、トーナメントのみは順位機能不要。
+  const canGenerate = groupStage ? rankingEnabled : true;
 
   // ラウンドごとに束ねる（position 昇順）。
   const rounds: BoardBracketMatch[][] = [];
@@ -199,36 +205,51 @@ export function TournamentBoard({
         </p>
       )}
 
-      {!readOnly && !rankingEnabled && (
+      {/* 順位機能の警告は予選を持つ形式のときだけ（トーナメントのみは順位機能不要）。 */}
+      {!readOnly && groupStage && !rankingEnabled && (
         <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
           決勝トーナメントには順位機能が必要です。イベント編集で順位設定を有効にしてください。
         </p>
       )}
 
-      {/* 生成エリア（主催者・順位機能ON のときのみ）。 */}
-      {!readOnly && rankingEnabled && (
+      {/* 生成エリア（主催者・生成可能なときのみ）。 */}
+      {!readOnly && canGenerate && (
         <div className="rounded-xl border border-border bg-card p-4">
           <h2 className="text-sm font-semibold">トーナメントを生成</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            各ブロックの上位チームをシードに、シングルエリミネーションのブラケットを作ります。
+            {groupStage
+              ? "各ブロックの上位チームをシードに、シングルエリミネーションのブラケットを作ります。"
+              : "参加チーム全員をシード（スコア順／スコアなしは参加順）に、シングルエリミネーションのブラケットを作ります。"}
             生成後はドラッグ＆ドロップなどで手動調整できます（本戦-5c）。
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <label className="text-sm text-muted-foreground" htmlFor="advance-count">
-              各ブロック上位
-            </label>
-            <input
-              id="advance-count"
-              type="number"
-              min={1}
-              max={99}
-              value={advanceCount}
-              onChange={(e) =>
-                setAdvanceCount(Math.max(1, Math.floor(Number(e.target.value) || 1)))
-              }
-              className="w-20 rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-            <span className="text-sm text-muted-foreground">チームが進出</span>
+            {/* 進出数の指定は予選を持つ形式のみ（トーナメントのみは全approvedが出場）。 */}
+            {groupStage && (
+              <>
+                <label
+                  className="text-sm text-muted-foreground"
+                  htmlFor="advance-count"
+                >
+                  各ブロック上位
+                </label>
+                <input
+                  id="advance-count"
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={advanceCount}
+                  onChange={(e) =>
+                    setAdvanceCount(
+                      Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                    )
+                  }
+                  className="w-20 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <span className="text-sm text-muted-foreground">
+                  チームが進出
+                </span>
+              </>
+            )}
             <button
               type="button"
               onClick={() => setDialogOpen(true)}
@@ -337,10 +358,11 @@ export function TournamentBoard({
                 : "トーナメントを生成しますか？"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {hasBracket
-                ? "現在のトーナメント表と入力済みの試合結果がすべて削除され、各ブロック上位"
-                : "各ブロック上位"}
-              {advanceCount}チームをシードに新しいブラケットを作成します。
+              {hasBracket &&
+                "現在のトーナメント表と入力済みの試合結果がすべて削除され、"}
+              {groupStage
+                ? `各ブロック上位${advanceCount}チームをシードに新しいブラケットを作成します。`
+                : "参加チーム全員をシードに新しいブラケットを作成します。"}
               {hasBracket && "この操作は元に戻せません。"}
             </AlertDialogDescription>
           </AlertDialogHeader>
