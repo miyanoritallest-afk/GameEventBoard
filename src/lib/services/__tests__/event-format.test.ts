@@ -3,6 +3,8 @@ import {
   hasGroupStage,
   hasTournamentStage,
   eventFormatLabel,
+  groupStageLabel,
+  tournamentStageLabel,
   type EventFormat,
 } from "../event-format";
 
@@ -51,6 +53,28 @@ describe("ステージの組み合わせ", () => {
       (f) => hasGroupStage(f) && hasTournamentStage(f),
     );
     expect(both).toEqual(["round_robin_then_tournament"]);
+  });
+});
+
+describe("groupStageLabel", () => {
+  it("決勝Tを後段に持つ形式では『予選』", () => {
+    expect(groupStageLabel("round_robin_then_tournament")).toBe("予選");
+  });
+
+  it("総当たりで完結する形式では『総当たり』", () => {
+    expect(groupStageLabel("round_robin")).toBe("総当たり");
+  });
+});
+
+describe("tournamentStageLabel", () => {
+  it("前段に予選を持つ形式では『決勝トーナメント』", () => {
+    expect(tournamentStageLabel("round_robin_then_tournament")).toBe(
+      "決勝トーナメント",
+    );
+  });
+
+  it("トーナメント単独の形式では『トーナメント』", () => {
+    expect(tournamentStageLabel("tournament")).toBe("トーナメント");
   });
 });
 

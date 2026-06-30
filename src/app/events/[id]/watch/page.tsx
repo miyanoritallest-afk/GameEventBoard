@@ -14,6 +14,8 @@ import { canViewEvent } from "@/lib/services/event-status";
 import {
   hasGroupStage,
   hasTournamentStage,
+  groupStageLabel,
+  tournamentStageLabel,
 } from "@/lib/services/event-format";
 import { isValidEventSlug } from "@/lib/services/event-slug";
 
@@ -308,6 +310,10 @@ export default async function EventWatchPage({
   // 決勝Tを持たない形式（総当たりのみ）では決勝Tセクションを出さない。
   const groupStage = hasGroupStage(event.format);
   const tournamentStage = hasTournamentStage(event.format);
+  // ステージ呼称も形式連動（実機FB）。総当たり完結なら「予選」でなく「総当たり」、
+  // トーナメント単独なら「決勝トーナメント」でなく「トーナメント」と呼ぶ。
+  const groupLabel = groupStageLabel(event.format);
+  const tournamentLabel = tournamentStageLabel(event.format);
   const showTeams = teams.length > 0;
   const showGroups = groupStage && groups.length > 0;
   const showStandings = groupStage && standingsToShow.length > 0;
@@ -403,10 +409,10 @@ export default async function EventWatchPage({
           </Section>
         )}
 
-        {/* 予選順位 */}
+        {/* 順位（予選 / 総当たり） */}
         {showStandings && (
           <Section
-            title="予選 順位"
+            title={`${groupLabel} 順位`}
             action={{ href: matchesHref, label: "詳しく見る →" }}
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -440,10 +446,10 @@ export default async function EventWatchPage({
           </Section>
         )}
 
-        {/* 予選 試合結果 */}
+        {/* 試合結果（予選 / 総当たり） */}
         {showResults && (
           <Section
-            title={`予選 試合結果 (${finishedMatches.length}/${groupMatches.length} 試合消化)`}
+            title={`${groupLabel} 試合結果 (${finishedMatches.length}/${groupMatches.length} 試合消化)`}
             action={{ href: matchesHref, label: "詳しく見る →" }}
           >
             <ul className="space-y-2">
@@ -463,10 +469,10 @@ export default async function EventWatchPage({
           </Section>
         )}
 
-        {/* 決勝トーナメント（簡易ブラケット） */}
+        {/* トーナメント（簡易ブラケット・予選あり時は「決勝トーナメント」） */}
         {showTournament && (
           <Section
-            title="決勝トーナメント"
+            title={tournamentLabel}
             action={{
               href: `/events/${event.id}/tournament`,
               label: "詳しく見る →",

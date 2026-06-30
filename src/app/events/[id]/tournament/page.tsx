@@ -17,6 +17,7 @@ import { canViewEvent } from "@/lib/services/event-status";
 import {
   hasGroupStage,
   hasTournamentStage,
+  tournamentStageLabel,
 } from "@/lib/services/event-format";
 import { utcIsoToJstLocal } from "@/lib/datetime-local";
 import {
@@ -59,6 +60,8 @@ export default async function EventTournamentPage({
   if (!hasTournamentStage(event.format)) notFound();
   // 予選を持つ形式のときだけ「対戦表・順位表へ」の導線を出す。
   const showMatchesLink = hasGroupStage(event.format);
+  // トーナメントの呼称（単独なら「トーナメント」・予選ありなら「決勝トーナメント」）。
+  const tournamentLabel = tournamentStageLabel(event.format);
   const isOrganizer = viewerId !== null && event.organizer_id === viewerId;
   const myRegistration =
     isOrganizer || viewerId === null
@@ -189,7 +192,7 @@ export default async function EventTournamentPage({
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">決勝トーナメント</h1>
+          <h1 className="text-2xl font-bold">{tournamentLabel}</h1>
           <div className="flex items-center gap-4">
             {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
             {showMatchesLink && (

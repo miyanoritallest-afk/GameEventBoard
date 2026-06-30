@@ -10,6 +10,7 @@ import {
   hasGroupStage,
   hasTournamentStage,
   eventFormatLabel,
+  tournamentStageLabel,
 } from "@/lib/services/event-format";
 import { PublishButton } from "./publish-button";
 import { DeleteDraftButton } from "./delete-draft-button";
@@ -103,6 +104,8 @@ export default async function EventDetailPage({
   // 決勝T関連の導線を出さない。
   const showGroupStage = hasGroupStage(event.format);
   const showTournamentStage = hasTournamentStage(event.format);
+  // トーナメントの呼称（トーナメント単独なら「トーナメント」・予選ありなら「決勝トーナメント」）。
+  const tournamentLabel = tournamentStageLabel(event.format);
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
@@ -212,7 +215,7 @@ export default async function EventDetailPage({
                 ? "ブロックの組み分けと、対戦表・順位表・決勝トーナメントを確認できます。"
                 : showGroupStage
                   ? "ブロックの組み分けと、対戦表・順位表を確認できます。"
-                  : "決勝トーナメントを確認できます。"}
+                  : `${tournamentLabel}を確認できます。`}
               {!isOrganizer && "（閲覧のみ）"}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
@@ -243,7 +246,7 @@ export default async function EventDetailPage({
                   href={`/events/${event.id}/tournament`}
                   className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
                 >
-                  決勝トーナメントを見る →
+                  {tournamentLabel}を見る →
                 </Link>
               )}
             </div>

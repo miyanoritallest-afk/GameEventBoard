@@ -44,3 +44,20 @@ export function eventFormatLabel(format: EventFormat): string {
       return "総当たり → 決勝トーナメント";
   }
 }
+
+/**
+ * 総当たりステージの呼称（タイトル接頭辞）。
+ * 後段に決勝Tがある形式では「予選」、総当たりで完結する形式では「総当たり」と呼ぶ。
+ * 例: 「予選 順位」/「総当たり 順位」。実機FBで呼称を形式連動にした（PR-2）。
+ */
+export function groupStageLabel(format: EventFormat): string {
+  return hasTournamentStage(format) ? "予選" : "総当たり";
+}
+
+/**
+ * トーナメントステージの呼称。
+ * 前段に予選がある形式では「決勝トーナメント」、トーナメント単独の形式では「トーナメント」と呼ぶ。
+ */
+export function tournamentStageLabel(format: EventFormat): string {
+  return hasGroupStage(format) ? "決勝トーナメント" : "トーナメント";
+}

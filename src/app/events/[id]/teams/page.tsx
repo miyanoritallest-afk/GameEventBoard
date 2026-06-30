@@ -8,7 +8,10 @@ import {
   listUnassignedApproved,
 } from "@/lib/repositories/teams";
 import { canViewEvent } from "@/lib/services/event-status";
-import { hasGroupStage } from "@/lib/services/event-format";
+import {
+  hasGroupStage,
+  tournamentStageLabel,
+} from "@/lib/services/event-format";
 import { TeamsBoard, type BoardMember, type BoardTeam } from "./teams-board";
 
 export const dynamic = "force-dynamic";
@@ -135,7 +138,7 @@ export default async function EventTeamsPage({
                 href={`/events/${event.id}/tournament`}
                 className="text-sm text-primary hover:underline"
               >
-                決勝トーナメントへ →
+                {tournamentStageLabel(event.format)}へ →
               </Link>
             )}
             <Link
