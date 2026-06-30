@@ -7,6 +7,29 @@
 
 ---
 
+## 2026-07-01 — PR-4: 決勝Tブラケットのラウンド別BO一括編集UI
+
+「イベント形式＋ラウンド別BO」設計の最終PR。決勝Tブラケット画面で**ラウンド単位の一括BO編集**を可能にする。トーナメントは生成し直すとラウンド数が変わる（4チーム2R/8チーム3R）ため、生成前固定ではなく**生成後にラウンド単位で編集**する方式（既存 `matches.best_of` を活用＝追加カラム不要）。
+
+### やったこと
+- **`bracket.ts` に純粋関数 `computeRoundBoGroups` 追加**（テスト+5）。ブラケット試合を「BO編集グループ」に束ねる。基本はラウンド単位・**最終ラウンドの3位決定戦(position=1)は決勝(position=0)と別グループ**・グループに結果のある試合が1件でもあれば `locked=true`・代表BOは最小positionの試合の値。
+- **`matches.ts` に2関数**: `updateRoundBestOf`（phase=tournament＋event_id＋round で絞り、3位決定戦は position=1 のみ・本戦は position!=1 で一括更新）／`listTournamentMatchesForBoEdit`（ロック判定用に round/position/best_of/結果有無を取得）。
+- **`actions.ts` に `updateRoundBestOfAction`**。主催者確認＋Zod（BOは**奇数1〜15のみ**）＋**結果のあるラウンドはロック拒否**（同じ純粋関数 `computeRoundBoGroups` で判定）→ 一括更新。
+- **`schema.ts` に `updateRoundBestOfSchema`**（round/thirdPlace/bestOf・奇数 refine）。
+- **`tournament-board.tsx` に `RoundBoRow` サブコンポーネント＋「ラウンド別 BO 設定」セクション**（主催者・ブラケット生成済みのみ）。ラウンド名＋BOセレクト（奇数のみ）＋保存。locked 行はセレクト無効＋「結果入力済みのため変更不可」注記。
+- lint / typecheck / test(312緑＝307+5) 通過。実機確認（準々決勝をBO5へ変更→保存→永続化→他ラウンドは不変、を確認）。
+
+### 決めたこと（なぜ）
+- **結果のあるラウンドは編集不可（ロック）**（壁打ち確定）。BO変更で既存スコアが不整合になる（BO3の2-1をBO5にすると勝利条件が変わる）。「結果を取り消してからBO変更」の運用。ロックにより、編集対象は必ず結果なし＝不整合は構造的に起きない。
+- **3位決定戦は別枠**（壁打ち確定）。決勝(pos0)と3位決定戦(pos1)は同じ最終ラウンドだがBOを分けたい需要がある。編集単位を `round`＋`thirdPlace` で表現。
+- **BOは奇数のみ**: トーナメントは引分を構造的に出さない（本戦-5b `toOddBestOf` と整合）。セレクトの選択肢を奇数に限定。
+- **グルーピングは純粋関数に集約**: 表示（page）とロック判定（action）で同じ `computeRoundBoGroups` を使い、UIとサーバー検証の判定を一致させる。
+
+### 次にやること
+- [ ] （イベント形式＋ラウンド別BO設計はこのPRで完結）
+
+---
+
 ## 2026-06-30 — PR-3: トーナメントのみ形式のシード生成分岐
 
 PR-2 で出し分けた `events.format` のうち、**トーナメントのみ形式で実際にブラケットを生成できるようにする**。これまで決勝T生成は「予選順位（ranking_enabled）」前提だったのを、形式でシード経路を分岐する。

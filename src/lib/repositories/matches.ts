@@ -231,6 +231,37 @@ export async function listTournamentMatches(eventId: string) {
   return data;
 }
 
+/**
+ * ラウンド別 BO 編集（PR-4）のロック判定用。トーナメント全試合を
+ * round / position / best_of / 結果有無で取得する。
+ * 結果有無は match_results（1:1）の有無で判定する。
+ */
+export async function listTournamentMatchesForBoEdit(
+  eventId: string,
+): Promise<
+  { round: number; position: number; bestOf: number; hasResult: boolean }[]
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("matches")
+    .select("round, bracket_position, best_of, match_results(match_id)")
+    .eq("event_id", eventId)
+    .eq("phase", "tournament");
+  if (error) throw error;
+
+  return (data ?? []).map((m) => {
+    // match_results は 1:1 のため Supabase は単一オブジェクト or null を返す（配列形にも念のため対応）。
+    const mr = m.match_results as unknown;
+    const hasResult = Array.isArray(mr) ? mr.length > 0 : mr != null;
+    return {
+      round: m.round ?? 1,
+      position: m.bracket_position ?? 0,
+      bestOf: m.best_of,
+      hasResult,
+    };
+  });
+}
+
 /** 決勝トーナメントの試合をすべて削除する（再生成時の作り直し）。 */
 export async function deleteTournamentMatches(eventId: string): Promise<void> {
   const supabase = await createClient();
@@ -324,6 +355,37 @@ export async function updateMatchStream(params: {
       streamer_name: params.streamerName,
     })
     .eq("id", params.matchId);
+  if (error) throw error;
+}
+
+/**
+ * 指定ラウンドのトーナメント試合の best_of を一括更新する（PR-4・ラウンド別BO編集）。
+ * - phase='tournament' ＋ event_id ＋ round で絞る（IDOR は呼び出し側＋RLS が担保）。
+ * - 位置フィルタ（最終ラウンドの決勝/3位決定戦の分離）は呼び出し側が決める:
+ *   - target='third': position=1 のみ（最終ラウンドの3位決定戦）。
+ *   - target='exclude-third': position!=1（最終ラウンドの決勝側＝3位決定戦を除く）。
+ *   - target='all': そのラウンド全試合（3位決定戦が無いラウンド。position による絞り込みなし）。
+ *   注: position=1 は非最終ラウンドでは通常の本戦カードなので、'all' を使う（誤除外を防ぐ）。
+ * - 結果のあるラウンドのロックは呼び出し側（Server Action）が判定する。ここは純粋に更新。
+ */
+export async function updateRoundBestOf(params: {
+  eventId: string;
+  round: number;
+  target: "third" | "exclude-third" | "all";
+  bestOf: number;
+}): Promise<void> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("matches")
+    .update({ best_of: params.bestOf })
+    .eq("event_id", params.eventId)
+    .eq("phase", "tournament")
+    .eq("round", params.round);
+  if (params.target === "third") query = query.eq("bracket_position", 1);
+  else if (params.target === "exclude-third")
+    query = query.neq("bracket_position", 1);
+  // 'all' は position 絞り込みなし。
+  const { error } = await query;
   if (error) throw error;
 }
 

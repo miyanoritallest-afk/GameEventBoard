@@ -29,7 +29,9 @@ import {
   reportTournamentResult,
   clearTournamentResult,
   swapBracketTeams,
+  updateRoundBestOfAction,
 } from "./actions";
+import type { RoundBoGroup } from "@/lib/services/bracket";
 import { updateSchedule, updateStream } from "../matches/actions";
 import { mapsPlayed } from "@/lib/services/match-result";
 import { formatLocalInputForDisplay } from "@/lib/datetime-local";
@@ -107,6 +109,7 @@ export function TournamentBoard({
   podium,
   initialAdvanceCount,
   previewSeeded,
+  roundBoGroups,
   initialMatches,
 }: {
   eventId: string;
@@ -125,6 +128,8 @@ export function TournamentBoard({
   initialAdvanceCount: number;
   /** 現在の進出数で抽出されるシード順チーム（生成前プレビュー）。 */
   previewSeeded: PreviewSeed[];
+  /** ラウンド別 BO 編集グループ（PR-4・主催者のみ編集）。 */
+  roundBoGroups: RoundBoGroup[];
   initialMatches: BoardBracketMatch[];
 }) {
   const router = useRouter();
@@ -274,6 +279,26 @@ export function TournamentBoard({
               </ol>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ラウンド別 BO 編集（主催者・ブラケット生成済みのときのみ）。 */}
+      {!readOnly && hasBracket && roundBoGroups.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="text-sm font-semibold">ラウンド別 BO 設定</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            ラウンドごとに1試合のマップ数（BO）を変えられます。トーナメントは引分なしのため奇数のみ。
+            結果が入力済みのラウンドは変更できません（結果を取り消してから変更してください）。
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            {roundBoGroups.map((g) => (
+              <RoundBoRow
+                key={`${g.round}:${g.thirdPlace ? "3rd" : "main"}`}
+                eventId={eventId}
+                group={g}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -889,6 +914,81 @@ function ScoreInput({
           title="POTG"
         />
       )}
+    </div>
+  );
+}
+
+/** トーナメントで設定できる BO（奇数のみ・引分なし）。 */
+const ODD_BO_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15];
+
+/**
+ * ラウンド別 BO 編集の1行（PR-4）。ラウンド名＋BO セレクト＋保存ボタン。
+ * locked（結果あり）のときはセレクトを無効化し、注記を出す。
+ */
+function RoundBoRow({
+  eventId,
+  group,
+}: {
+  eventId: string;
+  group: RoundBoGroup;
+}) {
+  const router = useRouter();
+  const [bestOf, setBestOf] = useState(group.bestOf);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const dirty = bestOf !== group.bestOf;
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateRoundBestOfAction(eventId, {
+        round: group.round,
+        thirdPlace: group.thirdPlace,
+        bestOf,
+      });
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="min-w-24 font-medium">{group.label}</span>
+      <span className="text-xs text-muted-foreground">
+        ({group.matchCount}試合)
+      </span>
+      <select
+        value={bestOf}
+        disabled={group.locked || isPending}
+        onChange={(e) => setBestOf(Number(e.target.value))}
+        className="rounded-md border border-border bg-background px-2 py-1 text-sm disabled:opacity-60"
+        aria-label={`${group.label} のBO`}
+      >
+        {ODD_BO_OPTIONS.map((n) => (
+          <option key={n} value={n}>
+            BO{n}
+          </option>
+        ))}
+      </select>
+      {group.locked ? (
+        <span className="text-xs text-muted-foreground">
+          結果入力済みのため変更不可
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={save}
+          disabled={!dirty || isPending}
+          className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {isPending ? "保存中…" : "保存"}
+        </button>
+      )}
+      {error && <span className="text-xs text-destructive">{error}</span>}
     </div>
   );
 }
