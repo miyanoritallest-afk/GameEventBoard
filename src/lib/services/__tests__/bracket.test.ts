@@ -7,9 +7,11 @@ import {
   seedTournamentOnly,
   recomputeBracket,
   toOddBestOf,
+  computeRoundBoGroups,
   tournamentPodium,
   type SeedTeam,
   type TournamentSeedTeam,
+  type RoundBoMatch,
   type BracketMatch,
   type StoredMatch,
   type StoredResult,
@@ -383,6 +385,70 @@ describe("toOddBestOf — トーナメントは奇数BO強制", () => {
     expect(toOddBestOf(-2)).toBe(1);
     expect(toOddBestOf(14)).toBe(15);
     expect(toOddBestOf(16)).toBe(15);
+  });
+});
+
+describe("computeRoundBoGroups — ラウンド別BO編集グループ", () => {
+  const m = (
+    round: number,
+    position: number,
+    bestOf: number,
+    hasResult = false,
+  ): RoundBoMatch => ({ round, position, bestOf, hasResult });
+
+  it("4チーム（準決勝2試合＋決勝）をラウンド単位で束ねる", () => {
+    // round1=準決勝(pos0,1), round2=決勝(pos0)。
+    const groups = computeRoundBoGroups([
+      m(1, 0, 3),
+      m(1, 1, 3),
+      m(2, 0, 5),
+    ]);
+    expect(groups.map((g) => g.label)).toEqual(["準決勝", "決勝"]);
+    expect(groups.map((g) => g.bestOf)).toEqual([3, 5]);
+    expect(groups.map((g) => g.matchCount)).toEqual([2, 1]);
+    expect(groups.every((g) => !g.locked)).toBe(true);
+    expect(groups.every((g) => !g.thirdPlace)).toBe(true);
+  });
+
+  it("3位決定戦は決勝と別グループ（最終ラウンドの position=1）", () => {
+    // round2 が最終: pos0=決勝, pos1=3位決定戦。
+    const groups = computeRoundBoGroups([
+      m(1, 0, 3),
+      m(1, 1, 3),
+      m(2, 0, 7), // 決勝
+      m(2, 1, 3), // 3位決定戦
+    ]);
+    // 同ラウンドは 本戦→3位決定戦 の順。
+    const finalGroup = groups.find((g) => g.round === 2 && !g.thirdPlace)!;
+    const thirdGroup = groups.find((g) => g.round === 2 && g.thirdPlace)!;
+    expect(finalGroup.label).toBe("決勝");
+    expect(finalGroup.bestOf).toBe(7);
+    expect(thirdGroup.label).toBe("3位決定戦");
+    expect(thirdGroup.bestOf).toBe(3);
+    // 並び順: 準決勝 → 決勝 → 3位決定戦。
+    expect(groups.map((g) => g.label)).toEqual(["準決勝", "決勝", "3位決定戦"]);
+  });
+
+  it("結果のある試合が1件でもあればそのグループは locked", () => {
+    const groups = computeRoundBoGroups([
+      m(1, 0, 3, true), // 結果あり
+      m(1, 1, 3, false),
+      m(2, 0, 5, false),
+    ]);
+    const semi = groups.find((g) => g.round === 1)!;
+    const final = groups.find((g) => g.round === 2)!;
+    expect(semi.locked).toBe(true);
+    expect(final.locked).toBe(false);
+  });
+
+  it("代表BOは最小positionの試合の値", () => {
+    // 同ラウンド内で best_of が割れていても、position=0 の値を採用。
+    const groups = computeRoundBoGroups([m(1, 1, 7), m(1, 0, 3)]);
+    expect(groups[0].bestOf).toBe(3);
+  });
+
+  it("空入力は空配列", () => {
+    expect(computeRoundBoGroups([])).toEqual([]);
   });
 });
 

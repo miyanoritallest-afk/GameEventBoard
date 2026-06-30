@@ -14,6 +14,7 @@ import {
   extractSeededTeams,
   seedTournamentOnly,
   tournamentPodium,
+  computeRoundBoGroups,
   type SeedTeam,
 } from "@/lib/services/bracket";
 import type { TiebreakerKey } from "@/lib/services/standings";
@@ -209,6 +210,16 @@ export default async function EventTournamentPage({
   // 結果が1件もなければ1回戦の手動入れ替え（D&D）を許可する（壁打ち確定）。
   const swapEnabled = isOrganizer && matches.some((m) => m.hasResult) === false;
 
+  // ラウンド別 BO 編集グループ（PR-4）。結果のあるラウンドは locked。主催者にだけ意味を持つ。
+  const roundBoGroups = computeRoundBoGroups(
+    matches.map((m) => ({
+      round: m.round,
+      position: m.position,
+      bestOf: m.bestOf,
+      hasResult: m.hasResult,
+    })),
+  );
+
   return (
     <div className="dark min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1400px] px-6 py-10">
@@ -250,6 +261,7 @@ export default async function EventTournamentPage({
           podium={podium}
           initialAdvanceCount={currentAdvance}
           previewSeeded={previewSeeded}
+          roundBoGroups={roundBoGroups}
           initialMatches={matches}
         />
       </div>

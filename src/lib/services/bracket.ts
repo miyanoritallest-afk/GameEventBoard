@@ -419,6 +419,95 @@ export function toOddBestOf(bestOf: number): number {
   return n;
 }
 
+// --- ラウンド別 BO 一括編集（PR-4） ---
+
+/** ラウンド別 BO 編集の入力に使う、1試合の最小情報。 */
+export type RoundBoMatch = {
+  round: number;
+  /** ラウンド内の位置（最終ラウンドの 3位決定戦は position=1）。 */
+  position: number;
+  bestOf: number;
+  /** 結果が入力済みか（ロック判定に使う）。 */
+  hasResult: boolean;
+};
+
+/** ラウンド別 BO 編集の1編集グループ（ラウンド or 3位決定戦）。 */
+export type RoundBoGroup = {
+  round: number;
+  /** この編集グループが3位決定戦か（最終ラウンドの position=1）。 */
+  thirdPlace: boolean;
+  /** 表示ラベル（決勝 / 準決勝 / N回戦 / 3位決定戦）。 */
+  label: string;
+  /** グループ共通の BO。グループ内で値が割れている場合は最頻値ではなく最初の値を採用。 */
+  bestOf: number;
+  /** このグループに結果のある試合が1件でもあるか（true なら編集ロック）。 */
+  locked: boolean;
+  /** このグループの試合数。 */
+  matchCount: number;
+};
+
+/**
+ * ラウンド番号からラベルを作る（最終ラウンド=決勝, その前=準決勝…）。
+ * tournament-board / watch の roundLabel と同じ規則。
+ */
+function bracketRoundLabel(round: number, totalRounds: number): string {
+  const fromLast = totalRounds - round;
+  if (fromLast === 0) return "決勝";
+  if (fromLast === 1) return "準決勝";
+  if (fromLast === 2) return "準々決勝";
+  return `${round}回戦`;
+}
+
+/**
+ * ブラケット試合を「BO 編集グループ」に束ねる（PR-4・純粋関数）。
+ *
+ * 仕様（壁打ち確定）:
+ * - 基本はラウンド単位で1グループ（同ラウンドの全試合は同じ BO）。
+ * - 最終ラウンドの3位決定戦（position=1）は決勝（position=0）と分けて別グループにする。
+ * - グループに結果のある試合が1件でもあれば locked=true（BO 変更でスコアが不整合になるため編集不可）。
+ * - bestOf はグループ内の代表値（最小 position の試合の best_of）。
+ *
+ * @returns round 昇順・同ラウンドは「本戦→3位決定戦」の順の編集グループ配列。
+ */
+export function computeRoundBoGroups(matches: RoundBoMatch[]): RoundBoGroup[] {
+  if (matches.length === 0) return [];
+  const totalRounds = Math.max(...matches.map((m) => m.round));
+
+  // (round, thirdPlace) ごとに束ねる。
+  const byKey = new Map<string, RoundBoMatch[]>();
+  for (const m of matches) {
+    const thirdPlace = m.round === totalRounds && m.position === 1;
+    const key = `${m.round}:${thirdPlace ? "3rd" : "main"}`;
+    const arr = byKey.get(key) ?? [];
+    arr.push(m);
+    byKey.set(key, arr);
+  }
+
+  const groups: RoundBoGroup[] = [];
+  for (const [key, ms] of byKey) {
+    const [roundStr, kind] = key.split(":");
+    const round = Number(roundStr);
+    const thirdPlace = kind === "3rd";
+    // 代表 BO は最小 position の試合（決勝なら position=0）の best_of。
+    const rep = [...ms].sort((a, b) => a.position - b.position)[0];
+    groups.push({
+      round,
+      thirdPlace,
+      label: thirdPlace ? "3位決定戦" : bracketRoundLabel(round, totalRounds),
+      bestOf: rep.bestOf,
+      locked: ms.some((m) => m.hasResult),
+      matchCount: ms.length,
+    });
+  }
+
+  // round 昇順、同ラウンドは本戦(false)→3位決定戦(true) の順。
+  return groups.sort(
+    (a, b) =>
+      a.round - b.round ||
+      Number(a.thirdPlace) - Number(b.thirdPlace),
+  );
+}
+
 /** 表彰台（本戦-5c）。確定していない順位は null / 空配列。 */
 export type Podium = {
   /** 優勝（決勝の勝者）。 */

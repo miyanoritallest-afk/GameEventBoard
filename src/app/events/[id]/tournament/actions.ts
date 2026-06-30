@@ -12,6 +12,8 @@ import {
   applyBracketRecompute,
   findTournamentMatchSlots,
   updateMatchSlots,
+  updateRoundBestOf,
+  listTournamentMatchesForBoEdit,
 } from "@/lib/repositories/matches";
 import {
   upsertMatchResult,
@@ -28,6 +30,7 @@ import {
   generateBracket,
   recomputeBracket,
   toOddBestOf,
+  computeRoundBoGroups,
 } from "@/lib/services/bracket";
 import { hasGroupStage } from "@/lib/services/event-format";
 import {
@@ -42,6 +45,7 @@ import {
   generateTournamentSchema,
   reportTournamentResultSchema,
   swapBracketTeamsSchema,
+  updateRoundBestOfSchema,
 } from "./schema";
 
 /**
@@ -161,6 +165,65 @@ export async function generateTournament(
       teamBId: m.teamBId,
     })),
   });
+
+  revalidatePath(`/events/${eventId}/tournament`);
+  return {};
+}
+
+/**
+ * ラウンド別 BO を一括更新する（PR-4）。主催者のみ。
+ *
+ * 防御:
+ * 1. ログイン → 主催者確認。
+ * 2. Zod 検証（round / thirdPlace / bestOf。BO は奇数 1〜15 のみ）。
+ * 3. 結果のあるラウンドはロック: 対象編集グループに結果のある試合が1件でもあれば拒否
+ *    （BO 変更でスコアが不整合になるのを防ぐ。結果を取り消してから変更する運用）。
+ * 4. 対象ラウンドの全試合（3位決定戦は分離）の best_of を更新する。
+ */
+export async function updateRoundBestOfAction(
+  eventId: string,
+  input: { round: number; thirdPlace: boolean; bestOf: number },
+): Promise<TournamentActionState> {
+  const userId = await currentUserId();
+  if (!userId) return { error: "ログインが必要です。" };
+
+  const event = await findEventById(eventId);
+  if (!event || event.organizer_id !== userId) {
+    return { error: "このイベントを操作する権限がありません。" };
+  }
+
+  const parsed = updateRoundBestOfSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力を確認してください。" };
+  }
+  const { round, thirdPlace, bestOf } = parsed.data;
+
+  // 結果のあるラウンドはロック（純粋関数で同じグルーピングを使って判定）。
+  const boMatches = await listTournamentMatchesForBoEdit(eventId);
+  const groups = computeRoundBoGroups(boMatches);
+  const targetGroup = groups.find(
+    (g) => g.round === round && g.thirdPlace === thirdPlace,
+  );
+  if (!targetGroup) {
+    return { error: "対象のラウンドが見つかりません。画面を更新してください。" };
+  }
+  if (targetGroup.locked) {
+    return {
+      error:
+        "結果が入力済みのラウンドはBOを変更できません。結果を取り消してから変更してください。",
+    };
+  }
+
+  // 位置フィルタを決める。同ラウンドに3位決定戦グループが別途あるときだけ、
+  // 本戦側は position=1 を除外する（非最終ラウンドの position=1 を誤って除外しないため）。
+  const hasThirdSibling = groups.some((g) => g.round === round && g.thirdPlace);
+  const target = thirdPlace
+    ? "third"
+    : hasThirdSibling
+      ? "exclude-third"
+      : "all";
+
+  await updateRoundBestOf({ eventId, round, target, bestOf });
 
   revalidatePath(`/events/${eventId}/tournament`);
   return {};

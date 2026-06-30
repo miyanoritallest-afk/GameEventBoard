@@ -60,7 +60,29 @@ export const swapBracketTeamsSchema = z.object({
   y: slotRef,
 });
 
+/**
+ * ラウンド別 BO 一括編集（PR-4）。指定ラウンド（＋3位決定戦フラグ）の全試合の best_of を更新する。
+ * トーナメントは引分を構造的に出さないため BO は奇数のみ受理（1〜15）。
+ * round / thirdPlace はどの編集グループかを表す。event_id・matchId はサーバー側で解決する。
+ */
+export const updateRoundBestOfSchema = z.object({
+  round: z
+    .number({ message: "ラウンドを指定してください" })
+    .int("ラウンドは整数です")
+    .min(1, "ラウンドが不正です")
+    .max(20, "ラウンドが不正です"),
+  /** 最終ラウンドの3位決定戦（position=1）を対象にするか。決勝（position=0）と分けて編集する。 */
+  thirdPlace: z.boolean().default(false),
+  bestOf: z
+    .number({ message: "BOを入力してください" })
+    .int("BOは整数で入力してください")
+    .min(1, "BOは1以上で入力してください")
+    .max(15, "BOは15以下で入力してください")
+    .refine((n) => n % 2 === 1, "トーナメントのBOは奇数のみ設定できます"),
+});
+
 export type GenerateTournamentInput = z.infer<typeof generateTournamentSchema>;
+export type UpdateRoundBestOfInput = z.infer<typeof updateRoundBestOfSchema>;
 export type ReportTournamentResultInput = z.infer<
   typeof reportTournamentResultSchema
 >;
