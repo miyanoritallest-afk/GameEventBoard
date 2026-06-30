@@ -190,6 +190,12 @@ export default async function EventTournamentPage({
               ← 対戦表・順位表へ
             </Link>
             <Link
+              href={`/events/${event.id}/watch`}
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              観戦ビューへ
+            </Link>
+            <Link
               href={`/events/${event.slug ?? event.id}`}
               className="text-sm text-muted-foreground hover:underline"
             >
