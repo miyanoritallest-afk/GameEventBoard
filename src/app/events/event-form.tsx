@@ -39,6 +39,8 @@ export type EventFormDefaults = {
   endsAt?: string;
   recruitDeadline?: string;
   capacity?: string;
+  /** イベント形式（総当たりのみ / トーナメントのみ / 総当たり→決勝T）。既定は両方。 */
+  format?: "round_robin" | "tournament" | "round_robin_then_tournament";
   requireScore?: boolean;
   uncertifiedHandling?: "fill_by_role" | "fill_by_season" | "exclude";
   roleSwapAllowed?: boolean;
@@ -364,6 +366,27 @@ export function EventForm({
       {/* 本戦設定（予選BO・本戦-3d） */}
       <fieldset className="rounded-xl border border-border bg-card p-4">
         <legend className="px-1 text-sm font-semibold">本戦設定</legend>
+
+        {/* イベント形式（2026-06-30 壁打ち）。総当たり/トーナメント/両方を選ぶ。
+            形式に応じた画面分岐（予選/決勝T の出し分け）は後続 PR。 */}
+        <Field label="イベント形式" error={fe.format}>
+          <select
+            name="format"
+            defaultValue={d.format ?? "round_robin_then_tournament"}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          >
+            <option value="round_robin_then_tournament">
+              総当たり → 決勝トーナメント
+            </option>
+            <option value="round_robin">総当たりのみ</option>
+            <option value="tournament">トーナメントのみ</option>
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            大会の進め方を選びます。「総当たり → 決勝トーナメント」は予選で順位を決めてから上位チームでトーナメント、「総当たりのみ」はリーグ戦で完結、「トーナメントのみ」は予選なしで一発勝負です。
+          </p>
+        </Field>
+
+        <div className="mt-4">
         <Field label="BO（1試合のマップ数）" error={fe.groupBestOf}>
           <input
             name="groupBestOf"
@@ -378,6 +401,7 @@ export function EventForm({
             対戦表を生成すると全試合に反映されます。偶数は引分けあり。
           </p>
         </Field>
+        </div>
 
         {/* 3位決定戦の有無（本戦-5c）。決勝トーナメントで準決勝の敗者2チームが戦う。 */}
         <label className="mt-4 flex items-center gap-2 text-sm">

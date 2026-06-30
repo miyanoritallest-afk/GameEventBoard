@@ -66,6 +66,12 @@ export const createDraftEventSchema = z
       ]),
     ),
 
+    // イベント形式（2026-06-30 壁打ち）。総当たりのみ / トーナメントのみ / 総当たり→決勝T。
+    // 既定は従来挙動（round_robin_then_tournament）。形式別の画面分岐は後続 PR。
+    format: z
+      .enum(["round_robin", "tournament", "round_robin_then_tournament"])
+      .default("round_robin_then_tournament"),
+
     // スコアリング設定（既定値あり）。
     // 個人スコアを計算するか（スコアあり応募の親トグル）。OFF なら配下は無効。
     requireScore: z.coerce.boolean().default(true),

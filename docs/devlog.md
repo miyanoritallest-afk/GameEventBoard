@@ -7,6 +7,27 @@
 
 ---
 
+## 2026-06-30 — PR-1: イベント形式 `events.format` カラム＋作成/編集フォームの形式セレクタ
+
+同日に壁打ちで確定したイベント形式設計の最初の一歩。**形式の保存までを扱う（形式別の画面分岐＝予選/決勝Tの出し分けは PR-2 以降）。**
+
+### やったこと
+- **マイグレーション 0026**: `event_format` enum（round_robin / tournament / round_robin_then_tournament）を冪等に作成（`do$$` で重複回避）。`events.format` 列を追加、**既定は `round_robin_then_tournament`＝従来挙動**（既存イベントの見た目を変えない）。
+- types.ts に Row/Insert/Update＋Enums（型・Constants）の format を反映（DB型再生成の手当て）。
+- schema.ts に `format` の Zod enum（既定 round_robin_then_tournament）。actions.ts の3箇所（formData読取・values組み立て・EventEditableValues型）と events Repository の更新ホワイトリストに追加。
+- event-form.tsx の「本戦設定」冒頭に**形式セレクタ（select）**を追加（BOより上＝構成を先に決める順）。edit ページの defaults に `event.format` を渡し、編集時に現在値が初期表示されるように。
+- DB設計書（events 表・enum 一覧）更新。lint / typecheck / test(289緑) 通過。
+
+### 決めたこと（なぜ）
+- **既定を round_robin_then_tournament にする**: 既存データ・現状UIの挙動を一切変えないため。形式を意識しない主催者は従来通り使える。
+- **本 PR はカラム＋設定UIまで**: 形式に応じた画面分岐（round_robin で決勝T非表示など）は影響範囲が広く、独立してレビューしたいので PR-2 に切る。
+
+### 次にやること
+- [ ] **マイグレーション 0026 を Supabase SQL Editor で手動適用**（migration-apply-practice）。適用前は `event.format` 参照でエラーになるため、実機確認は適用後。
+- [ ] PR-2: 形式に応じた画面分岐（各 board・観戦ビュー・詳細での予選/決勝T 出し分け）。
+
+---
+
 ## 2026-06-30 — 設計壁打ち: イベント形式の選択＋ラウンド別BO（実装は次回・PR分割確定）
 
 実機確認のフィードバックから、イベント設計の根幹に関わる論点を壁打ちで確定。**本エントリは設計記録のみ（コード変更なし）**。実装は別 PR 群で進める。
