@@ -138,6 +138,7 @@ export type Database = {
           discord_webhook_url: string | null
           ends_at: string | null
           entry_type: Database["public"]["Enums"]["entry_type"]
+          format: Database["public"]["Enums"]["event_format"]
           game_id: string
           group_best_of: number
           id: string
@@ -181,6 +182,7 @@ export type Database = {
           discord_webhook_url?: string | null
           ends_at?: string | null
           entry_type?: Database["public"]["Enums"]["entry_type"]
+          format?: Database["public"]["Enums"]["event_format"]
           game_id: string
           group_best_of?: number
           id?: string
@@ -224,6 +226,7 @@ export type Database = {
           discord_webhook_url?: string | null
           ends_at?: string | null
           entry_type?: Database["public"]["Enums"]["entry_type"]
+          format?: Database["public"]["Enums"]["event_format"]
           game_id?: string
           group_best_of?: number
           id?: string
@@ -1319,6 +1322,10 @@ export type Database = {
       delivery_channel: "discord_dm" | "discord_webhook"
       delivery_status: "pending" | "sent" | "failed" | "skipped"
       entry_type: "individual" | "team" | "mixed"
+      event_format:
+        | "round_robin"
+        | "tournament"
+        | "round_robin_then_tournament"
       event_status:
         | "draft"
         | "published"
@@ -1468,6 +1475,11 @@ export const Constants = {
       delivery_channel: ["discord_dm", "discord_webhook"],
       delivery_status: ["pending", "sent", "failed", "skipped"],
       entry_type: ["individual", "team", "mixed"],
+      event_format: [
+        "round_robin",
+        "tournament",
+        "round_robin_then_tournament",
+      ],
       event_status: [
         "draft",
         "published",

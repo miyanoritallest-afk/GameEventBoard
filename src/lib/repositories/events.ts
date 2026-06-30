@@ -15,6 +15,7 @@ type EventEditableColumns = Pick<
   | "ends_at"
   | "recruit_deadline"
   | "capacity"
+  | "format"
   | "require_score"
   | "uncertified_handling"
   | "role_swap_allowed"
