@@ -7,6 +7,34 @@
 
 ---
 
+## 2026-07-01 — 通知 PR-A2b: 通知の Realtime ライブ更新（土台①A 完了）
+
+A2a はサーバー描画のため、通知が来ても再読み込みするまで気づけなかった。自分宛て通知の INSERT を Realtime で検知し、🔔バッジと `/notifications` 一覧をリロードなしで最新化する。**このプロジェクト初の Supabase Realtime 導入**。これで土台①A（アプリ内通知）が完了。
+
+### やったこと
+- **マイグレーション `0028_notifications_realtime.sql`（新規・手動適用これから）**: `notifications` を `supabase_realtime` publication に追加（冪等：既に含まれていれば no-op）。
+- **Realtime 購読コンポーネント `src/components/notifications-realtime.tsx`（新規・クライアント）**: `notifications` への自分宛て INSERT（`filter: user_id=eq.<uid>`）を購読し、検知したら `router.refresh()`。**購読前にセッションの access_token を `realtime.setAuth()` で設定**（RLS 配下テーブルの変更配信に必須・後述バグ）。未ログインは購読しない。アンマウントで `removeChannel`。
+- **ヘッダー `site-header.tsx` に購読を1つ配置**: ログイン時のみマウント＝全ページで効く。
+- lint / typecheck / test(315緑) / build 通過。
+- **実機確認済み（0028 適用後・Playwright）**: `/notifications` を開いたまま別経路で自分宛て通知を作る→**リロードせず**一覧に追加＋🔔バッジが「未読 N 件」に増加、を確認。channel status も `SUBSCRIBED` を確認。
+
+### 実機で見つけたバグと修正（Realtime × RLS の認証）
+- **症状**: 購読は `SUBSCRIBED` になるのに、自分宛て通知を INSERT しても発火しない（`router.refresh()` が呼ばれず画面が変わらない）。
+- **原因**: Realtime の `postgres_changes` は RLS を尊重するが、**購読者のアクセストークンを Realtime に渡さないと RLS 評価ができず変更が配信されない**。anon キーのブラウザクライアントは、ログインセッションの JWT をチャンネルに明示的に渡す必要がある。
+- **修正**: subscribe 前に `supabase.auth.getSession()` の `access_token` を `supabase.realtime.setAuth(token)` で設定。これで自分宛て INSERT が届くようになった。自動テストでは捕まらない（実セッション＋Realtime＋RLS が絡む）ため実機確認の収穫。
+
+### 決めたこと（なぜ）
+- **検知したら `router.refresh()`**（壁打ち確定）。🔔バッジ（ヘッダー）も一覧もサーバー描画なので、クライアント状態を二重管理せず「変化を検知→サーバー再取得」で表示は常に DB 真値。既存のサーバーコンポーネント構造を壊さない最小手。
+- **購読はヘッダーに1つ**（全ページ共通ヘッダーに置く）。ページごとに購読を張らず、どの画面でも新着で🔔が動く。
+- **Realtime は RLS を尊重**: 0027 の SELECT=宛先本人のみ が Realtime にも効くため、各ユーザーには自分宛ての INSERT だけが届く（他人の通知は漏れない）。念のため `filter` でも user_id を絞る二重防御。
+
+### 次にやること
+- [x] 0028 を Supabase SQL Editor で手動適用。
+- [x] 実機確認（開いたまま通知→リロードせず🔔・一覧が増える）完了。
+- [ ] （土台①A 完了）次フェーズ: ②フォロー基盤（follows CRUD＋フォローボタン）。
+
+---
+
 ## 2026-07-01 — 通知 PR-A2a: アプリ内通知の生成・一覧・🔔（応募承認1種を接続）
 
 通知機能の土台の本体。応募が承認されると応募者本人に通知が飛び、`/notifications` 一覧とヘッダー🔔（未読バッジ）で見られるようにした。**Realtime は分けて PR-A2b で**（本PRは「承認→リロードで通知が出る」まで）。スキーマ変更なし（RLS は 0027 で適用済み）。
