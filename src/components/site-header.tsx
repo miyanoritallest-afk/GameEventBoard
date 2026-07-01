@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { findDiscordName } from "@/lib/repositories/users";
 import { countMyUnreadNotifications } from "@/lib/repositories/notifications";
 import { LogoutButton } from "@/app/me/logout-button";
+import { NotificationsRealtime } from "@/components/notifications-realtime";
 
 /**
  * 全ページ共通ヘッダー（サーバーコンポーネント）。layout.tsx に配置する。
@@ -39,6 +40,8 @@ export async function SiteHeader() {
         <div className="flex items-center gap-3 text-sm">
           {user ? (
             <>
+              {/* 自分宛て通知の Realtime 購読（新着で🔔・一覧をライブ更新） */}
+              <NotificationsRealtime userId={user.id} />
               <Link
                 href="/notifications"
                 className="relative rounded-lg p-2 hover:bg-accent"

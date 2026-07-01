@@ -602,6 +602,7 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
 - follows / notifications: 本人のみ。
   - notifications 実装状況: 0027 で設定（通知 PR-A1）。SELECT/UPDATE=「宛先本人のみ（user_id=auth.uid()）」＝盗み見・勝手な既読化を DB 層で固く防ぐ。INSERT=authenticated（with check true）。**type ごとに引き金を引く主体が異なる**（応募承認=主催者 / スクリム登録=チームメンバー / 直前リマインド=Cron…）ため DB 層で type 別の引き金判定を共通化できず、INSERT の正当性（どの type を誰の業務が誰宛てに作るか）は各 Server Action（アプリ層）が担保する（rls-authz-asymmetry: 操作系は if 主役）。文面 title/body/link_url は開発側がサーバーで固定生成（マスアサインメント防止）。
   - notification_events / notification_deliveries 実装状況: 0027 で設定。ともに **SELECT ポリシーを意図的に作らない**＝一般ユーザーは出来事・配信状況テーブルを直接読めない（UI に出さないサーバー処理専用データ）。INSERT のみ authenticated（Server Action / 将来の宛先集約・Discord 配信から記録）。
+  - notifications Realtime: 0028 で `notifications` を `supabase_realtime` publication に追加（通知 PR-A2b）。Realtime は RLS を尊重するため、購読しても SELECT=宛先本人のみ（0027）が効き、各ユーザーには自分宛ての INSERT だけが届く。クライアントは変更検知で `router.refresh()` し 🔔・一覧を最新化。
 - is_admin は全権限のエスケープハッチ。
 
 ---
