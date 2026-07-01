@@ -23,6 +23,21 @@ export async function findDiscordName(userId: string): Promise<string | null> {
 }
 
 /**
+ * ユーザーが実在するか（id の有無だけ）を判定する。フォロー等の対象実在確認用。
+ * discord_name の有無では判定しない（null 名でも実在ユーザーは弾かない）。
+ */
+export async function existsUserById(userId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("id", userId);
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+/**
  * ユーザーの battle_tag を取得する。応募フォームの既定値に使う。
  * 未登録は null。本人の行は RLS（0009）で取得できる。
  */
