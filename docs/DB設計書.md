@@ -600,6 +600,7 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
   - 実装状況: 0015 で設定（本戦フェーズ PR-3a）。SELECT=「主催者 or 同イベント参加者」（matches 経由で event 判定）。INSERT/UPDATE/DELETE=「主催者 or 対戦両チームの代表（captain）」。代表判定は match_results→matches→teams→registrations の多段になるため security definer 関数 `can_report_match(match_id, uid)` に切り出し（再帰評価回避）。winner_team_id / reported_by はアプリ層がスコアと auth.uid() から固定（マスアサインメント対策）。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
+  - follows 実装状況: 0029 で設定（フォロー PR-②）。SELECT/INSERT/DELETE=本人のみ（follower_id=auth.uid()）。二重フォローは UNIQUE(follower_id, target_type, target_id)。target_id はポリモーフィック（event/user/series・FK 無し）のため、対象の実在確認はアプリ層（Server Action）で担保。本 PR は target=event/user のみ（series はシリーズ画面実装後）。
   - notifications 実装状況: 0027 で設定（通知 PR-A1）。SELECT/UPDATE=「宛先本人のみ（user_id=auth.uid()）」＝盗み見・勝手な既読化を DB 層で固く防ぐ。INSERT=authenticated（with check true）。**type ごとに引き金を引く主体が異なる**（応募承認=主催者 / スクリム登録=チームメンバー / 直前リマインド=Cron…）ため DB 層で type 別の引き金判定を共通化できず、INSERT の正当性（どの type を誰の業務が誰宛てに作るか）は各 Server Action（アプリ層）が担保する（rls-authz-asymmetry: 操作系は if 主役）。文面 title/body/link_url は開発側がサーバーで固定生成（マスアサインメント防止）。
   - notification_events / notification_deliveries 実装状況: 0027 で設定。ともに **SELECT ポリシーを意図的に作らない**＝一般ユーザーは出来事・配信状況テーブルを直接読めない（UI に出さないサーバー処理専用データ）。INSERT のみ authenticated（Server Action / 将来の宛先集約・Discord 配信から記録）。
   - notifications Realtime: 0028 で `notifications` を `supabase_realtime` publication に追加（通知 PR-A2b）。Realtime は RLS を尊重するため、購読しても SELECT=宛先本人のみ（0027）が効き、各ユーザーには自分宛ての INSERT だけが届く。クライアントは変更検知で `router.refresh()` し 🔔・一覧を最新化。

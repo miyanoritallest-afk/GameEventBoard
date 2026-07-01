@@ -7,6 +7,34 @@
 
 ---
 
+## 2026-07-01 — フォロー PR-②: フォロー基盤（event / user・follows RLS＋CRUD＋ボタン）
+
+通知の土台①A 完了に続き、次フェーズ②フォロー基盤。イベント詳細でイベント／主催者をフォロー・解除できるようにした。フォロー対象3種のうち **event と user の2種**（series はシリーズ画面が未実装なので⑥に回す）。フォローしても通知が届くのは③（出来事→宛先集約）以降。
+
+### やったこと
+- **マイグレーション `0029_follows_rls.sql`（新規・適用済み）**: follows の RLS。SELECT/INSERT/DELETE=本人のみ（follower_id=auth.uid()）。二重フォローは UNIQUE(follower_id, target_type, target_id)。
+- **follows Repository `src/lib/repositories/follows.ts`（新規）**: `insertFollow`（23505→alreadyFollowing）／`deleteFollow`（冪等）／`isFollowing`（head count）。
+- **フォロー Server Action `src/app/events/[id]/follow-actions.ts`（新規）**: ログイン確認＋Zod（event/user・uuid）＋**対象の実在確認**（ポリモーフィックで FK 無しのため event=`findEventById`／user=`findDiscordName` で存在確認）＋follow/unfollow。follower_id は auth.uid() 固定。
+- **`follow-schema.ts`（Zod）**: target は event/user のみ・uuid（マスアサインメント対策）。
+- **FollowButton `follow-button.tsx`（新規・クライアント）**: 楽観的トグル・失敗で戻す・未ログインは /login へ・event/user 共用。
+- **イベント詳細ページに配置**: 非主催者のみ、イベント／主催者(名前)の2ボタン。初期状態は `isFollowing` で取得。
+- lint / typecheck / test(315緑) / build 通過。**実機確認済み**（Playwright＋ひで主催のテストイベント）: 非主催者にボタン表示→クリックで「フォロー中」[pressed]→DB に follows 1件、を確認。検証データは掃除済み。
+
+### 決めたこと（なぜ）
+- **対象は event / user の2種のみ**（壁打ち確定）。series はシリーズ画面（一覧・詳細）が未実装でボタンの置き場所が無いため⑥に回す。follows 基盤（RLS/CRUD）は series でも使い回せる。
+- **対象の実在確認をアプリ層で**（follows.target_id はポリモーフィックで FK が無い設計）。存在しない event/user のフォローを Server Action で弾く。
+- **フォロー状態取得は非主催者のみ**（主催者は自分の対象をフォローしない）。未ログインはボタンは出すが押下で /login へ。
+- 既存流儀の踏襲: 楽観的トグル（A2a 既読化と同じ）・保護操作は /login?redirect=・follower_id サーバー固定。
+
+### 実機で確認した運用メモ（バグではない）
+- **0029 未適用だとフォロー INSERT が 42501**（RLS 有効・ポリシーゼロ＝全拒否）。手動適用で解消（[[migration-apply-practice]]）。通知の 0027 と同じ「適用忘れ」注意点。
+
+### 次にやること
+- [ ] ③ 出来事→通知生成（notification_events→宛先集約→重複排除 3.6.1）。ここで初めてフォロワーに通知が飛ぶ。
+- [ ] ⑥ シリーズ概念（event_series/series_members）＋ series フォロー。
+
+---
+
 ## 2026-07-01 — 通知 PR-A2b: 通知の Realtime ライブ更新（土台①A 完了）
 
 A2a はサーバー描画のため、通知が来ても再読み込みするまで気づけなかった。自分宛て通知の INSERT を Realtime で検知し、🔔バッジと `/notifications` 一覧をリロードなしで最新化する。**このプロジェクト初の Supabase Realtime 導入**。これで土台①A（アプリ内通知）が完了。

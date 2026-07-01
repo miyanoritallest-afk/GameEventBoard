@@ -12,9 +12,11 @@ import {
   eventFormatLabel,
   tournamentStageLabel,
 } from "@/lib/services/event-format";
+import { isFollowing } from "@/lib/repositories/follows";
 import { PublishButton } from "./publish-button";
 import { DeleteDraftButton } from "./delete-draft-button";
 import { ApplyButton } from "./apply-button";
+import { FollowButton } from "./follow-button";
 
 /** 応募ステータスの日本語ラベル。 */
 const REG_STATUS_LABEL: Record<string, string> = {
@@ -81,6 +83,25 @@ export default async function EventDetailPage({
     (event.organizer as { discord_name: string } | null)?.discord_name ??
     "-";
 
+  // フォロー状態（イベント／主催者）。主催者は自分の対象をフォローしないので非主催者のみ。
+  // 未ログインはボタンは出すが状態は false（押下で /login へ）。
+  const canFollow = !isOrganizer;
+  const [followingEvent, followingOrganizer] =
+    canFollow && viewerId !== null
+      ? await Promise.all([
+          isFollowing({
+            followerId: viewerId,
+            targetType: "event",
+            targetId: event.id,
+          }),
+          isFollowing({
+            followerId: viewerId,
+            targetType: "user",
+            targetId: event.organizer_id,
+          }),
+        ])
+      : [false, false];
+
   // 応募の状態（ログイン済み・非主催者・公開中のときだけ意味を持つ）。
   const canApply = viewerId !== null && !isOrganizer && event.status !== "draft";
   const myRegistration = canApply
@@ -129,6 +150,29 @@ export default async function EventDetailPage({
             形式: {eventFormatLabel(event.format)}
           </span>
         </div>
+
+        {/* フォロー導線（非主催者のみ）。イベント／主催者をフォローできる。
+            未ログインでもボタンは出す（押下で /login へ）。通知が届くのは③以降。 */}
+        {canFollow && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <FollowButton
+              targetType="event"
+              targetId={event.id}
+              initialFollowing={followingEvent}
+              isLoggedIn={viewerId !== null}
+              redirectTo={`/events/${event.id}`}
+              label="このイベント"
+            />
+            <FollowButton
+              targetType="user"
+              targetId={event.organizer_id}
+              initialFollowing={followingOrganizer}
+              isLoggedIn={viewerId !== null}
+              redirectTo={`/events/${event.id}`}
+              label={`主催者(${organizerName})`}
+            />
+          </div>
+        )}
 
         {event.description && (
           <p className="mt-4 whitespace-pre-wrap text-sm text-foreground/90">
