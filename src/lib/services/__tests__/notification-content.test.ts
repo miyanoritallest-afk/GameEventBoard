@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   NotificationType,
   buildRegistrationApprovedContent,
+  buildSeriesSeasonAnnouncedContent,
 } from "../notification-content";
 
 /**
@@ -34,5 +35,27 @@ describe("buildRegistrationApprovedContent", () => {
     // title は固定文言（イベント名を混ぜない）。body の name は React 側で自動エスケープされる。
     expect(c.title).toBe("応募が承認されました");
     expect(c.linkUrl).toBe("/events/e-9");
+  });
+});
+
+describe("NotificationType.SeriesSeasonAnnounced", () => {
+  it("type 文字列は要件定義書 3.7 の series_season_announced", () => {
+    expect(NotificationType.SeriesSeasonAnnounced).toBe(
+      "series_season_announced",
+    );
+  });
+});
+
+describe("buildSeriesSeasonAnnouncedContent", () => {
+  it("主催者名とイベント名を本文に埋め、link はイベントページを指す", () => {
+    const c = buildSeriesSeasonAnnouncedContent({
+      eventId: "e-1",
+      eventTitle: "OSL Season3",
+      organizerName: "のり",
+    });
+    expect(c.title).toBe("新しいイベントが公開されました");
+    expect(c.body).toContain("OSL Season3");
+    expect(c.body).toContain("のり");
+    expect(c.linkUrl).toBe("/events/e-1");
   });
 });

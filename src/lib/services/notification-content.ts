@@ -13,6 +13,12 @@
 export const NotificationType = {
   /** 応募が承認された（参加確定）。宛先=応募者本人・直接関係者。 */
   RegistrationApproved: "registration_approved",
+  /**
+   * 新しい開催回が公開された（＝新シーズン告知。単発イベント含む）。
+   * 宛先=シリーズ／主催者フォロワー・フォロー集約（3.7 の #4）。
+   * 本 PR では主催者(user)フォロワー分のみ生成（series は⑥で追加）。
+   */
+  SeriesSeasonAnnounced: "series_season_announced",
 } as const;
 
 export type NotificationTypeValue =
@@ -35,6 +41,22 @@ export function buildRegistrationApprovedContent(params: {
   return {
     title: "応募が承認されました",
     body: `「${params.eventTitle}」への参加が承認されました。`,
+    linkUrl: `/events/${params.eventId}`,
+  };
+}
+
+/**
+ * #4 新しい開催回の公開。宛先はフォロワー（本 PR は主催者フォロワー）。
+ * link 先は公開されたイベントページ。主催者名・イベント名は通知時点の値を渡す。
+ */
+export function buildSeriesSeasonAnnouncedContent(params: {
+  eventId: string;
+  eventTitle: string;
+  organizerName: string;
+}): NotificationContent {
+  return {
+    title: "新しいイベントが公開されました",
+    body: `${params.organizerName}さんが「${params.eventTitle}」を公開しました。`,
     linkUrl: `/events/${params.eventId}`,
   };
 }
