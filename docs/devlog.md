@@ -7,6 +7,66 @@
 
 ---
 
+## 2026-07-01 — 通知 PR-A1: 通知3テーブルのRLSポリシー（0027）
+
+通知機能の土台の第一歩。0001 で RLS は ON なのにポリシーゼロ＝全拒否だった `notifications` / `notification_events` / `notification_deliveries` にポリシーを整備し、「自分宛ての通知を読める」土台を用意する。DB のみ（アプリ実装は次の PR-A2）。
+
+### やったこと
+- **`0027_notifications_rls.sql` を追加**（手動適用はこれから）。既存 0004〜のポリシー書式（`drop if exists`→`create`・`to authenticated`・`auth.uid()`）に準拠。
+  - `notifications`: SELECT/UPDATE=**宛先本人のみ**（`user_id=auth.uid()`）。INSERT=authenticated（`with check true`）。
+  - `notification_events` / `notification_deliveries`: INSERT=authenticated のみ。**SELECT ポリシーは意図的に作らない**＝一般ユーザーは直接読めない（サーバー処理専用データ）。
+- **DB設計書6章の `notifications` 実装状況を詳細化**（0027 の SELECT/UPDATE/INSERT 方針・events/deliveries が SELECT 不可の理由）。
+
+### 決めたこと（なぜ）
+- **SELECT/UPDATE は宛先本人のみで固く守る**（壁打ち確定）。通知は全ユーザー分が1テーブルに混在するため、盗み見（他人宛ての SELECT）と勝手な既読化（他人宛ての UPDATE）を DB 層で物理的に防ぐ。「本人」＝通知の宛先ユーザー（`user_id`）。
+- **INSERT は type 別の引き金判定を DB 層でやらない**（壁打ちで方針を2回修正して確定）。当初「INSERT=主催者のみ」と設計しかけたが、カタログ（3.7）を見ると**引き金を引く主体が type ごとに違う**（応募承認=主催者 / スクリム登録=チームメンバー / 直前リマインド=Cron…人ですらない）。特定の人に紐づく RLS を共通化できないため、INSERT は authenticated まで許可し、「どの type を・誰の業務が・誰宛てに作るか」の正当性は各 Server Action（アプリ層）が担保する（[[rls-authz-asymmetry]]: 操作系は if 主役・RLS は補助）。
+- **通知の文面は開発側がサーバーで固定生成**（マスアサインメント防止）。主催者・参加者が中身を編集する領域ではない。RLS は中身の正しさは見ない。
+- **events/deliveries は SELECT 不可**: UI に出さないサーバー処理専用データ。出来事・配信状況を一般ユーザーに直接読ませない。
+
+### 次にやること
+- [ ] 0027 を Supabase SQL Editor で手動適用（[[migration-apply-practice]]）。
+- [ ] PR-A2: `/notifications`一覧＋ヘッダー🔔＋Realtime＋応募承認→通知1件生成（#1 `registration_approved`）。
+
+---
+
+## 2026-07-01 — 通知機能の着手方針（壁打ち・全体分割と土台PRの確定）
+
+「イベント形式＋ラウンド別BO」（#67〜#70）が完結したので、次の宿題＝**通知機能**の着手方針を壁打ちで確定した。通知はこのアプリの中心価値（要件定義書 3.5 で「通知設計の中心的な価値」と明記）だが、**スキーマは0001で全部先行投入済み・アプリ側は完全ゼロ**という状態。実装コードは書かず、分割と土台PRの設計だけを固めた回。
+
+### 現状（一次情報で裏取り）
+- **スキーマは揃っている**（0001）: `follows` / `event_series` / `series_members` / `series_invites` / `notification_events` / `notifications` / `notification_deliveries` ＋ `events.series_id` / `events.discord_webhook_url` / `events.auto_announce` ＋ enum（`follow_target` / `delivery_channel(discord_dm,discord_webhook)` / `delivery_status`）。`types.ts` にも型あり。
+- **アプリ側はゼロ**: `app/` 配下に follows/notification/series/discord のヒット皆無。UI・Action・Service・Repository すべて未実装。
+- **⚠️ RLSポリシーの穴**: 上記7テーブルは0001で `enable row level security` されているが、**0004以降のポリシー整備に一切含まれていない**＝「RLS有効・ポリシーゼロ＝全拒否」。このままだと自分の通知すら読めない。→ **どのPRから始めるにせよ、RLSポリシー追加が最初の必須作業**。
+
+### 決めたこと（なぜ）
+- **アプリ内通知とDiscord通知は別レイヤー・両方セット**（要件定義書 3.5.2）。同じ1出来事を「①アプリ内（DB記録＋Realtime＝確実な土台）」＋「②Discord Webhook（全体告知）」＋「③Discord Bot DM（個人）」に流す。DM単独は「DM拒否設定の人に届かない＝通知が消える」事故になるため、**アプリ内に必ず記録した上でDiscordをブーストとして乗せる**。
+- **着手はアプリ内の土台から**（壁打ち確定）。外部設定ゼロでローカル完結でき、3.5.2 の実装順（アプリ内→直後にDM）とも一致。
+- **全体分割（依存順・7段）**:
+  1. **①A アプリ内通知の土台**（今回ここ）: RLSポリシー＋`/notifications`一覧＋ヘッダー🔔＋未読バッジ＋Realtime＋「応募確定」1種だけ接続
+  2. フォロー基盤（`follows` CRUD＋フォローボタン event/user）
+  3. 出来事→通知生成（`notification_events`→宛先集約→重複排除。フォロー多重の事故防止＝3.6.1）
+  4. Discord Webhook（全体告知・Bot不要＝外部設定が一番軽い）
+  5. Discord Bot DM（個人向け・Bot作成/サーバー導入＝外部作業が重い）
+  6. シリーズ概念（`event_series`/`series_members`。フォロー対象をシリーズまで拡張）
+  7. Cron（スケジュール通知。3・4が動いてから）
+- **土台①Aの内訳（今回作るPR）**:
+  - **PR-A1**: RLSポリシー追加マイグレーション（0027）。`notifications` は本人のみ SELECT／UPDATE（既読化）。`notification_events`・`notification_deliveries` はサーバー専用（一般SELECT不可）。既存 0004〜 のポリシー書式に揃える。
+  - **PR-A2**: `/notifications`一覧＋ヘッダー🔔＋未読バッジ＋Realtime＋**応募承認時に通知1件生成**（③の最小雛形を1本だけ通す）。自分で応募→承認で🔔にバッジ・一覧に1件・クリックで `link_url` へ、が**手動SQLなしで**E2Eに通るのをゴールにする。
+- **RLSより先に「何に通知が飛ぶか」を確定**（壁打ち・指摘を受けて）。RLS・一覧UI・宛先集約はすべて「通知イベントの一覧」を前提にするため、先に**通知イベントカタログ**を要件定義書 3.7 に切って確定した。11イベントを `type` 文字列・宛先分類（全体/個人）・起点（直接関係者/フォロー集約）・担当PRの表にした。`type` 命名規則は `snake_case`・「対象名詞_過去分詞」。**土台①Aで接続するのは #1 `registration_approved` のみ**（宛先が応募者本人で自明・フォロー不要・既存承認フローに乗せるだけ）。
+- **宛先の決まり方で2分類**（3.7の核心）: 「直接関係者（DB関係から一意に引ける・集約不要）」と「フォロー集約（フォロワー和＋重複排除＝3.6.1・②③が前提）」。土台が #1 なのは前者の最小例だから。
+- **カタログの2つの穴を潰した**（壁打ちの指摘を受けて）:
+  - **旧#4「イベント公開」を削除・#4 `series_season_announced` に統合**。非公開イベントはフォローできない＝公開の瞬間に event フォロワーはゼロで空振り。「新しい開催回が公開された」の宛先は 3.5.1 に従い series フォロワー ∪ 主催者フォロワー。単発（series_id=null）は主催者フォロワーのみ。1DB操作＝1出来事で 3.6.1 の二重通知も回避。
+  - **リマインド（#7/#8）は「開始2時間前」の相対発火に確定**。当初要望の「PM18:00」は例で、実体は「予定の2時間前」。試合とスクリムは type を分ける（`match_starting_soon`/`scrim_starting_soon`）ことで文面をサーバー側で出し分ける。Cron は数分間隔で「この後2時間以内開始・未送信」を拾い `UNIQUE` で二重送信防止。
+- **一覧の置き場所は専用ページ `/notifications`＋全ページ共通ヘッダーに🔔**（壁打ち確定）。見落とし防止が価値なのでどの画面からも気づける導線を優先。`/me` はプロフィール専用のまま役割分担を維持。
+- **実装ガイドライン準拠の要点**: 通知生成は Service（出来事→宛先集約の純粋ロジック）＋Repository に分離し Controller は薄く。`/notifications` は保護ページ（A:リダイレクト＋B:Actionで弾く）。既読化は本人のもののみ（アプリ層if＋RLS）。`title/body/link_url` はサーバー側で固定生成（マスアサインメント防止）。`UNIQUE(user_id, source_event_id)` を最初から効かせ二重通知を物理的に防ぐ。マイグレーションは Supabase SQL Editor で手動適用。
+
+### 次にやること
+- [ ] PR-A1: RLSポリシー追加マイグレーション（0027）を `feature/notifications-rls` で作成。
+- [ ] PR-A2: `/notifications`＋ヘッダー🔔＋Realtime＋応募承認→通知1件生成。
+- [ ] 後続②〜⑦は上の依存順で。Discord連携（④⑤）着手時に外部設定（Webhook発行／Bot作成・サーバー導入）の手順を別途壁打ち。
+
+---
+
 ## 2026-07-01 — PR-4: 決勝Tブラケットのラウンド別BO一括編集UI
 
 「イベント形式＋ラウンド別BO」設計の最終PR。決勝Tブラケット画面で**ラウンド単位の一括BO編集**を可能にする。トーナメントは生成し直すとラウンド数が変わる（4チーム2R/8チーム3R）ため、生成前固定ではなく**生成後にラウンド単位で編集**する方式（既存 `matches.best_of` を活用＝追加カラム不要）。
