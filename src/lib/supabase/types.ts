@@ -1317,6 +1317,13 @@ export type Database = {
     Functions: {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      list_follower_ids: {
+        Args: {
+          p_target_type: Database["public"]["Enums"]["follow_target"]
+          p_target_id: string
+        }
+        Returns: string[]
+      }
     }
     Enums: {
       delivery_channel: "discord_dm" | "discord_webhook"

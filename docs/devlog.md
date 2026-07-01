@@ -7,6 +7,34 @@
 
 ---
 
+## 2026-07-01 — 通知 PR-③: 出来事→通知生成（フォロワー集約・重複排除／公開通知を接続）
+
+①（通知）と②（フォロー）を繋ぐ要。要件定義書 3.6.1 の「出来事起点→宛先集約→重複排除→1人1通」を初めて実装。最初の出来事は **主催者が新イベントを公開 → 主催者(user)フォロワーへ通知**（type=`series_season_announced`・3.7 の #4）。series フォロワーは⑥で追加。
+
+### やったこと
+- **マイグレーション `0030_list_follower_ids.sql`（新規・適用済み）**: フォロワー集約用 security definer 関数。follows の RLS（0029・本人のみ SELECT）では「対象のフォロワー全員」を集められないため、RLS をバイパスして follower_id 集合を返す（0015 can_report_match と同じパターン）。
+- **`follows.ts` に `listFollowerIds`**: 上記 RPC 経由でフォロワー列挙。`types.ts` に関数の型を手動追加（gen types で正式化される）。
+- **`notification-fanout.ts`（新規・純粋関数）**: `aggregateRecipients`（複数フォロワー集合の和集合＋ユーザー単位重複排除＋本人除外・順序安定）。3.6.1 の核心。テスト +7。
+- **`notification-content.ts` に `SeriesSeasonAnnounced` type＋文面**（サーバー固定生成）。テスト +2。
+- **`publishEvent`（Controller）に `notifyEventPublished` を差し込み**: 公開成功後にベストエフォートで通知（失敗しても公開は成功）。宛先＝主催者フォロワー・本人除外。
+- lint / typecheck / test(324緑) / build 通過。**実機確認済み**（0030適用後・Playwright＋service_role）: ひで→のりフォロー→のりが OSLmini 公開→**ひで宛てに series_season_announced 通知が生成**、を確認。検証データは掃除済み。
+
+### 決めたこと（なぜ）
+- **type は series_season_announced を使う**（壁打ち確定）。3.7 で旧 event_published は series_season_announced に統合済み。新 type を作ると同じ公開操作から2通飛ぶ二重通知リスク（3.6.1 が防ぐ事故）が再発するため、1 type に統一し⑥で series フォロワーを足すだけにする。
+- **フォロワー集約は security definer 関数（0030）**: follows の RLS（本人のみ SELECT）を通常クライアントで跨げないため。返すのは user_id のみ（フォロー関係の詳細は出さない）。
+- **宛先集約・重複排除は純粋関数（Service）に集約**: 3.6.1 の規則（和集合・ユニーク化・本人除外）をテストで固定。DB 取得（Repository）と分離。
+- **ベストエフォート＋並列生成**: 通知失敗で公開を巻き添えにしない。各宛先は Promise.allSettled で独立生成（1件失敗が他を巻き込まない・多数フォロワーでも直列待ちにしない）。二重は UNIQUE(user_id, source_event_id) が最終防衛。
+
+### コードレビュー（/code-review high）で修正
+- 直列ループ→Promise.allSettled（部分配信の防止＋並列化）。`as string[]` キャスト削除（types.ts の Returns 定義で不要に）。
+
+### 次にやること
+- [ ] 他の出来事を接続（日程確定・結果更新＝event フォロワー集約）。カタログ 3.7 参照。
+- [ ] ④ Discord Webhook（全体告知）／⑤ Bot DM（個人）。外部設定の壁打ちから。
+- [ ] ⑥ シリーズ概念＋series フォロワーを series_season_announced に追加。
+
+---
+
 ## 2026-07-01 — フォロー PR-②: フォロー基盤（event / user・follows RLS＋CRUD＋ボタン）
 
 通知の土台①A 完了に続き、次フェーズ②フォロー基盤。イベント詳細でイベント／主催者をフォロー・解除できるようにした。フォロー対象3種のうち **event と user の2種**（series はシリーズ画面が未実装なので⑥に回す）。フォローしても通知が届くのは③（出来事→宛先集約）以降。

@@ -601,6 +601,7 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
 - 結果/順位: 参照は公開、更新は運営。
 - follows / notifications: 本人のみ。
   - follows 実装状況: 0029 で設定（フォロー PR-②）。SELECT/INSERT/DELETE=本人のみ（follower_id=auth.uid()）。二重フォローは UNIQUE(follower_id, target_type, target_id)。target_id はポリモーフィック（event/user/series・FK 無し）のため、対象の実在確認はアプリ層（Server Action）で担保。本 PR は target=event/user のみ（series はシリーズ画面実装後）。
+  - フォロワー集約（通知③）: 0030 で `list_follower_ids(target_type, target_id)` security definer 関数を追加。follows の RLS（本人のみ SELECT）では出来事→通知生成の宛先集約に必要な「対象のフォロワー全員」を通常クライアントから集められないため、RLS をバイパスして follower_id 集合を返す（0015 can_report_match と同型）。返すのは user_id のみ。サーバー（Server Action）の通知生成からのみ呼ぶ。宛先の重複排除・本人除外はアプリ層の純粋関数（notification-fanout）、二重生成の最終防衛は notifications の UNIQUE(user_id, source_event_id)。
   - notifications 実装状況: 0027 で設定（通知 PR-A1）。SELECT/UPDATE=「宛先本人のみ（user_id=auth.uid()）」＝盗み見・勝手な既読化を DB 層で固く防ぐ。INSERT=authenticated（with check true）。**type ごとに引き金を引く主体が異なる**（応募承認=主催者 / スクリム登録=チームメンバー / 直前リマインド=Cron…）ため DB 層で type 別の引き金判定を共通化できず、INSERT の正当性（どの type を誰の業務が誰宛てに作るか）は各 Server Action（アプリ層）が担保する（rls-authz-asymmetry: 操作系は if 主役）。文面 title/body/link_url は開発側がサーバーで固定生成（マスアサインメント防止）。
   - notification_events / notification_deliveries 実装状況: 0027 で設定。ともに **SELECT ポリシーを意図的に作らない**＝一般ユーザーは出来事・配信状況テーブルを直接読めない（UI に出さないサーバー処理専用データ）。INSERT のみ authenticated（Server Action / 将来の宛先集約・Discord 配信から記録）。
   - notifications Realtime: 0028 で `notifications` を `supabase_realtime` publication に追加（通知 PR-A2b）。Realtime は RLS を尊重するため、購読しても SELECT=宛先本人のみ（0027）が効き、各ユーザーには自分宛ての INSERT だけが届く。クライアントは変更検知で `router.refresh()` し 🔔・一覧を最新化。

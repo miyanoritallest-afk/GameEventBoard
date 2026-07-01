@@ -45,7 +45,10 @@ import {
 import {
   NotificationType,
   buildRegistrationApprovedContent,
+  buildSeriesSeasonAnnouncedContent,
 } from "@/lib/services/notification-content";
+import { listFollowerIds } from "@/lib/repositories/follows";
+import { aggregateRecipients } from "@/lib/services/notification-fanout";
 
 /**
  * イベント「下書き作成」 Server Action（Controller。薄く保つ）。
@@ -230,6 +233,63 @@ async function allocateUniqueSlug(maxAttempts = 5): Promise<string> {
 }
 
 /**
+ * イベント公開時の通知生成（#4 series_season_announced・フォロー集約 3.6.1）。
+ * 宛先＝主催者(user)のフォロワー（本 PR では series フォロワーは未対応・⑥で追加）。
+ * Controller から repository（フォロワー列挙）＋ service（集約・文面）を束ねる。
+ *
+ * ベストエフォート: 通知生成の失敗で公開自体は成功扱い（呼び出し側で握り潰す）。
+ * 二重通知は UNIQUE(user_id, source_event_id) が最終防衛。宛先集約は aggregateRecipients
+ * で重複排除し、公開した主催者本人は宛先から除く。
+ */
+async function notifyEventPublished(params: {
+  eventId: string;
+  eventTitle: string;
+  organizerId: string;
+  organizerName: string;
+}): Promise<void> {
+  // 宛先＝主催者フォロワー（重複排除＋本人除外）。宛先ゼロなら出来事も作らない。
+  const followers = await listFollowerIds({
+    targetType: "user",
+    targetId: params.organizerId,
+  });
+  const recipients = aggregateRecipients([followers], [params.organizerId]);
+  if (recipients.length === 0) return;
+
+  // 出来事は「主催者(user)」に紐づく（3.6.1 の起点）。
+  const { id: sourceEventId } = await insertNotificationEvent({
+    type: NotificationType.SeriesSeasonAnnounced,
+    sourceType: "user",
+    sourceId: params.organizerId,
+  });
+  const content = buildSeriesSeasonAnnouncedContent({
+    eventId: params.eventId,
+    eventTitle: params.eventTitle,
+    organizerName: params.organizerName,
+  });
+  // 1人1通。各人を独立に並列で作る（1件の失敗が他の宛先を巻き込まない＝部分配信を防ぐ・
+  // 多数フォロワーでも直列待ちにならない）。二重は UNIQUE が弾く（insertNotification が
+  // duplicate を握る）。失敗した宛先は allSettled で握り、ログのみ（ベストエフォート）。
+  const results = await Promise.allSettled(
+    recipients.map((userId) =>
+      insertNotification({
+        userId,
+        sourceEventId,
+        title: content.title,
+        body: content.body,
+        linkUrl: content.linkUrl,
+      }),
+    ),
+  );
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    console.error(
+      `[notifyEventPublished] ${failed.length}/${recipients.length} 件の通知生成に失敗`,
+      (failed[0] as PromiseRejectedResult).reason,
+    );
+  }
+}
+
+/**
  * イベント「公開」 Server Action（Controller。薄く保つ）。
  * 下書き(draft)を published に上げる1遷移のみを扱う。
  *
@@ -298,6 +358,22 @@ export async function publishEvent(
     return {
       error: "公開に失敗しました。画面を更新してからもう一度お試しください。",
     };
+  }
+
+  // 公開できたら、主催者フォロワーへ通知（ベストエフォート＝失敗しても公開は成功）。
+  const organizerName =
+    event.organizer_display_name ??
+    (event.organizer as { discord_name: string } | null)?.discord_name ??
+    "主催者";
+  try {
+    await notifyEventPublished({
+      eventId: event.id,
+      eventTitle: event.title,
+      organizerId: event.organizer_id,
+      organizerName,
+    });
+  } catch (e) {
+    console.error("[publishEvent] 公開通知の生成に失敗:", e);
   }
 
   revalidatePath(`/events/${event.id}`);

@@ -75,3 +75,24 @@ export async function isFollowing(params: {
   if (error) throw error;
   return (count ?? 0) > 0;
 }
+
+/**
+ * 対象（event / user / series）をフォローしている follower_id 一覧を返す。
+ * 出来事→通知生成（3.6.1）の宛先集約の元。RLS（0029）は本人の SELECT のみ許可するため、
+ * これはサーバー側（service_role ではなく通常クライアント）から呼んでも他人の
+ * フォロー行は見えない ＝ 宛先集約に必要な「対象のフォロワー全員」を取得できない。
+ * そのため security definer 関数（0030）でフォロワー集合を取得する。
+ */
+export async function listFollowerIds(params: {
+  targetType: FollowTarget;
+  targetId: string;
+}): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("list_follower_ids", {
+    p_target_type: params.targetType,
+    p_target_id: params.targetId,
+  });
+
+  if (error) throw error;
+  return data ?? [];
+}
