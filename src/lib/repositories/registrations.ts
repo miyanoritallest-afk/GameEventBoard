@@ -143,12 +143,14 @@ export async function setOverrideScore(params: {
 /**
  * 承認/却下の所有権確認用に、応募とそのイベント（organizer_id・status）を取得する。
  * 2テーブル跨ぎの所有権チェックをアプリ層で行うため events を JOIN する。
+ * user_id・events(title) は承認後の通知生成（宛先＝応募者本人・文面のイベント名）に使う。
+ * events は多対一参照なので単一オブジェクト（[[supabase-embed-cardinality]]）。
  */
 export async function findRegistrationWithEvent(registrationId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("registrations")
-    .select("id, status, event_id, events(id, organizer_id)")
+    .select("id, status, event_id, user_id, events(id, organizer_id, title)")
     .eq("id", registrationId)
     .maybeSingle();
 

@@ -7,6 +7,36 @@
 
 ---
 
+## 2026-07-01 — 通知 PR-A2a: アプリ内通知の生成・一覧・🔔（応募承認1種を接続）
+
+通知機能の土台の本体。応募が承認されると応募者本人に通知が飛び、`/notifications` 一覧とヘッダー🔔（未読バッジ）で見られるようにした。**Realtime は分けて PR-A2b で**（本PRは「承認→リロードで通知が出る」まで）。スキーマ変更なし（RLS は 0027 で適用済み）。
+
+### やったこと
+- **通知 Repository `src/lib/repositories/notifications.ts`（新規）**: `insertNotificationEvent`（出来事1件）／`insertNotification`（宛先へ1件・二重は 23505→`{duplicate:true}`）／`listMyNotifications`（新しい順）／`countMyUnreadNotifications`（未読数・head count）／`markNotificationRead`（本人 id 条件）。RLS 0027 で本人の行のみ。
+- **通知文面 Service `src/lib/services/notification-content.ts`（新規・純粋関数）**: `NotificationType`（3.7 の type 定数＝唯一の正）＋ `buildRegistrationApprovedContent`（title/body/link をサーバー固定生成）。テスト +3（文面・link・type 文字列）。
+- **既存 `decideRegistration`（Controller）に通知生成を差し込み**: 承認成功直後に `notifyRegistrationApproved`（repository＋service を Controller で束ねる＝Service は repository を呼ばない流儀を維持）。**ベストエフォート**（try/catch でログのみ・承認は成功扱い）。`findRegistrationWithEvent` に `user_id・events(title)` を追加（宛先・文面用）。
+- **一覧ページ `/notifications`（新規・保護）**: 未ログインは `/login?redirect=` へ。`NotificationItem`（クライアント）はクリックで既読化（楽観的表示）→ `markRead` Action → link_url へ遷移。文面は React 自動エスケープ（XSS 対策）。JST 表示。
+- **ヘッダー `site-header.tsx` に🔔＋未読バッジ**: ログイン時のみ・`countMyUnreadNotifications` で件数取得・99+ 表示・どの画面からも `/notifications` へ。
+- lint / typecheck / test(315緑＝312+3) / build 通過。
+- **実機確認済み（Playwright＋service_role でダミー応募を承認）**: 承認→`notifications`/`notification_events` 生成（type=`registration_approved`・宛先=応募者本人・文面・link_url すべて正）→🔔に未読1→`/notifications` に1件（JST表示）→クリックで既読（`is_read=true`）＆イベントページへ遷移、を全て確認。
+
+### 実機で見つけたバグと修正（RLS × .select() 読み返し）
+- **症状**: 承認は成功（200）するのに通知が生成されず、ログに `42501 new row violates row-level security policy for table "notification_events"`。ベストエフォート設計が正しく働き承認だけ通っていた。
+- **原因**: repository の INSERT が `.insert(...).select("id").single()` と**読み返し**をしていた。`notification_events` は SELECT ポリシー無し（0027）、`notifications` は SELECT=宛先本人のみ。承認者（主催者）≠宛先（応募者）なので、INSERT 直後の `.select()` が RLS で拒否され 42501。
+- **修正**: id をアプリ側で `crypto.randomUUID()` 事前生成し INSERT に渡す→`.select()` を削除（読み返さない）。RLS 設計（SELECT不可・本人のみ）を崩さず解決。「サーバー処理専用データは読み返さない」方針とも一貫。自動テストでは捕まらない（RLS＋実セッションが絡む）ため実機確認の収穫。
+
+### 決めたこと（なぜ）
+- **オーケストレーションは Controller に置く**（既存流儀の踏襲）。Service は repository を import しない純粋関数（全 service が repository 非依存を確認）。通知も「repository（DB）＋service（文面）を Controller で束ねる」に揃えた。
+- **通知失敗はベストエフォート**（壁打ち確定）。承認（status 更新）が成功したら通知 INSERT が失敗しても承認は成功扱い（ログのみ）。通知は「見落とし防止のブースト」で、確実な土台＝status 更新を巻き添えにしない（要件定義書 3.5.2）。二重は UNIQUE(user_id, source_event_id) が最終防衛。
+- **文面はサーバー固定生成**: title は固定文言・イベント名は body に埋め、React 自動エスケープに任せる（マスアサインメント＋XSS 対策）。
+- **RLS 配下の INSERT は読み返さない**（実機で確定）: SELECT が制限されたテーブルへの INSERT は `.select()` を付けず、必要な id はアプリ側で事前生成する。
+
+### 次にやること
+- [x] 実機確認（承認→通知→🔔→一覧→既読＆遷移）完了。
+- [ ] PR-A2b: Realtime（自分宛て INSERT を購読して🔔と一覧をライブ更新）。
+
+---
+
 ## 2026-07-01 — 通知 PR-A1: 通知3テーブルのRLSポリシー（0027）
 
 通知機能の土台の第一歩。0001 で RLS は ON なのにポリシーゼロ＝全拒否だった `notifications` / `notification_events` / `notification_deliveries` にポリシーを整備し、「自分宛ての通知を読める」土台を用意する。DB のみ（アプリ実装は次の PR-A2）。

@@ -38,6 +38,14 @@ import {
   simpleApplicationSchema,
 } from "./apply-schema";
 import { updateBattleTag } from "@/lib/repositories/users";
+import {
+  insertNotificationEvent,
+  insertNotification,
+} from "@/lib/repositories/notifications";
+import {
+  NotificationType,
+  buildRegistrationApprovedContent,
+} from "@/lib/services/notification-content";
 
 /**
  * イベント「下書き作成」 Server Action（Controller。薄く保つ）。
@@ -604,6 +612,39 @@ export type DecideRegistrationState = {
 };
 
 /**
+ * 応募承認時の通知生成（#1 registration_approved）。宛先＝応募者本人。
+ * Controller から repository（DB）＋ service（文面）を束ねる（Service は repository を
+ * 呼ばない純粋関数の流儀を守るため、オーケストレーションは Controller 側に置く）。
+ *
+ * ベストエフォート: 通知生成に失敗しても承認自体は成功扱い（呼び出し側で握り潰す）。
+ * 通知は「見落とし防止のブースト」であり、確実な土台＝status 更新を巻き添えにしない
+ * （要件定義書 3.5.2）。二重通知は UNIQUE(user_id, source_event_id) が最終防衛。
+ */
+async function notifyRegistrationApproved(params: {
+  eventId: string;
+  eventTitle: string;
+  applicantUserId: string;
+}): Promise<void> {
+  // 出来事（event に紐づく）を1件記録 → 宛先（応募者本人）へ通知を1件生成。
+  const { id: sourceEventId } = await insertNotificationEvent({
+    type: NotificationType.RegistrationApproved,
+    sourceType: "event",
+    sourceId: params.eventId,
+  });
+  const content = buildRegistrationApprovedContent({
+    eventId: params.eventId,
+    eventTitle: params.eventTitle,
+  });
+  await insertNotification({
+    userId: params.applicantUserId,
+    sourceEventId,
+    title: content.title,
+    body: content.body,
+    linkUrl: content.linkUrl,
+  });
+}
+
+/**
  * 応募の「承認/却下」 Server Action（Controller）。主催者のみ。
  *
  * 防御（2テーブル跨ぎの所有権確認＝応募フロー固有の IDOR）:
@@ -611,6 +652,7 @@ export type DecideRegistrationState = {
  * 2. 応募＋イベントを取得。存在しない／イベント主催者でない→同一の権限なし応答（列挙防止）。
  * 3. canDecide(status)：pending のみ処理可（二重処理防止）。
  * 4. update（pending のみ更新）。null→競合（既に処理済み）。最終防衛は RLS（0006）。
+ * 5. 承認時のみ、応募者本人へ通知（ベストエフォート＝失敗しても承認は成功）。
  */
 export async function decideRegistration(
   registrationId: string,
@@ -627,7 +669,11 @@ export async function decideRegistration(
 
   // 2. 応募＋イベント取得し、主催者本人か確認（存在しない/他人は同一応答）。
   const reg = await findRegistrationWithEvent(registrationId);
-  const event = reg?.events as { id: string; organizer_id: string } | null;
+  const event = reg?.events as {
+    id: string;
+    organizer_id: string;
+    title: string;
+  } | null;
   if (!reg || !event || event.organizer_id !== user.id) {
     return { error: "この応募を操作する権限がありません。" };
   }
@@ -648,6 +694,20 @@ export async function decideRegistration(
     return {
       error: "処理に失敗しました。画面を更新してからもう一度お試しください。",
     };
+  }
+
+  // 5. 承認時のみ、応募者本人へ通知（ベストエフォート）。
+  //    通知の失敗で承認業務を巻き添えにしない（要件定義書 3.5.2）。ログのみ残す。
+  if (decision === "approve") {
+    try {
+      await notifyRegistrationApproved({
+        eventId: event.id,
+        eventTitle: event.title,
+        applicantUserId: reg.user_id,
+      });
+    } catch (e) {
+      console.error("[decideRegistration] 承認通知の生成に失敗:", e);
+    }
   }
 
   revalidatePath(`/events/${event.id}/registrations`);
