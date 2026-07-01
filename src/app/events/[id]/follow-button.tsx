@@ -39,7 +39,12 @@ export function FollowButton({
     setFollowing(next); // 楽観的更新
     setError(null);
     startTransition(async () => {
-      const res = await toggleFollow({ targetType, targetId, follow: next });
+      const res = await toggleFollow({
+        targetType,
+        targetId,
+        follow: next,
+        eventPath: redirectTo,
+      });
       if (res.error) {
         setFollowing(!next); // 失敗したら戻す
         setError(res.error);

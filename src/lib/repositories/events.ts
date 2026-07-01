@@ -68,6 +68,21 @@ export async function findEventById(id: string) {
 }
 
 /**
+ * イベントが実在するか（id の有無だけ）を判定する。フォロー等の対象実在確認用。
+ * 全カラム＋join を引く findEventById より軽い（存在確認だけが目的のとき使う）。
+ */
+export async function existsEventById(id: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("events")
+    .select("id", { count: "exact", head: true })
+    .eq("id", id);
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+/**
  * 決勝トーナメントの進出数 N（events.tournament_advance_count）を更新する（本戦-5a）。
  * 所有権確認は呼び出し側＋RLS が担保。生成時にだけ呼ぶ専用更新（編集フォームの whitelist とは分離）。
  */
