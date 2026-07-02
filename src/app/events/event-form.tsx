@@ -96,6 +96,7 @@ export function EventForm({
   action,
   defaultValues = {},
   discordName = "",
+  seriesId,
   submitLabel,
   pendingLabel,
 }: {
@@ -104,6 +105,8 @@ export function EventForm({
   defaultValues?: EventFormDefaults;
   /** 登録名欄の初期値フォールバック（認証時の Discord 名）。作成時に既定で入れる。 */
   discordName?: string;
+  /** シリーズの新しい開催回を作るとき、紐付けるシリーズ id（hidden で送る）。 */
+  seriesId?: string;
   submitLabel: string;
   pendingLabel: string;
 }) {
@@ -137,6 +140,8 @@ export function EventForm({
 
   return (
     <form action={formAction} className="mt-6 space-y-6">
+      {/* シリーズの新しい開催回として作成するとき、紐付け先を hidden で送る。 */}
+      {seriesId && <input type="hidden" name="series_id" value={seriesId} />}
       {state.error && (
         <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {state.error}

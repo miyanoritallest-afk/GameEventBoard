@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { insertFollow, deleteFollow } from "@/lib/repositories/follows";
 import { existsEventById } from "@/lib/repositories/events";
 import { existsUserById } from "@/lib/repositories/users";
+import { existsSeriesById } from "@/lib/repositories/series";
 import { followSchema } from "./follow-schema";
 
 export type FollowState = { error?: string; following?: boolean };
@@ -51,14 +52,17 @@ export async function toggleFollow(
   const exists =
     targetType === "event"
       ? await existsEventById(targetId)
-      : await existsUserById(targetId);
+      : targetType === "series"
+        ? await existsSeriesById(targetId)
+        : await existsUserById(targetId);
   if (!exists) {
-    return {
-      error:
-        targetType === "event"
-          ? "対象のイベントが見つかりません。"
-          : "対象のユーザーが見つかりません。",
-    };
+    const label =
+      targetType === "event"
+        ? "イベント"
+        : targetType === "series"
+          ? "シリーズ"
+          : "ユーザー";
+    return { error: `対象の${label}が見つかりません。` };
   }
 
   if (input.follow) {
@@ -67,9 +71,9 @@ export async function toggleFollow(
     await deleteFollow({ followerId: user.id, targetType, targetId });
   }
 
-  // ボタンが置かれているイベントページを最新化（event / user 両方のボタンを再描画）。
-  // eventPath は "/events/<eventId>" 形式のみ許可（任意パスの revalidate を防ぐ）。
-  if (/^\/events\/[^/]+$/.test(input.eventPath)) {
+  // ボタンが置かれているページ（イベント詳細 or シリーズ詳細）を最新化してボタン状態を再描画。
+  // eventPath は "/events/<id>" または "/series/<id>" 形式のみ許可（任意パスの revalidate を防ぐ）。
+  if (/^\/(events|series)\/[^/]+$/.test(input.eventPath)) {
     revalidatePath(input.eventPath);
   }
   return { following: input.follow };

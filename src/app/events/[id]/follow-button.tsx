@@ -18,7 +18,7 @@ export function FollowButton({
   redirectTo,
   label,
 }: {
-  targetType: "event" | "user";
+  targetType: "event" | "user" | "series";
   targetId: string;
   initialFollowing: boolean;
   isLoggedIn: boolean;

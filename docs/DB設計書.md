@@ -584,6 +584,7 @@ Supabase前提で各テーブルにRLSを設定する（詳細は実装時）。
 - users: 本人のみ更新可、参照は公開情報のみ。
   - 実装状況: SELECT は「ログインユーザーは参照可」を 0009 で設定（応募者一覧の表示用）。UPDATE は「本人のみ（id = auth.uid()）」を 0025 で設定（マイページのバトルタグ登録/編集）。列レベルの制限（battle_tag のみ）はアプリ層（Repository updateBattleTag）で担保＝マスアサインメント対策の二層目。
 - event_series / series_members: series_members(active) のみ更新可。owner のみ運営追加削除・シリーズ削除。参照は公開。
+  - 実装状況: 0032 で設定（シリーズ PR-⑥-1）。event_series は SELECT=公開／INSERT=本人（created_by=auth.uid()）／UPDATE=owner のみ。series_members は SELECT=公開／INSERT=作成者本人が自分を owner・active で登録するときのみ（招待は⑥-2）。owner/staff 判定は多段のため security definer 関数 `is_series_owner` / `is_series_staff` に切り出し（0015 と同型）。シリーズ作成＋owner登録は **`create_series_with_owner` security definer 関数で1トランザクション**（分割 INSERT だと owner 不在の孤立シリーズが残るため）。events.series_id への紐付けはシリーズ化 Action（seriesifyEvent）と新回作成のプリフィルから（events_update_own / 0004 が最終防衛）。③公開通知は主催者フォロワー ∪ series フォロワーを宛先集約する。
 - events: 該当シリーズの運営（series_members active）または organizer のみ更新可、published は全員参照可。
   - 実装状況: SELECT は「公開済み（status≠draft）は全員 / 下書きは organizer 本人のみ」を 0005 で設定。INSERT/UPDATE/DELETE は organizer 本人を 0004 で設定（series 運営による更新は未実装・後続）。
 - registrations: 本人＋該当イベントの運営が参照/更新。

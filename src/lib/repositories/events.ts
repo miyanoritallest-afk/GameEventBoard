@@ -83,6 +83,31 @@ export async function existsEventById(id: string): Promise<boolean> {
 }
 
 /**
+ * イベントをシリーズに紐付ける（events.series_id をセット）。
+ * 主催者本人＝organizerId、かつ **まだ series 未所属（series_id is null）** の行のみ更新
+ * ＝二重シリーズ化を防ぐ。更新できたら true。条件に合わなければ false（他人・既に所属等）。
+ * 主催者確認はアプリ層＋RLS（events_update_own / 0004）で最終防衛。
+ */
+export async function linkEventToSeries(params: {
+  eventId: string;
+  organizerId: string;
+  seriesId: string;
+}): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .update({ series_id: params.seriesId })
+    .eq("id", params.eventId)
+    .eq("organizer_id", params.organizerId)
+    .is("series_id", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
  * 決勝トーナメントの進出数 N（events.tournament_advance_count）を更新する（本戦-5a）。
  * 所有権確認は呼び出し側＋RLS が担保。生成時にだけ呼ぶ専用更新（編集フォームの whitelist とは分離）。
  */

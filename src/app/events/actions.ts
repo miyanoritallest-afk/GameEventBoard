@@ -132,11 +132,20 @@ function parseEventFormData(
   }
 
   const v = parsed.data;
+  // series_id はフォームの hidden（シリーズの新回作成/シリーズ化）から。uuid 以外は無視（null）。
+  // 実在・運営権限の確認は別途（本 PR ではシリーズ化 Action 経由 or 運営のみ候補表示で担保）。
+  const rawSeriesId = formData.get("series_id");
+  const seriesId =
+    typeof rawSeriesId === "string" &&
+    /^[0-9a-f-]{36}$/i.test(rawSeriesId)
+      ? rawSeriesId
+      : null;
   return {
     ok: true,
     values: {
       title: v.title,
       game_id: v.gameId,
+      series_id: seriesId,
       // 空文字＝未設定 → null（表示側で discord_name にフォールバック）。
       organizer_display_name: v.organizerDisplayName
         ? v.organizerDisplayName
@@ -171,6 +180,7 @@ function parseEventFormData(
 type EventEditableValues = {
   title: string;
   game_id: string;
+  series_id: string | null;
   organizer_display_name: string | null;
   description: string | null;
   starts_at: string | null;
@@ -248,13 +258,17 @@ async function notifyEventPublished(params: {
   eventTitle: string;
   organizerId: string;
   organizerName: string;
+  seriesId: string | null;
 }): Promise<void> {
-  // 宛先＝主催者フォロワー（重複排除＋本人除外）。宛先ゼロなら出来事も作らない。
-  const followers = await listFollowerIds({
-    targetType: "user",
-    targetId: params.organizerId,
-  });
-  const recipients = aggregateRecipients([followers], [params.organizerId]);
+  // 宛先＝主催者フォロワー ∪ シリーズフォロワー（3.5.1）。series 未所属なら主催者分のみ。
+  // aggregateRecipients が和集合＋ユーザー単位重複排除＋本人除外を行う（3.6.1）。
+  const followerSets = await Promise.all([
+    listFollowerIds({ targetType: "user", targetId: params.organizerId }),
+    params.seriesId
+      ? listFollowerIds({ targetType: "series", targetId: params.seriesId })
+      : Promise.resolve<string[]>([]),
+  ]);
+  const recipients = aggregateRecipients(followerSets, [params.organizerId]);
   if (recipients.length === 0) return;
 
   // 出来事は「主催者(user)」に紐づく（3.6.1 の起点）。
@@ -373,6 +387,7 @@ export async function publishEvent(
       eventTitle: event.title,
       organizerId: event.organizer_id,
       organizerName,
+      seriesId: event.series_id ?? null,
     });
   } catch (e) {
     console.error("[publishEvent] 公開通知の生成に失敗:", e);
@@ -423,11 +438,14 @@ export async function updateEvent(
   if (!parsed.ok) return parsed.state;
 
   // 4. 楽観ロック付き更新。slug は Repository 側で触らない（URL固定）。
+  //    series_id は編集フォームでは扱わない（紐付けはシリーズ化/新回作成 経由）。
+  //    ここで渡すと編集のたびに null 上書きされてしまうため、値から除外する。
+  const { series_id: _ignoredSeriesId, ...editableValues } = parsed.values;
   const updated = await updateEventRepo({
     id: event.id,
     organizerId: user.id,
     expectedVersion: event.version,
-    values: parsed.values,
+    values: editableValues,
   });
   if (!updated) {
     return {

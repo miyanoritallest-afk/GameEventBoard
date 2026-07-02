@@ -1334,6 +1334,14 @@ export type Database = {
         }
         Returns: string
       }
+      create_series_with_owner: {
+        Args: {
+          p_name: string
+          p_description: string | null
+          p_created_by: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       delivery_channel: "discord_dm" | "discord_webhook"
