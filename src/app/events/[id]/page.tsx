@@ -17,6 +17,7 @@ import { PublishButton } from "./publish-button";
 import { DeleteDraftButton } from "./delete-draft-button";
 import { ApplyButton } from "./apply-button";
 import { FollowButton } from "./follow-button";
+import { SeriesifyButton } from "./seriesify-button";
 
 /** 応募ステータスの日本語ラベル。 */
 const REG_STATUS_LABEL: Record<string, string> = {
@@ -310,6 +311,17 @@ export default async function EventDetailPage({
             >
               編集する
             </Link>
+            {/* シリーズ化（単発→好評→シリーズ化）。未所属なら化ボタン・所属済みなら導線。 */}
+            {event.series_id ? (
+              <Link
+                href={`/series/${event.series_id}`}
+                className="text-sm text-primary hover:underline"
+              >
+                シリーズを見る
+              </Link>
+            ) : (
+              <SeriesifyButton eventId={event.id} />
+            )}
             {event.status === "draft" && (
               <DeleteDraftButton eventId={event.id} />
             )}

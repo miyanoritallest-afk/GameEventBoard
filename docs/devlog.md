@@ -7,6 +7,32 @@
 
 ---
 
+## 2026-07-02 — シリーズ PR-⑥-1: シリーズ基盤（作成/一覧/詳細・シリーズ化・フォロー・③接続・プリフィル）
+
+通知フェーズの積み残し「シリーズ」。継続する企画（例: OSL）を独立概念として持ち、フォローすると新しい開催回の公開が届く（要件定義書 3.5.1）。壁打ちで設計を2回見直した：シリーズ先→**イベント起点（単発→好評→シリーズ化）**、プリフィルは**前回イベント設定**。
+
+### やったこと
+- **0032（適用済み）**: event_series/series_members の RLS（SELECT公開・INSERT本人・UPDATE=owner）＋ security definer 関数 `is_series_owner` / `is_series_staff` ／ **`create_series_with_owner`（シリーズ作成＋owner登録を1トランザクション。孤立シリーズ防止）**。
+- **series Repository**: insertSeries（RPC）／listSeries／findSeriesById／existsSeriesById／listMySeries／listSeriesEvents／findLatestEventSettingsForSeries（プリフィル用）。
+- **シリーズページ**: `/series`（一覧・公開）／`/series/[id]`（詳細＝情報＋開催回一覧＋**series フォローボタン**＝既存 FollowButton を series で再利用）。作成 Action（createSeries）。
+- **イベント起点のシリーズ化**: イベント詳細に「シリーズ化する」ボタン（主催者・series 未所属のみ）＋ `seriesifyEvent` Action（イベント名でシリーズ作成→この回を第1回に紐付け）。所属済みは「シリーズを見る」導線。
+- **③公開通知に series フォロワーを接続**: `notifyEventPublished` に seriesId を渡し、主催者フォロワー ∪ series フォロワーを aggregateRecipients で和集合＋重複排除（3.6.1）。
+- **2回目以降のプリフィル**: シリーズ詳細（owner）に「次の開催回を作成」→ `/events/new?series=<id>`。作成ページで最新イベント設定を EventFormDefaults に詰めてプリフィル（編集可）＋ series_id を hidden 保存。**編集フォームでは series_id を触らない**（null 上書き防止のため updateEvent で除外）。
+- follow-schema / FollowButton / toggleFollow を series 対応（3種: event/user/series）。
+- lint / typecheck / test(327緑) / build 通過。**実機確認済み**（0032適用後・Playwright）: シリーズ化→series作成＋owner(active)＋第1回紐付け／ひでが series をフォロー→のりが新回公開→**主催者は未フォローでも series フォローだけでひでに通知**、を確認。検証データ掃除済み。
+
+### 決めたこと（なぜ）
+- **イベント起点のシリーズ化**（オーナー指摘・確定）。「最初からシリーズ化を見込むイベントは少ない。単発→好評→次回→シリーズ」が実態。空の箱を先に作る `/series/new` は主導線から外し、イベント詳細の「シリーズ化」を起点にした。
+- **プリフィルは前回イベント設定**（案B・確定）。event_series に大会設定カラムを持たせる（案A）と十数項目の二重管理になるため、「Season2 は Season1 と同じ設定」という実態に合わせ最新イベントを引き継ぐ。
+- **create_series_with_owner でトランザクション化**（code-review 指摘）。分割 INSERT だと members 失敗で owner 不在の孤立シリーズが残り、RLS(update=owner) で誰も編集できなくなる。
+- **series フォローの revalidate 対応**（code-review 指摘）。toggleFollow の revalidate 正規表現を /events/・/series/ 両対応に（シリーズ詳細のフォローが反映されないバグを修正）。
+
+### 次にやること
+- [ ] ⑥-2: シリーズ共同運営（owner/admin・検索招待・series_members の invited→active フロー）。
+- [ ] ④ Discord Webhook / ⑤ Bot DM（外部設定の壁打ちから）。
+
+---
+
 ## 2026-07-02 — 通知: event フォロワーへの結果更新・日程更新通知（#6/#5短期・1日1回集約）
 
 ③（出来事→通知生成）の横展開。event フォロワーへ「結果が更新された（#6）」「日程が更新された（#5・短期イベント分）」を通知する。中心は**通知洪水の防止**＝イベント単位・1日1回に集約。全体向け（Discord Webhook）は④に回し、今回は個人＝event フォロワー（アプリ内）分のみ。
