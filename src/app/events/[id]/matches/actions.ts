@@ -23,6 +23,11 @@ import {
   upsertMatchResult,
   deleteMatchResult,
 } from "@/lib/repositories/match-results";
+import { notifyEventFollowers } from "@/lib/notifications/notify";
+import {
+  NotificationType,
+  buildEventResultUpdatedContent,
+} from "@/lib/services/notification-content";
 import {
   roundRobinPairs,
   pairExists,
@@ -324,6 +329,22 @@ export async function reportResult(input: {
   });
   if (!result.ok) {
     return { error: "結果の保存に失敗しました。画面を更新してからお試しください。" };
+  }
+
+  // 結果が入ったら、event フォロワーへ通知（ベストエフォート＝失敗しても結果保存は成功）。
+  // イベント単位・1日1回に集約（dedup_key）。入力した本人は宛先から除く。
+  try {
+    await notifyEventFollowers({
+      eventId: match.eventId,
+      type: NotificationType.EventResultUpdated,
+      content: buildEventResultUpdatedContent({
+        eventId: match.eventId,
+        eventTitle: event?.title ?? "イベント",
+      }),
+      excludeUserId: userId,
+    });
+  } catch (e) {
+    console.error("[reportResult] 結果更新通知の生成に失敗:", e);
   }
 
   revalidatePath(`/events/${match.eventId}/matches`);

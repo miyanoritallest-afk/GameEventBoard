@@ -1324,6 +1324,16 @@ export type Database = {
         }
         Returns: string[]
       }
+      upsert_notification_event: {
+        Args: {
+          p_type: string
+          p_source_type: Database["public"]["Enums"]["follow_target"]
+          p_source_id: string
+          p_dedup_key: string
+          p_payload?: Json
+        }
+        Returns: string
+      }
     }
     Enums: {
       delivery_channel: "discord_dm" | "discord_webhook"

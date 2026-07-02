@@ -42,6 +42,37 @@ export async function insertNotificationEvent(params: {
 }
 
 /**
+ * dedup_key で「1出来事＝1行」を find-or-create し、その id を返す（RPC・0031）。
+ * 結果更新（#6）・日程更新（#5 短期）のように同じイベントで何度も起きる出来事を
+ * 「1日1回」に集約するため。同じ dedup_key の2回目は既存行の id を返す（＝同じ
+ * source_event_id になり、notifications の UNIQUE がその日の2通目を弾く）。
+ * notification_events は SELECT 不可（0027）のため security definer 関数で行う。
+ */
+export async function upsertNotificationEvent(params: {
+  type: string;
+  sourceType: FollowTarget;
+  sourceId: string;
+  dedupKey: string;
+  payload?: Database["public"]["Tables"]["notification_events"]["Insert"]["payload"];
+}): Promise<{ id: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("upsert_notification_event", {
+    p_type: params.type,
+    p_source_type: params.sourceType,
+    p_source_id: params.sourceId,
+    p_dedup_key: params.dedupKey,
+    p_payload: params.payload ?? null,
+  });
+
+  if (error) throw error;
+  if (data === null) {
+    // 想定外（関数は必ず id を返す設計）。null を後続に流すと NOT NULL 制約違反になるため弾く。
+    throw new Error("upsert_notification_event が id を返しませんでした。");
+  }
+  return { id: data };
+}
+
+/**
  * 出来事から、宛先ユーザーへの通知（notifications）を1件作成する。
  * title / body / link_url はサーバー固定生成の値を受け取るだけ（入力から取らない）。
  * 同一出来事から同一ユーザーへの二重生成は UNIQUE(user_id, source_event_id) が弾く。
