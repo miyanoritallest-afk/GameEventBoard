@@ -46,9 +46,11 @@ import {
   NotificationType,
   buildRegistrationApprovedContent,
   buildSeriesSeasonAnnouncedContent,
+  buildEventScheduleConfirmedContent,
 } from "@/lib/services/notification-content";
 import { listFollowerIds } from "@/lib/repositories/follows";
 import { aggregateRecipients } from "@/lib/services/notification-fanout";
+import { notifyEventFollowers } from "@/lib/notifications/notify";
 
 /**
  * イベント「下書き作成」 Server Action（Controller。薄く保つ）。
@@ -431,6 +433,34 @@ export async function updateEvent(
     return {
       error: "更新に失敗しました。画面を更新してからもう一度お試しください。",
     };
+  }
+
+  // 公開済みイベントで開催日時が実際に変わったら、event フォロワーへ日程更新通知
+  // （短期イベント想定・1日1回集約）。下書き編集・日時が同じ更新では飛ばさない。
+  // ベストエフォート＝失敗しても編集は成功。redirect の前に行う（redirect は例外を投げる）。
+  // 比較は**時刻の値**で行う（保存形式 "...000Z" と DB 読み出し形式 "...+00:00" の
+  // 文字列差で誤判定しないため）。starts_at が新たに入った場合も「変更」とみなす。
+  const newStartsAt = parsed.values.starts_at ?? null;
+  const startsAtMs = (v: string | null) =>
+    v === null ? null : new Date(v).getTime();
+  const scheduleChanged =
+    event.status !== "draft" &&
+    newStartsAt !== null &&
+    startsAtMs(newStartsAt) !== startsAtMs(event.starts_at);
+  if (scheduleChanged) {
+    try {
+      await notifyEventFollowers({
+        eventId: event.id,
+        type: NotificationType.EventScheduleConfirmed,
+        content: buildEventScheduleConfirmedContent({
+          eventId: event.id,
+          eventTitle: event.title,
+        }),
+        excludeUserId: user.id,
+      });
+    } catch (e) {
+      console.error("[updateEvent] 日程更新通知の生成に失敗:", e);
+    }
   }
 
   revalidatePath(`/events/${event.id}`);

@@ -3,6 +3,8 @@ import {
   NotificationType,
   buildRegistrationApprovedContent,
   buildSeriesSeasonAnnouncedContent,
+  buildEventScheduleConfirmedContent,
+  buildEventResultUpdatedContent,
 } from "../notification-content";
 
 /**
@@ -57,5 +59,38 @@ describe("buildSeriesSeasonAnnouncedContent", () => {
     expect(c.body).toContain("OSL Season3");
     expect(c.body).toContain("のり");
     expect(c.linkUrl).toBe("/events/e-1");
+  });
+});
+
+describe("イベントフォロワー向け type 文字列", () => {
+  it("#5/#6 は 3.7 カタログの type", () => {
+    expect(NotificationType.EventScheduleConfirmed).toBe(
+      "event_schedule_confirmed",
+    );
+    expect(NotificationType.EventResultUpdated).toBe("event_result_updated");
+  });
+});
+
+describe("buildEventScheduleConfirmedContent", () => {
+  it("イベント名を本文に埋め、link はイベントページを指す", () => {
+    const c = buildEventScheduleConfirmedContent({
+      eventId: "e-2",
+      eventTitle: "OSL Season2",
+    });
+    expect(c.title).toBe("イベントの日程が更新されました");
+    expect(c.body).toContain("OSL Season2");
+    expect(c.linkUrl).toBe("/events/e-2");
+  });
+});
+
+describe("buildEventResultUpdatedContent", () => {
+  it("イベント名を本文に埋め、link は観戦ビューを指す", () => {
+    const c = buildEventResultUpdatedContent({
+      eventId: "e-3",
+      eventTitle: "OSL Season2",
+    });
+    expect(c.title).toBe("結果が更新されました");
+    expect(c.body).toContain("OSL Season2");
+    expect(c.linkUrl).toBe("/events/e-3/watch");
   });
 });

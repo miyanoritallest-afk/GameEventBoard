@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-07-02 — 通知: event フォロワーへの結果更新・日程更新通知（#6/#5短期・1日1回集約）
+
+③（出来事→通知生成）の横展開。event フォロワーへ「結果が更新された（#6）」「日程が更新された（#5・短期イベント分）」を通知する。中心は**通知洪水の防止**＝イベント単位・1日1回に集約。全体向け（Discord Webhook）は④に回し、今回は個人＝event フォロワー（アプリ内）分のみ。
+
+### やったこと
+- **マイグレーション `0031_notification_events_dedup_key.sql`（新規・適用済み）**: `notification_events.dedup_key`（nullable・unique）を追加＋ `upsert_notification_event(...)` security definer 関数（dedup_key で find-or-create し id を返す。notification_events は SELECT 不可のため RLS バイパス）。
+- **`notifications.upsertNotificationEvent`**（RPC 経由）＋ `types.ts` に関数型を手動追加。
+- **アプリケーションサービス新設 `src/lib/notifications/notify.ts`**: `notifyEventFollowers`（event フォロワー集約＋本人除外＋1日1回 dedup＋Promise.allSettled 並列生成）。2つの Controller（reportResult / updateEvent）から共用。Service は repository 非依存の規律を保ちつつ、クロス Controller のオーケストレーションを正しい層に置く。
+- **content に #5/#6 の type＋文面**（`event_schedule_confirmed` / `event_result_updated`）。テスト +3。
+- **`reportResult`（#6）に差し込み**: 結果保存成功後、event フォロワーへ通知（ベストエフォート）。link 先は観戦ビュー。
+- **`updateEvent`（#5 短期）に差し込み**: 公開済み＆開催日時が実際に変わったときのみ通知（redirect の前・ベストエフォート）。
+- lint / typecheck / test(327緑) / build 通過。**実機確認済み**（0031適用後・Playwright＋service_role）: 日程変えず保存→通知ゼロ / 日程変更→通知1件 / 同日2回目の変更→通知増えず（dedup 効く）。検証データ掃除・イベント日程復元済み。
+
+### 決めたこと（なぜ）
+- **1イベント・1種別・1日1回に集約**（壁打ち確定）。結果は1試合ごと（総当たりで数十回）、日程も変わり得るため、毎回フォロワー全員に飛ばすと洪水。dedup_key=`event:<id>:<type>:<JST日付>` で1日1出来事を DB 物理保証し、notifications の UNIQUE(user_id, source_event_id) が同日2通目を弾く（3.6.1: DB で最終防衛）。
+- **#5 日程通知はイベント形式・期間で意味が違う**（オーナー整理・確定）。短期（総当たりのみ/トナメのみ）は「主催者が日程を組んだ/変えたとき1回」。長期予選は「期間中！観戦ビューをチェック」、決勝Tは確定時——**長期系は Cron・本戦進行と絡むため後続**（本 PR は短期＝updateEvent での starts_at 変更のみ）。
+- **starts_at 比較は時刻の値で行う**（code-review 指摘＝実害バグを修正）。保存形式 "...000Z" と DB 読み出し形式 "...+00:00" の文字列差で「変えてないのに毎回通知」になるのを防ぐ（`new Date(a).getTime() !== new Date(b).getTime()`）。
+- **共用オーケストレーションは lib/notifications に新設**: 2 Controller から呼ぶため。Service（純粋）を汚さない。
+
+### コードレビュー（/code-review high）で修正
+- #5 の starts_at 文字列比較→時刻値比較（実害）。upsert RPC の `data as string`→null チェックで例外。
+
+### 次にやること
+- [ ] #6 結果更新の実機確認（試合結果セットアップが要る・共通基盤は #5 で確認済み）。
+- [ ] ④ Discord Webhook（全体告知）／⑤ Bot DM。外部設定の壁打ちから。
+- [ ] #5 長期系（予選期間中告知・決勝T日程確定）＝ Cron#9 と一緒に。
+
+---
+
 ## 2026-07-01 — 通知 PR-③: 出来事→通知生成（フォロワー集約・重複排除／公開通知を接続）
 
 ①（通知）と②（フォロー）を繋ぐ要。要件定義書 3.6.1 の「出来事起点→宛先集約→重複排除→1人1通」を初めて実装。最初の出来事は **主催者が新イベントを公開 → 主催者(user)フォロワーへ通知**（type=`series_season_announced`・3.7 の #4）。series フォロワーは⑥で追加。
