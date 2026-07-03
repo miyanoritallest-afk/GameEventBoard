@@ -1,9 +1,14 @@
 import {
+  insertNotificationEvent,
   upsertNotificationEvent,
   insertNotification,
 } from "@/lib/repositories/notifications";
 import { listFollowerIds } from "@/lib/repositories/follows";
 import { aggregateRecipients } from "@/lib/services/notification-fanout";
+import {
+  buildSeriesMemberInvitedContent,
+  NotificationType,
+} from "@/lib/services/notification-content";
 import type { NotificationContent } from "@/lib/services/notification-content";
 
 /**
@@ -74,4 +79,41 @@ export async function notifyEventFollowers(params: {
       (failed[0] as PromiseRejectedResult).reason,
     );
   }
+}
+
+/**
+ * #11 シリーズ運営への招待を招待相手本人へ通知する（直接関係者・3.7 の #11）。
+ * フォロー集約は不要（宛先が招待相手1人に一意に決まる）。出来事は招待ごとに1つ生成する
+ * （日程/結果のような1日1回集約はしない）。source は series。
+ *
+ * ベストエフォート: 呼び出し側（招待 Action）が try/catch で握り、招待成功を通知失敗で
+ * 巻き添えにしない。招待ごとに新しい source_event_id を採番するため、招待→拒否→再招待では
+ * 通知が都度届く（UNIQUE(user_id, source_event_id) は同一出来事の重複のみ弾く＝集約はしない）。
+ * これは意図通り（「また招待された」を毎回知らせる）。
+ */
+export async function notifySeriesMemberInvited(params: {
+  seriesId: string;
+  seriesName: string;
+  inviteeUserId: string;
+  inviterName: string;
+}): Promise<void> {
+  const content = buildSeriesMemberInvitedContent({
+    seriesId: params.seriesId,
+    seriesName: params.seriesName,
+    inviterName: params.inviterName,
+  });
+
+  const { id: sourceEventId } = await insertNotificationEvent({
+    type: NotificationType.SeriesMemberInvited,
+    sourceType: "series",
+    sourceId: params.seriesId,
+  });
+
+  await insertNotification({
+    userId: params.inviteeUserId,
+    sourceEventId,
+    title: content.title,
+    body: content.body,
+    linkUrl: content.linkUrl,
+  });
 }

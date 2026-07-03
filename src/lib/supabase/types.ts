@@ -1342,6 +1342,39 @@ export type Database = {
         }
         Returns: string
       }
+      search_users_for_invite: {
+        Args: {
+          p_series_id: string
+          p_query: string
+        }
+        Returns: {
+          id: string
+          discord_name: string
+          battle_tag: string | null
+          discord_avatar_url: string | null
+        }[]
+      }
+      invite_series_member: {
+        Args: {
+          p_series_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      respond_to_series_invite: {
+        Args: {
+          p_series_id: string
+          p_accept: boolean
+        }
+        Returns: number
+      }
+      remove_series_member: {
+        Args: {
+          p_series_id: string
+          p_user_id: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       delivery_channel: "discord_dm" | "discord_webhook"

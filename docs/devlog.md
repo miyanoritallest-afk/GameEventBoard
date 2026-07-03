@@ -7,6 +7,42 @@
 
 ---
 
+## 2026-07-03 — シリーズ PR-⑥-2: シリーズ共同運営（検索招待・承認/拒否・削除・#11通知）
+
+⑥-1 では series_members は「作成者が自分を owner・active で登録」だけだった。本 PR で **owner が他ユーザーを検索して admin 招待 → 相手が承認（invited→active）→ 運営業務ができる**までを通した（要件定義書 3.5.1 / 3.7 #11）。外部設定ゼロ・依存は⑥-1(0032)のみ。
+
+### やったこと
+- **0033（要適用）**: security definer 関数4つ ＋ series_members の RLS 拡張。
+  - `search_users_for_invite`（discord_name/battle_tag 部分一致・既member除外・上限20。users は他人行が RLS で見えないため definer で跨ぐ）／`invite_series_member`（owner資格・二重招待防止を関数内で検証し admin・invited で INSERT）／`respond_to_series_invite`（本人の invited 行のみ承認=active化 / 拒否=削除。作用行数を返す）／`remove_series_member`（owner資格＋**最後の active owner 保護**＝孤立防止）。
+  - RLS: INSERT に「owner による招待（admin・invited）」を追加／UPDATE「本人が自分の invited 行を承認」／DELETE「owner または本人」。
+- **series Repository**: listSeriesMembers（users を `!series_members_user_id_fkey` でヒント埋め込み＝多FK曖昧回避）／findSeriesMembership／searchUsersForInvite／inviteSeriesMember／respondToSeriesInvite／removeSeriesMember。
+- **通知 #11**: `NotificationType.SeriesMemberInvited` ＋ `buildSeriesMemberInvitedContent`（link=シリーズ詳細＝承認先）＋ `notifySeriesMemberInvited`（直接関係者・1人宛・出来事は招待ごとに生成。フォロー集約不要）。招待 Action からベストエフォートで呼ぶ。
+- **Server Actions**: searchInviteCandidates（owner のみ候補検索）／inviteMember／respondInvite／removeMember。いずれも冒頭ログイン確認・Zod 検証・DB関数の例外をユーザー向けメッセージに丸める。role/status は入力から取らずサーバー固定（マスアサインメント対策）。
+- **シリーズ詳細ページ**: owner に運営管理パネル（検索→招待／運営一覧＋削除）、被招待者本人に承認/辞退バナー、それ以外に読み取り専用の運営一覧。**「次の開催回を作成」を created_by 判定 → staff(owner/admin・active) 判定に切替**（admin もイベント運営できるべき、という⑥-1の積み残しを解消）。
+- lint / typecheck / test(329緑・+2) / build 通過。**実機確認済み**（0033適用後・Playwright＋anon+ひでJWTで RLS を効かせて検証）: のりがシリーズ作成→ひで検索→招待（admin/invited・#11通知届く）→ひでが承認（admin のまま active）→運営一覧に反映。**RLS 直叩きで role=owner への自己昇格が弾かれる**／**admin は招待できない（owner資格）**／**最後の active owner は退会できない**を確認。検証データ掃除済み。
+
+### 直したこと（実機で発見）
+- **Supabase の RPC 例外は Error インスタンスではない**（`{code, message}` のプレーンオブジェクト）。当初 `e instanceof Error ? e.message : ""` で message を取りこぼし、「最後のオーナーは削除できません」等の専用メッセージが汎用エラーに落ちていた。`errorMessage(e)` ヘルパで message を確実に拾うよう修正（inviteMember / removeMember 両方）。
+
+### 直したこと（code-review で発見・重大／0034 で修正・要適用）
+- **【Critical】definer 関数の認可バイパス（権限昇格）**。0033 の4関数は actor を引数（p_inviter/p_user/p_remover）で受け取っていた。Postgres は definer 関数に EXECUTE を PUBLIC へデフォルト付与するため、認証済みユーザーが REST の `/rpc/<fn>` を直叩きし、**他人の owner UUID を actor に渡すだけで RLS をバイパスして権限昇格できた**（非 owner が「のりの UUID を p_inviter に」→自分を admin 招待、を **anon+ひでJWT で実地再現**）。最初の実機確認は Server Action 経由しか見ておらず RPC 直叩きを検証していなかったため見逃していた。
+- **【Critical】DELETE RLS で最後の owner 保護をバイパス**。`series_members_delete_owner_or_self` の USING が `user_id=auth.uid()` で自己削除を無条件許可。唯一の owner が直 REST DELETE で自分を消しシリーズ孤立（以後 update=owner で永久ロック）できた。
+- **0034（要適用）で修正**: (1) 4関数の actor を **`auth.uid()` に変更・引数廃止**（他人 UUID を渡す攻撃を原理的に不可能に）。(2) `search_users_for_invite` に owner 内部チェック追加＋ilike の `% _` エスケープ。(3) 削除/承認/招待は **全て definer 関数経由に強制**（DELETE/UPDATE/INSERT の RLS ポリシーを撤去）。最後 owner 保護・TOCTOU 対策（`for update`）を関数が一元管理。(4) 4関数の EXECUTE を **anon から REVOKE**（authenticated のみ）。
+- 併せて軽微修正: respondInvite に try/catch 追加（他3アクションと非対称だった）／招待成功後に検索結果を「招待済み」表示にして陳腐リストの再クリックエラーを防止／notify の source_event_id 採番に関するコメント誤記（UNIQUE で集約される、は誤り）を修正。
+- types.ts / Repository / Actions を新シグネチャに追従。lint / typecheck / test(329緑) / build 通過。
+
+### 決めたこと（なぜ）
+- **検索は全ユーザー部分一致**（案A・確定）。要件が「フォロー有無に依存しない汎用性（初めて組む人も招待可）」を明示。プライバシー懸念は本人承認と上限20で緩和。
+- **承認 UI はシリーズ詳細に出す**（確定）。🔔通知→/series/[id]→承認/辞退。専用受信箱は作らず小さく保つ。
+- **owner 最後の1人保護**（確定）。最後の active owner は削除/退会不可（シリーズ孤立防止）。admin は owner を蹴れない（削除は owner のみ）。
+- **RLS UPDATE の権限昇格穴を塞いだ**（自己レビュー）。当初 WITH CHECK が `user_id=auth.uid()` のみで、被招待者が RLS 直叩きで `role='owner'` に自己昇格できた。`role='admin' and status='active'` に固定（承認は admin のまま active 化のみ）。role 変更 UI は将来別ポリシーで。
+
+### 次にやること
+- [ ] 0033 を Supabase SQL Editor で適用 → 実機確認（招待→承認→運営業務／#11通知／最後のowner保護／権限昇格が塞がれているか）。
+- [ ] ④ Discord Webhook / ⑤ Bot DM（外部設定の壁打ちから）／⑦ Cron。
+
+---
+
 ## 2026-07-02 — シリーズ PR-⑥-1: シリーズ基盤（作成/一覧/詳細・シリーズ化・フォロー・③接続・プリフィル）
 
 通知フェーズの積み残し「シリーズ」。継続する企画（例: OSL）を独立概念として持ち、フォローすると新しい開催回の公開が届く（要件定義書 3.5.1）。壁打ちで設計を2回見直した：シリーズ先→**イベント起点（単発→好評→シリーズ化）**、プリフィルは**前回イベント設定**。

@@ -5,6 +5,7 @@ import {
   buildSeriesSeasonAnnouncedContent,
   buildEventScheduleConfirmedContent,
   buildEventResultUpdatedContent,
+  buildSeriesMemberInvitedContent,
 } from "../notification-content";
 
 /**
@@ -92,5 +93,25 @@ describe("buildEventResultUpdatedContent", () => {
     expect(c.title).toBe("結果が更新されました");
     expect(c.body).toContain("OSL Season2");
     expect(c.linkUrl).toBe("/events/e-3/watch");
+  });
+});
+
+describe("NotificationType.SeriesMemberInvited", () => {
+  it("type 文字列は要件定義書 3.7 #11 の series_member_invited", () => {
+    expect(NotificationType.SeriesMemberInvited).toBe("series_member_invited");
+  });
+});
+
+describe("buildSeriesMemberInvitedContent", () => {
+  it("招待者名とシリーズ名を本文に埋め、link はシリーズ詳細（承認先）を指す", () => {
+    const c = buildSeriesMemberInvitedContent({
+      seriesId: "s-1",
+      seriesName: "OSL",
+      inviterName: "のり",
+    });
+    expect(c.title).toBe("シリーズ運営に招待されました");
+    expect(c.body).toContain("OSL");
+    expect(c.body).toContain("のり");
+    expect(c.linkUrl).toBe("/series/s-1");
   });
 });

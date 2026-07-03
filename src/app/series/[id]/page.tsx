@@ -4,9 +4,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { findSeriesById, listSeriesEvents } from "@/lib/repositories/series";
+import {
+  findSeriesById,
+  listSeriesEvents,
+  listSeriesMembers,
+  findSeriesMembership,
+} from "@/lib/repositories/series";
 import { isFollowing } from "@/lib/repositories/follows";
 import { FollowButton } from "@/app/events/[id]/follow-button";
+import { SeriesMembersPanel } from "./members-panel";
+import { InviteBanner } from "./invite-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +51,21 @@ export default async function SeriesDetailPage({
   } = await supabase.auth.getUser();
   const viewerId = user?.id ?? null;
 
-  const [events, following] = await Promise.all([
+  const [events, following, members, membership] = await Promise.all([
     listSeriesEvents(series.id),
     viewerId
       ? isFollowing({ followerId: viewerId, targetType: "series", targetId: series.id })
       : Promise.resolve(false),
+    listSeriesMembers(series.id),
+    viewerId
+      ? findSeriesMembership({ seriesId: series.id, userId: viewerId })
+      : Promise.resolve(null),
   ]);
+
+  // 運営（owner/admin・active）＝イベント運営業務ができる人。owner＝運営の追加削除もできる人。
+  const isStaff = membership?.status === "active";
+  const isOwner = membership?.role === "owner" && membership.status === "active";
+  const isInvited = membership?.status === "invited";
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
@@ -71,8 +87,8 @@ export default async function SeriesDetailPage({
           </p>
         )}
 
-        {/* シリーズ運営（本 PR は owner=作成者）向け: 次の開催回を作成（前回設定プリフィル）。 */}
-        {viewerId === series.created_by && (
+        {/* シリーズ運営（owner/admin・active）向け: 次の開催回を作成（前回設定プリフィル）。 */}
+        {isStaff && (
           <div className="mt-4">
             <Link
               href={`/events/new?series=${series.id}`}
@@ -81,6 +97,44 @@ export default async function SeriesDetailPage({
               次の開催回を作成
             </Link>
           </div>
+        )}
+
+        {/* 被招待者本人（invited）へ: 承認/辞退バナー。 */}
+        {isInvited && <InviteBanner seriesId={series.id} />}
+
+        {/* 運営メンバー: owner には管理パネル（招待/削除）、それ以外には読み取り専用の一覧。 */}
+        {isOwner && viewerId ? (
+          <SeriesMembersPanel
+            seriesId={series.id}
+            members={members.map((m) => ({
+              userId: m.userId,
+              role: m.role,
+              status: m.status,
+              user: m.user,
+            }))}
+            currentUserId={viewerId}
+          />
+        ) : (
+          members.filter((m) => m.status === "active").length > 0 && (
+            <section className="mt-8">
+              <h2 className="text-sm font-semibold">運営メンバー</h2>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {members
+                  .filter((m) => m.status === "active")
+                  .map((m) => (
+                    <li
+                      key={m.userId}
+                      className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs"
+                    >
+                      <span>{m.user?.discord_name ?? "（不明）"}</span>
+                      {m.role === "owner" && (
+                        <span className="text-muted-foreground">オーナー</span>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          )
         )}
 
         <section className="mt-8">
