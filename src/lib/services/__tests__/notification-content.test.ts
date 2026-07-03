@@ -6,6 +6,7 @@ import {
   buildEventScheduleConfirmedContent,
   buildEventResultUpdatedContent,
   buildSeriesMemberInvitedContent,
+  buildEventAnnounceWebhookContent,
 } from "../notification-content";
 
 /**
@@ -113,5 +114,20 @@ describe("buildSeriesMemberInvitedContent", () => {
     expect(c.body).toContain("OSL");
     expect(c.body).toContain("のり");
     expect(c.linkUrl).toBe("/series/s-1");
+  });
+});
+
+describe("buildEventAnnounceWebhookContent", () => {
+  it("イベント名・主催者名・絶対URLを含む Discord 告知文を作る", () => {
+    const msg = buildEventAnnounceWebhookContent({
+      eventTitle: "OSL Season3",
+      organizerName: "のり",
+      eventUrl: "https://example.com/events/e-1",
+    });
+    expect(msg).toContain("OSL Season3");
+    expect(msg).toContain("のり");
+    expect(msg).toContain("https://example.com/events/e-1");
+    // 告知チャンネル向けの1メッセージ（改行区切りの複数行）。
+    expect(msg.split("\n").length).toBeGreaterThanOrEqual(3);
   });
 });

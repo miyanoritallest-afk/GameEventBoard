@@ -55,6 +55,8 @@ export type EventFormDefaults = {
   bonusChampion?: number;
   /** チームスコア上限（メンバー final_score 平均の上限）。null/未設定＝上限なし。 */
   teamScoreCap?: number;
+  /** Discord 全体告知の投稿先 Webhook URL（④）。未設定＝投稿しない。 */
+  discordWebhookUrl?: string;
   rankingEnabled?: boolean;
   pointsWin?: number;
   pointsDraw?: number;
@@ -377,6 +379,25 @@ export function EventForm({
             )}
           </div>
         )}
+      </fieldset>
+
+      {/* Discord 連携（④ 全体告知）。公開時に告知チャンネルへ自動投稿する Webhook URL。 */}
+      <fieldset className="rounded-xl border border-border bg-card p-4">
+        <legend className="px-1 text-sm font-semibold">Discord 連携</legend>
+        <Field label="告知チャンネルの Webhook URL（任意）" error={fe.discordWebhookUrl}>
+          <input
+            name="discordWebhookUrl"
+            type="url"
+            defaultValue={d.discordWebhookUrl ?? ""}
+            placeholder="https://discord.com/api/webhooks/..."
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            設定すると、このイベントを公開したとき Discord の告知チャンネルへ自動で投稿します。
+            チャンネルの「連携サービス → ウェブフック」で発行した URL を貼り付けてください。
+            空欄なら投稿しません。
+          </p>
+        </Field>
       </fieldset>
 
       {/* 本戦設定（予選BO・本戦-3d） */}

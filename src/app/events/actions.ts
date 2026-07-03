@@ -50,7 +50,10 @@ import {
 } from "@/lib/services/notification-content";
 import { listFollowerIds } from "@/lib/repositories/follows";
 import { aggregateRecipients } from "@/lib/services/notification-fanout";
-import { notifyEventFollowers } from "@/lib/notifications/notify";
+import {
+  notifyEventFollowers,
+  announceEventPublishedToWebhook,
+} from "@/lib/notifications/notify";
 
 /**
  * イベント「下書き作成」 Server Action（Controller。薄く保つ）。
@@ -109,6 +112,8 @@ function parseEventFormData(
     bonusGm: formData.get("bonusGm"),
     bonusChampion: formData.get("bonusChampion"),
     teamScoreCap: formData.get("teamScoreCap"),
+    // Discord 全体告知（④）。公開時に告知チャンネルへ投稿する Webhook URL（任意）。
+    discordWebhookUrl: formData.get("discordWebhookUrl"),
     // 順位設定（本戦-3b）。tiebreakers は D&D 順を hidden input のカンマ区切りで受ける。
     rankingEnabled: formData.get("rankingEnabled") === "on",
     pointsWin: formData.get("pointsWin"),
@@ -165,6 +170,8 @@ function parseEventFormData(
       bonus_champion: v.bonusChampion,
       // 空文字＝上限なし → null で保存。
       team_score_cap: typeof v.teamScoreCap === "number" ? v.teamScoreCap : null,
+      // 空文字＝未設定 → null で保存（④ Discord 全体告知の投稿先）。
+      discord_webhook_url: v.discordWebhookUrl === "" ? null : v.discordWebhookUrl,
       ranking_enabled: v.rankingEnabled,
       points_win: v.pointsWin,
       points_draw: v.pointsDraw,
@@ -196,6 +203,7 @@ type EventEditableValues = {
   bonus_gm: number;
   bonus_champion: number;
   team_score_cap: number | null;
+  discord_webhook_url: string | null;
   ranking_enabled: boolean;
   points_win: number;
   points_draw: number;
@@ -391,6 +399,20 @@ export async function publishEvent(
     });
   } catch (e) {
     console.error("[publishEvent] 公開通知の生成に失敗:", e);
+  }
+
+  // ④ Discord 全体告知（Webhook）。アプリ内通知とは別レイヤー（告知チャンネルへ1投稿）。
+  // ベストエフォート＝失敗しても公開は成功。投稿先は event 側 URL（未設定なら投稿せず skipped）。
+  // series 側 URL へのフォールバックは series 編集 UI ができてから（現状は event 単位）。
+  try {
+    await announceEventPublishedToWebhook({
+      eventId: event.id,
+      eventTitle: event.title,
+      organizerName,
+      webhookUrl: event.discord_webhook_url ?? null,
+    });
+  } catch (e) {
+    console.error("[publishEvent] Discord 告知の投稿に失敗:", e);
   }
 
   revalidatePath(`/events/${event.id}`);

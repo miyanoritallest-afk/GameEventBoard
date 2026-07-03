@@ -71,6 +71,7 @@ export default async function EditEventPage({
     bonusGm: event.bonus_gm,
     bonusChampion: event.bonus_champion,
     teamScoreCap: event.team_score_cap ?? undefined,
+    discordWebhookUrl: event.discord_webhook_url ?? "",
     rankingEnabled: event.ranking_enabled,
     pointsWin: event.points_win,
     pointsDraw: event.points_draw,

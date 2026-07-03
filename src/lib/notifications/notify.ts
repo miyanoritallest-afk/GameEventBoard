@@ -2,14 +2,17 @@ import {
   insertNotificationEvent,
   upsertNotificationEvent,
   insertNotification,
+  insertDelivery,
 } from "@/lib/repositories/notifications";
 import { listFollowerIds } from "@/lib/repositories/follows";
 import { aggregateRecipients } from "@/lib/services/notification-fanout";
 import {
   buildSeriesMemberInvitedContent,
+  buildEventAnnounceWebhookContent,
   NotificationType,
 } from "@/lib/services/notification-content";
 import type { NotificationContent } from "@/lib/services/notification-content";
+import { postToDiscordWebhook } from "@/lib/notifications/discord";
 
 /**
  * 通知のアプリケーションサービス（クロス Controller のオーケストレーション）。
@@ -116,4 +119,68 @@ export async function notifySeriesMemberInvited(params: {
     body: content.body,
     linkUrl: content.linkUrl,
   });
+}
+
+/**
+ * アプリの絶対URLのベース。Discord メッセージ内リンクは絶対URLでなければ踏めないため、
+ * env（NEXT_PUBLIC_APP_URL）から解決する。未設定なら開発用に localhost:3000 へフォールバック
+ * （本番デプロイ時は NEXT_PUBLIC_APP_URL を設定する）。末尾スラッシュは落とす。
+ */
+function appBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  return raw.replace(/\/+$/, "");
+}
+
+/** Webhook の投稿先識別（トークンを保存しないよう host だけ）。記録用。 */
+function webhookTargetRef(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "invalid-url";
+  }
+}
+
+/**
+ * ④ イベント公開の全体告知を Discord 告知チャンネル（Webhook）へ投稿する。
+ * アプリ内通知（notifyEventPublished の宛先集約）とは別レイヤー＝チャンネルに1回投稿する
+ * 全体向け。webhookUrl が無ければ投稿せず skipped を記録する。
+ *
+ * ベストエフォート: 呼び出し側（publishEvent）が try/catch で握り、公開の成功を配信失敗で
+ * 巻き添えにしない。結果は notification_deliveries に sent/failed/skipped で残す（再送は⑦Cron）。
+ */
+export async function announceEventPublishedToWebhook(params: {
+  eventId: string;
+  eventTitle: string;
+  organizerName: string;
+  webhookUrl: string | null;
+}): Promise<void> {
+  // URL 未設定＝投稿しない。skipped として記録（「送らなかった」を可視化）。
+  if (!params.webhookUrl) {
+    await insertDelivery({ channel: "discord_webhook", status: "skipped" });
+    return;
+  }
+
+  const content = buildEventAnnounceWebhookContent({
+    eventTitle: params.eventTitle,
+    organizerName: params.organizerName,
+    eventUrl: `${appBaseUrl()}/events/${params.eventId}`,
+  });
+
+  const result = await postToDiscordWebhook(params.webhookUrl, content);
+  const targetRef = webhookTargetRef(params.webhookUrl);
+  if (result.ok) {
+    await insertDelivery({
+      channel: "discord_webhook",
+      status: "sent",
+      targetRef,
+      sentAt: new Date().toISOString(),
+    });
+  } else {
+    await insertDelivery({
+      channel: "discord_webhook",
+      status: "failed",
+      targetRef,
+      error: result.error,
+    });
+  }
 }

@@ -25,6 +25,24 @@ const optionalText = (max: number, maxMessage: string) =>
     z.string().max(max, maxMessage),
   );
 
+/**
+ * Discord Webhook URL の任意項目（④ 全体告知）。空文字は「未設定」。
+ * 値があれば discord.com / discordapp.com の webhook エンドポイント形式のみ受理する
+ * （任意ホストへの POST を主催者入力から許さない＝SSRF/誤爆対策。全体告知は Discord のみ）。
+ */
+const DISCORD_WEBHOOK_RE =
+  /^https:\/\/(?:\w+\.)?(?:discord\.com|discordapp\.com)\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+$/;
+const optionalDiscordWebhookUrl = z.preprocess(
+  (v) => (v == null ? "" : typeof v === "string" ? v.trim() : v),
+  z
+    .string()
+    .max(300, "Webhook URL は300文字以内で入力してください")
+    .refine(
+      (v) => v === "" || DISCORD_WEBHOOK_RE.test(v),
+      "Discord の Webhook URL を入力してください（https://discord.com/api/webhooks/...）",
+    ),
+);
+
 export const createDraftEventSchema = z
   .object({
     // 下書きでも識別子としてタイトルは必須。
@@ -113,6 +131,10 @@ export const createDraftEventSchema = z
         z.literal(""),
       ]),
     ),
+
+    // Discord 全体告知（④）。公開時に告知チャンネルへ自動投稿する Webhook URL（任意）。
+    // 空なら投稿しない（skipped 記録）。値の形式検証は optionalDiscordWebhookUrl。
+    discordWebhookUrl: optionalDiscordWebhookUrl,
 
     // 順位設定（本戦-3b）。ranking_enabled が親トグル。OFF なら配下は使わない。
     rankingEnabled: z.coerce.boolean().default(false),

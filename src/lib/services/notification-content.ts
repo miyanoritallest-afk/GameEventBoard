@@ -121,3 +121,24 @@ export function buildSeriesMemberInvitedContent(params: {
     linkUrl: `/series/${params.seriesId}`,
   };
 }
+
+/**
+ * ④ Discord 全体告知（Webhook 投稿）の本文を組み立てる純粋関数。
+ * 「新しい開催回が公開された」告知を、告知チャンネル向けの1メッセージにする
+ * （アプリ内通知の宛先集約とは別レイヤー＝チャンネルに1回投稿する全体向け）。
+ *
+ * eventUrl は**絶対URL**（Discord のメッセージから踏めるよう呼び出し側が baseUrl と結合して渡す）。
+ * イベント名・主催者名は通知時点の値。Discord の content は最大2000字だが、ここは短文なので
+ * 上限は気にしない（呼び出し側の値も title/name はフォーム側で長さ制限済み）。
+ */
+export function buildEventAnnounceWebhookContent(params: {
+  eventTitle: string;
+  organizerName: string;
+  eventUrl: string;
+}): string {
+  return [
+    `📢 **新しいイベントが公開されました**`,
+    `**${params.eventTitle}**（主催: ${params.organizerName}）`,
+    params.eventUrl,
+  ].join("\n");
+}

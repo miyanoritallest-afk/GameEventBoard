@@ -24,6 +24,7 @@ type EventEditableColumns = Pick<
   | "bonus_gm"
   | "bonus_champion"
   | "team_score_cap"
+  | "discord_webhook_url"
   | "ranking_enabled"
   | "points_win"
   | "points_draw"
