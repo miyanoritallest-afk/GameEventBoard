@@ -34,6 +34,16 @@ export const NotificationType = {
    * （フォロー集約不要・宛先を直接引いて notifications を生成）。
    */
   SeriesMemberInvited: "series_member_invited",
+  /**
+   * 試合が始まる（開始2時間前リマインド・3.7 の #7）。宛先=出場チームのメンバー
+   * （個人・直接関係者）。Cron が相対発火（⑦）。アプリ内通知（⑤DM は後続）。
+   */
+  MatchStartingSoon: "match_starting_soon",
+  /**
+   * 「本日◯時から各試合」（3.7 の #9）。宛先=全体（告知チャンネルへ Webhook 投稿）。
+   * Cron が1日1回発火（④のインフラ流用・⑦）。
+   */
+  EventMatchesToday: "event_matches_today",
 } as const;
 
 export type NotificationTypeValue =
@@ -139,6 +149,58 @@ export function buildEventAnnounceWebhookContent(params: {
   return [
     `📢 **新しいイベントが公開されました**`,
     `**${params.eventTitle}**（主催: ${params.organizerName}）`,
+    params.eventUrl,
+  ].join("\n");
+}
+
+/**
+ * UTC(ISO) を JST の「M/D HH:mm」表示に整形する（通知文面用の共通ヘルパ）。
+ * 純粋関数（Intl 依存のみ・副作用なし）。null は "未定"。
+ */
+export function fmtJstDateTime(iso: string | null): string {
+  if (!iso) return "未定";
+  return new Date(iso).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * #7 試合開始2時間前リマインド。宛先は出場チームのメンバー（個人・アプリ内）。
+ * link 先は観戦ビュー（試合の詳細に近い導線）。開始時刻は JST 表示で本文に混ぜる。
+ */
+export function buildMatchStartingSoonContent(params: {
+  eventId: string;
+  eventTitle: string;
+  scheduledAt: string;
+}): NotificationContent {
+  return {
+    title: "まもなく試合が始まります",
+    body: `「${params.eventTitle}」の試合が ${fmtJstDateTime(
+      params.scheduledAt,
+    )} に始まります（開始2時間前）。`,
+    linkUrl: `/events/${params.eventId}/watch`,
+  };
+}
+
+/**
+ * #9 「本日◯時から各試合」の全体告知（Webhook）。宛先は告知チャンネル。
+ * 本日そのイベントで最初に始まる試合の時刻を載せる（「本日 HH:mm から各試合！」）。
+ * eventUrl は絶対URL（呼び出し側が baseUrl と結合して渡す）。
+ */
+export function buildEventMatchesTodayWebhookContent(params: {
+  eventTitle: string;
+  firstMatchAt: string;
+  eventUrl: string;
+}): string {
+  return [
+    `⏰ **本日の試合**`,
+    `**${params.eventTitle}** は本日 ${fmtJstDateTime(
+      params.firstMatchAt,
+    )} から試合があります！`,
     params.eventUrl,
   ].join("\n");
 }

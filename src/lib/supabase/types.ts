@@ -626,6 +626,7 @@ export type Database = {
       notification_events: {
         Row: {
           created_at: string
+          dedup_key: string | null
           id: string
           payload: Json | null
           source_id: string
@@ -634,6 +635,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          dedup_key?: string | null
           id?: string
           payload?: Json | null
           source_id: string
@@ -642,6 +644,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          dedup_key?: string | null
           id?: string
           payload?: Json | null
           source_id?: string

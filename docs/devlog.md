@@ -7,6 +7,33 @@
 
 ---
 
+## 2026-07-03 — 通知 PR-⑦: Cron 定期通知（試合直前リマインド #7・本日の試合告知 #9）
+
+時刻で発火する通知（Vercel Cron）。**#7 試合開始2時間前リマインド**（出場メンバーへアプリ内通知）と **#9「本日◯時から各試合」全体告知**（告知チャンネルへ Webhook・④のインフラ流用）。#8 スクリムは前提機能（スクリム機能）未実装のため除外。マイグレーション不要（`matches.scheduled_at`/`notified_at` は 0001 で既存）。
+
+### やったこと
+- **admin クライアント**（`src/lib/supabase/admin.ts`）: service_role で **RLS を全バイパス**する Cron 専用クライアント。ログインセッションが無い定期処理で他人の試合・メンバーを跨ぐため。サーバー専用（キーはクライアントに出さない）。
+- **Cron Repository**（`src/lib/repositories/cron.ts`）: 2時間以内開始&未通知の試合取得（matches→teams→team_members→registrations→users を埋め込みで辿る）／`markMatchNotified`（notified_at を **is null 条件付き UPDATE** で立てる＝並行実行の二重送信防止）／本日試合のある webhook 付き公開イベント取得／admin 版の notification_events/notifications/deliveries insert。
+- **Service（純粋）**: `buildMatchStartingSoonContent`（#7・観戦ビューへ・JST時刻）／`buildEventMatchesTodayWebhookContent`（#9・Webhook文）／`fmtJstDateTime`（共通・UTC→JST）＋テスト5件。NotificationType に #7/#9 追加。
+- **オーケストレーション**（`src/lib/notifications/cron-notify.ts`）: `runMatchReminders`（#7・notified_at で枠を取ってから宛先集約→通知・aggregateRecipients で重複排除・dedup_key=`match:<id>:...`）／`runTodayMatchAnnounce`（#9・dedup_key=`event:<id>:event_matches_today:<JST日付>` で**1日1回**・Webhook 投稿結果を deliveries に記録）。各件ベストエフォート。
+- **Route Handler**（`src/app/api/cron/notifications/route.ts`）: GET・**`Authorization: Bearer <CRON_SECRET>` 検証**（不一致=401・未設定=500）・#7#9 を allSettled で独立実行・結果 JSON。デフォルト非キャッシュ。
+- **vercel.json**: `/api/cron/notifications` を `*/10 * * * *`（10分毎）。
+- types.ts に `notification_events.dedup_key`（0031 で追加済みだが型が未反映だった）を手動追加。
+- lint / typecheck / test(335緑・+5) / build 通過。**実機確認済み**（dev で CRON_SECRET 直叩き）: 401（無認証/誤SECRET）／#9 sent（**告知チャンネルに実投稿**）→2回目 skipped（1日1回集約）／#7 出場メンバー2人にアプリ内通知＋notified_at セット→2回目 matchesConsidered:0（二重防止）。検証データ掃除済み。
+
+### 決めたこと（なぜ）
+- **#7と#9両方・#8除外**（確定）。#8 スクリムは機能自体が無い。#7/#9 は Cron 基盤を1回作れば2 type 載せる追加コストが小さい。
+- **Cron は service_role（RLS バイパス）＋ CRON_SECRET 保護**（確定）。Cron にログインユーザーはおらず auth.uid() が使えない。definer 関数だと通知生成ロジックを SQL に寄せ TS Service と二重になるため、service_role で既存 TS Service を使い回す。Route を CRON_SECRET で固く守るのが前提。
+- **二重防止は2系統**: #7 は `matches.notified_at`（条件付き UPDATE）＋ notifications UNIQUE、#9 は `notification_events.dedup_key`（日付入り・1日1回）。通知洪水と重複を物理防止。
+- **リマインドは相対発火（開始2h前）**（要件確定）。Cron を数分間隔で回し「2時間以内開始&未送信」を拾う。
+
+### 次にやること
+- [ ] **本番設定**: Vercel の環境変数に `CRON_SECRET`（Route と同値）＋ `NEXT_PUBLIC_APP_URL` を設定。`vercel.json` の Cron を有効化。
+- [ ] **Vercel Hobby プランは Cron が1日1回まで**。現状 `*/10 * * * *` は Pro 前提。Hobby なら `0 0 * * *` 等に落とす（プランに応じて調整）。
+- [ ] ⑤ Discord Bot DM（個人向け・Bot 構築）。#7 の宛先に DM チャネルを足せば「試合直前を DM で」が完成（⑤×⑦）。
+
+---
+
 ## 2026-07-03 — 通知 PR-④: Discord Webhook で全体告知（イベント公開→告知チャンネル投稿）
 
 通知の中心価値「アプリを開かなくても通知が届く」の入口。全体向け通知（3.5.2）を **Discord の告知チャンネルへ Webhook 投稿**する。⑤（Bot DM＝個人向け）の前段。スキーマは 0001 で既に用意されていた（`events.discord_webhook_url` / `notification_deliveries` / enum）ため **マイグレーション不要**（0027 の deliveries INSERT ポリシーで足りる）。
