@@ -110,6 +110,131 @@ export async function listSeriesEvents(seriesId: string) {
 }
 
 /**
+ * シリーズの運営メンバー一覧（owner→admin の順、状態問わず）。詳細ページの運営一覧用。
+ * users を埋め込み（series_members→users は多対一なので単一オブジェクト
+ * ・[[supabase-embed-cardinality]]）。members/users とも SELECT は公開（0032 / users）。
+ */
+export async function listSeriesMembers(seriesId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("series_members")
+    // users は user_id / invited_by の2FKで参照されるため、埋め込むFKを明示する
+    // （曖昧だと "more than one relationship" で埋め込み不可）。運営者＝user_id 側。
+    .select(
+      "user_id, role, status, invited_at, users:users!series_members_user_id_fkey(discord_name, battle_tag, discord_avatar_url)",
+    )
+    .eq("series_id", seriesId)
+    // 辞書順で 'admin' < 'owner'。owner を先頭にしたいので降順。
+    .order("role", { ascending: false })
+    .order("invited_at", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    userId: row.user_id,
+    role: row.role,
+    status: row.status,
+    invitedAt: row.invited_at,
+    // series_members→users は多対一なので単一オブジェクト（[[supabase-embed-cardinality]]）。
+    user: row.users,
+  }));
+}
+
+/**
+ * 指定ユーザーのシリーズにおける運営レコード（無ければ null）。
+ * 権限判定（staff か・invited 招待中か）とUI分岐に使う。RLS で members は SELECT 公開。
+ */
+export async function findSeriesMembership(params: {
+  seriesId: string;
+  userId: string;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("series_members")
+    .select("role, status")
+    .eq("series_id", params.seriesId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 招待候補のユーザー検索（discord_name / battle_tag 部分一致・既member除外・上限20）。
+ * users の他人行は RLS で見えないため security definer 関数（0033）で跨ぐ。
+ */
+export async function searchUsersForInvite(params: {
+  seriesId: string;
+  query: string;
+}) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("search_users_for_invite", {
+    p_series_id: params.seriesId,
+    p_query: params.query,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * owner が運営メンバーを招待する（admin・invited）。原子性・二重招待防止・owner 資格確認は
+ * DB関数（0034 invite_series_member）内。実行者は関数内で auth.uid() を使う
+ * （actor をクライアントから渡さない＝他人 UUID を借りる権限昇格を封じる）。
+ * 返り値は作成した series_members.id。既に member 等は関数が例外を投げる（Server Action で握る）。
+ */
+export async function inviteSeriesMember(params: {
+  seriesId: string;
+  userId: string;
+}): Promise<{ id: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("invite_series_member", {
+    p_series_id: params.seriesId,
+    p_user_id: params.userId,
+  });
+  if (error) throw error;
+  if (data === null) {
+    throw new Error("invite_series_member が id を返しませんでした。");
+  }
+  return { id: data };
+}
+
+/**
+ * 招待への応答（承認/拒否）。自分（auth.uid()）宛ての invited 行にのみ作用
+ * （0034 respond_to_series_invite・実行者は関数内で auth.uid()）。
+ * 返り値は作用した行数（0 なら該当なし＝既に処理済み）。
+ */
+export async function respondToSeriesInvite(params: {
+  seriesId: string;
+  accept: boolean;
+}): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("respond_to_series_invite", {
+    p_series_id: params.seriesId,
+    p_accept: params.accept,
+  });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+/**
+ * 運営メンバーを削除する（owner による削除・招待取消、または本人の退会）。最後の owner 保護・
+ * 認可（auth.uid() が owner か本人か）は DB関数（0034 remove_series_member）内。
+ * 実行者は関数内で auth.uid() を使う。返り値は削除した行数（0 なら該当なし）。
+ */
+export async function removeSeriesMember(params: {
+  seriesId: string;
+  userId: string;
+}): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("remove_series_member", {
+    p_series_id: params.seriesId,
+    p_user_id: params.userId,
+  });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+/**
  * シリーズの最新イベント（開催回）の大会設定を取得する。イベント作成フォームの
  * プリフィル用（Season2 は Season1 と同じルール、という実運用）。下書き含む最新1件。
  * 無ければ null（初回シリーズ）。

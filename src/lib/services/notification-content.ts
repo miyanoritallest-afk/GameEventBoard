@@ -29,6 +29,11 @@ export const NotificationType = {
    * 試合ごとではなくイベント単位・1日1回に集約（dedup_key）。
    */
   EventResultUpdated: "event_result_updated",
+  /**
+   * シリーズ運営に招待された（3.7 の #11）。宛先=招待相手本人・直接関係者
+   * （フォロー集約不要・宛先を直接引いて notifications を生成）。
+   */
+  SeriesMemberInvited: "series_member_invited",
 } as const;
 
 export type NotificationTypeValue =
@@ -98,5 +103,21 @@ export function buildEventResultUpdatedContent(params: {
     title: "結果が更新されました",
     body: `「${params.eventTitle}」の結果・順位が更新されました。`,
     linkUrl: `/events/${params.eventId}/watch`,
+  };
+}
+
+/**
+ * #11 シリーズ運営への招待。宛先は招待相手本人（直接関係者）。
+ * link 先はシリーズ詳細（そこで承認/拒否できる）。招待者名・シリーズ名は通知時点の値を渡す。
+ */
+export function buildSeriesMemberInvitedContent(params: {
+  seriesId: string;
+  seriesName: string;
+  inviterName: string;
+}): NotificationContent {
+  return {
+    title: "シリーズ運営に招待されました",
+    body: `${params.inviterName}さんが「${params.seriesName}」の運営に招待しました。`,
+    linkUrl: `/series/${params.seriesId}`,
   };
 }
