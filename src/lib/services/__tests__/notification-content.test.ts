@@ -7,6 +7,9 @@ import {
   buildEventResultUpdatedContent,
   buildSeriesMemberInvitedContent,
   buildEventAnnounceWebhookContent,
+  buildMatchStartingSoonContent,
+  buildEventMatchesTodayWebhookContent,
+  fmtJstDateTime,
 } from "../notification-content";
 
 /**
@@ -129,5 +132,51 @@ describe("buildEventAnnounceWebhookContent", () => {
     expect(msg).toContain("https://example.com/events/e-1");
     // 告知チャンネル向けの1メッセージ（改行区切りの複数行）。
     expect(msg.split("\n").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("fmtJstDateTime", () => {
+  it("UTC を JST（+9h）で M/D HH:mm に整形する", () => {
+    // 2026-07-03T12:00Z → JST 21:00
+    const s = fmtJstDateTime("2026-07-03T12:00:00.000Z");
+    expect(s).toContain("21:00");
+    expect(s).toContain("7/3");
+  });
+  it("null は未定", () => {
+    expect(fmtJstDateTime(null)).toBe("未定");
+  });
+});
+
+describe("NotificationType #7/#9", () => {
+  it("type 文字列は 3.7 カタログの match_starting_soon / event_matches_today", () => {
+    expect(NotificationType.MatchStartingSoon).toBe("match_starting_soon");
+    expect(NotificationType.EventMatchesToday).toBe("event_matches_today");
+  });
+});
+
+describe("buildMatchStartingSoonContent", () => {
+  it("イベント名と開始時刻(JST)を本文に埋め、link は観戦ビュー", () => {
+    const c = buildMatchStartingSoonContent({
+      eventId: "e-1",
+      eventTitle: "OSL Season2",
+      scheduledAt: "2026-07-03T12:00:00.000Z",
+    });
+    expect(c.title).toBe("まもなく試合が始まります");
+    expect(c.body).toContain("OSL Season2");
+    expect(c.body).toContain("21:00");
+    expect(c.linkUrl).toBe("/events/e-1/watch");
+  });
+});
+
+describe("buildEventMatchesTodayWebhookContent", () => {
+  it("イベント名・最初の試合時刻(JST)・絶対URLを含む告知文を作る", () => {
+    const msg = buildEventMatchesTodayWebhookContent({
+      eventTitle: "OSL Season2",
+      firstMatchAt: "2026-07-03T12:00:00.000Z",
+      eventUrl: "https://example.com/events/e-1",
+    });
+    expect(msg).toContain("OSL Season2");
+    expect(msg).toContain("21:00");
+    expect(msg).toContain("https://example.com/events/e-1");
   });
 });
