@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
 type FollowTarget = Database["public"]["Enums"]["follow_target"];
+type DeliveryChannel = Database["public"]["Enums"]["delivery_channel"];
+type DeliveryStatus = Database["public"]["Enums"]["delivery_status"];
 
 /**
  * 通知（notification）Repository。DB アクセスを集約する（実装ガイドライン: 層構造）。
@@ -152,5 +154,32 @@ export async function markNotificationRead(params: {
     .eq("id", params.notificationId)
     .eq("user_id", params.userId);
 
+  if (error) throw error;
+}
+
+/**
+ * 外部配信（Discord Webhook / DM）の結果を notification_deliveries に記録する（④/⑤）。
+ * 全体告知（Webhook）は個人 notifications 行に紐づかないため notificationId は任意（null 可）。
+ * status: sent（成功）/ failed（投稿失敗）/ skipped（URL 未設定などで送らなかった）。
+ * target_ref には投稿先の識別（Webhook のホスト等・URL 全体＝トークンは保存しない）を入れる。
+ * RLS（0027）は INSERT=authenticated・SELECT ポリシー無し（サーバー処理専用）。読み返さない。
+ */
+export async function insertDelivery(params: {
+  channel: DeliveryChannel;
+  status: DeliveryStatus;
+  notificationId?: string | null;
+  targetRef?: string | null;
+  error?: string | null;
+  sentAt?: string | null;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("notification_deliveries").insert({
+    channel: params.channel,
+    status: params.status,
+    notification_id: params.notificationId ?? null,
+    target_ref: params.targetRef ?? null,
+    error: params.error ?? null,
+    sent_at: params.sentAt ?? null,
+  });
   if (error) throw error;
 }

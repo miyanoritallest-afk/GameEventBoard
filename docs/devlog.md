@@ -7,6 +7,31 @@
 
 ---
 
+## 2026-07-03 — 通知 PR-④: Discord Webhook で全体告知（イベント公開→告知チャンネル投稿）
+
+通知の中心価値「アプリを開かなくても通知が届く」の入口。全体向け通知（3.5.2）を **Discord の告知チャンネルへ Webhook 投稿**する。⑤（Bot DM＝個人向け）の前段。スキーマは 0001 で既に用意されていた（`events.discord_webhook_url` / `notification_deliveries` / enum）ため **マイグレーション不要**（0027 の deliveries INSERT ポリシーで足りる）。
+
+### やったこと
+- **URL 配線**: `events.discord_webhook_url` をイベント作成/編集フォームに入力欄追加（Zod で任意・**Discord ホスト（discord.com/discordapp.com）の webhook 形式のみ受理**＝任意ホストへの POST を主催者入力から許さない）。マスアサインメント許可カラム（EventEditableColumns / EventEditableValues）にも追加。edit プリフィル対応。
+- **Service（純粋）**: `buildEventAnnounceWebhookContent`（告知チャンネル向けの1メッセージ・**絶対URL**を含む）＋テスト。
+- **app サービス**: `src/lib/notifications/discord.ts` の `postToDiscordWebhook(url, content)`（fetch・5s タイムアウト・2xx 判定・`allowed_mentions: {parse:[]}` で @everyone 誤爆防止・例外を投げず結果オブジェクトを返す）。
+- **Repository**: `insertDelivery`（notification_deliveries に sent/failed/skipped を記録・全体告知は個人 notifications に紐づかないため notification_id は null 可）。
+- **オーケストレーション**: `announceEventPublishedToWebhook`（URL 未設定→skipped / 投稿成功→sent / 失敗→failed。target_ref は**ホストのみ**＝トークンを保存しない）を publishEvent から**ベストエフォート**で呼ぶ（③アプリ内通知と並ぶ別レイヤー・宛先集約は通さない＝チャンネルに1投稿）。
+- **絶対URL**: Discord メッセージ内リンク用に `NEXT_PUBLIC_APP_URL`（未設定は localhost:3000 フォールバック）。
+- lint / typecheck / test(330緑・+1) / build 通過。**実機確認済み**（Playwright で公開・本物 Webhook URL）: skipped（URL未設定）／failed（無効URL→HTTP 404・**公開自体は成功**＝ベストエフォート）／**sent（本物URLで実投稿→告知チャンネルに実際に届いた）** の3パスを確認。検証データ掃除済み。
+
+### 決めたこと（なぜ）
+- **URL は event 単位**（確定）。公開告知はイベント単位の出来事なので自然。series 側 URL へのフォールバック（0001 コメント「未設定なら series」）は series 編集 UI ができてから（現状は event のみ）。
+- **失敗時はリトライせず記録のみ**（確定）。再送は⑦Cron の仕組みで failed を拾い直す。④にリトライ/バックオフを入れると膨らむ。
+- **Discord ホスト限定＋トークン非保存**（SSRF/誤爆・秘密情報漏洩の予防）。URL 形式は schema で Discord に限定、記録は host のみ。
+- **投稿は app サービス層（副作用）／文面は Service（純粋）**（層構造）。⑤Bot DM も同じ discord.ts に足せる。
+
+### 次にやること
+- [ ] 本番デプロイ時に `NEXT_PUBLIC_APP_URL` を設定（未設定だと Discord のリンクが localhost になる）。
+- [ ] ⑤ Discord Bot DM（個人向け・Bot 構築が要る）／⑦ Cron（試合直前・本日の試合）。日程確定・結果更新の Webhook 化も後続で。
+
+---
+
 ## 2026-07-03 — シリーズ PR-⑥-2: シリーズ共同運営（検索招待・承認/拒否・削除・#11通知）
 
 ⑥-1 では series_members は「作成者が自分を owner・active で登録」だけだった。本 PR で **owner が他ユーザーを検索して admin 招待 → 相手が承認（invited→active）→ 運営業務ができる**までを通した（要件定義書 3.5.1 / 3.7 #11）。外部設定ゼロ・依存は⑥-1(0032)のみ。
