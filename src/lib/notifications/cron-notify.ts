@@ -154,9 +154,17 @@ export type ScrimReminderResult = {
 /**
  * #8 スクリム/練習開始2時間前リマインド。2時間以内に始まるスクリムを拾い、チームメンバー
  * へアプリ内通知を作る。#7 と違い scrims に notified_at 列は無い（列追加なし方針）ので、
- * 二重送信は #9 と同じ dedup_key の before-check（scrim:<id>:scrim_starting_soon）で防ぐ：
- * 既に同キーの出来事があれば送信済みとみなし skip。notifications の UNIQUE が最終防衛。
- * 出来事は event 単位（source_type='event'・source_id=event_id）。#10 と違い登録者も宛先に含む。
+ * 二重送信は #9 と同じ dedup_key の before-check で防ぐ：既に同キーの出来事があれば送信済み
+ * とみなし skip。notifications の UNIQUE が最終防衛。出来事は event 単位
+ * （source_type='event'・source_id=event_id）。#10 と違い登録者も宛先に含む。
+ *
+ * dedup_key には **開始時刻(scheduled_at)を含める**（`scrim:<id>:<type>:<scheduled_at>`）。
+ * 主催者が開始時刻を変更したら別キーになり、変更後の2時間前に再びリマインドが飛ぶ
+ * （#10 が時刻変更を通知する設計と揃える）。時刻が同じ間は同キーで二重送信を防ぐ。
+ *
+ * 宛先(recipients)の空チェックは **出来事を作る前** に行う。先に出来事を記録してしまうと、
+ * リマインド判定時にメンバー0人だった場合に以降ずっと skip され、後からメンバーが増えても
+ * 通知が飛ばなくなるため（宛先確定を出来事作成より先に置く）。
  */
 export async function runScrimReminders(
   admin: Admin,
@@ -175,25 +183,27 @@ export async function runScrimReminders(
       } | null;
       if (!team) continue;
 
-      const dedupKey = `scrim:${scrim.id}:${NotificationType.ScrimStartingSoon}`;
-      // 既に同キーの出来事があれば送信済み。先に判定してから upsert（#9 と同型）。
-      const alreadySent = await hasEventForKey(admin, dedupKey);
+      // 宛先を先に確定。0人なら出来事を作らず見送る（後からメンバーが増えたら次回拾う）。
+      const recipients = aggregateRecipients(
+        [collectScrimMemberIds(scrim.teams)],
+        [],
+      );
+      if (recipients.length === 0) continue;
+
+      // 開始時刻込みのキー。時刻変更後は別キー＝再リマインド、同時刻なら二重送信を防ぐ。
+      const dedupKey = `scrim:${scrim.id}:${NotificationType.ScrimStartingSoon}:${scrim.scheduled_at}`;
+      // 既に同キーの出来事があれば送信済み。ここで確定するので upsert は初回だけに絞れる。
+      if (await hasEventForKey(admin, dedupKey)) {
+        skipped += 1; // このスクリム（この開始時刻）は送信済み。二重送信しない。
+        continue;
+      }
+
       const { id: sourceEventId } = await adminUpsertNotificationEvent(admin, {
         type: NotificationType.ScrimStartingSoon,
         sourceType: "event",
         sourceId: team.event_id,
         dedupKey,
       });
-      if (alreadySent) {
-        skipped += 1; // このスクリムは送信済み。二重送信しない。
-        continue;
-      }
-
-      const recipients = aggregateRecipients(
-        [collectScrimMemberIds(scrim.teams)],
-        [],
-      );
-      if (recipients.length === 0) continue;
 
       const content = buildScrimStartingSoonContent({
         eventId: team.event_id,
