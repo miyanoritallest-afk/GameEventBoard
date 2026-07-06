@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import {
   listMatchesStartingSoon,
+  listScrimsStartingSoon,
   markMatchNotified,
   listEventsWithMatchesToday,
   adminUpsertNotificationEvent,
@@ -12,6 +13,7 @@ import { aggregateRecipients } from "@/lib/services/notification-fanout";
 import {
   NotificationType,
   buildMatchStartingSoonContent,
+  buildScrimStartingSoonContent,
   buildEventMatchesTodayWebhookContent,
 } from "@/lib/services/notification-content";
 import { postToDiscordWebhook } from "@/lib/notifications/discord";
@@ -124,6 +126,102 @@ export async function runMatchReminders(
     }
   }
   return { matchesConsidered: matches.length, notificationsCreated: created, errors };
+}
+
+/**
+ * スクリム埋め込み結果（team→team_members→registrations→user_id）から
+ * チームメンバーの user_id を集める。null や欠損は落とす。
+ */
+function collectScrimMemberIds(team: unknown): string[] {
+  const t = team as {
+    team_members?: { registrations?: { user_id?: string } | null }[];
+  } | null;
+  const ids: string[] = [];
+  for (const m of t?.team_members ?? []) {
+    const uid = m.registrations?.user_id;
+    if (uid) ids.push(uid);
+  }
+  return ids;
+}
+
+export type ScrimReminderResult = {
+  scrimsConsidered: number;
+  notificationsCreated: number;
+  skipped: number;
+  errors: number;
+};
+
+/**
+ * #8 スクリム/練習開始2時間前リマインド。2時間以内に始まるスクリムを拾い、チームメンバー
+ * へアプリ内通知を作る。#7 と違い scrims に notified_at 列は無い（列追加なし方針）ので、
+ * 二重送信は #9 と同じ dedup_key の before-check（scrim:<id>:scrim_starting_soon）で防ぐ：
+ * 既に同キーの出来事があれば送信済みとみなし skip。notifications の UNIQUE が最終防衛。
+ * 出来事は event 単位（source_type='event'・source_id=event_id）。#10 と違い登録者も宛先に含む。
+ */
+export async function runScrimReminders(
+  admin: Admin,
+  now: Date = new Date(),
+): Promise<ScrimReminderResult> {
+  const scrims = await listScrimsStartingSoon(admin, now);
+  let created = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const scrim of scrims) {
+    try {
+      const team = scrim.teams as {
+        name: string;
+        event_id: string;
+      } | null;
+      if (!team) continue;
+
+      const dedupKey = `scrim:${scrim.id}:${NotificationType.ScrimStartingSoon}`;
+      // 既に同キーの出来事があれば送信済み。先に判定してから upsert（#9 と同型）。
+      const alreadySent = await hasEventForKey(admin, dedupKey);
+      const { id: sourceEventId } = await adminUpsertNotificationEvent(admin, {
+        type: NotificationType.ScrimStartingSoon,
+        sourceType: "event",
+        sourceId: team.event_id,
+        dedupKey,
+      });
+      if (alreadySent) {
+        skipped += 1; // このスクリムは送信済み。二重送信しない。
+        continue;
+      }
+
+      const recipients = aggregateRecipients(
+        [collectScrimMemberIds(scrim.teams)],
+        [],
+      );
+      if (recipients.length === 0) continue;
+
+      const content = buildScrimStartingSoonContent({
+        eventId: team.event_id,
+        teamName: team.name,
+        kind: scrim.kind,
+        scheduledAt: scrim.scheduled_at as string,
+      });
+      for (const userId of recipients) {
+        await adminInsertNotification(admin, {
+          userId,
+          sourceEventId,
+          title: content.title,
+          body: content.body,
+          linkUrl: content.linkUrl,
+        });
+        created += 1;
+      }
+    } catch (e) {
+      errors += 1;
+      console.error(`[runScrimReminders] スクリム ${scrim.id} の通知に失敗:`, e);
+    }
+  }
+  return {
+    scrimsConsidered: scrims.length,
+    notificationsCreated: created,
+    skipped,
+    errors,
+  };
 }
 
 /** イベント名を admin で引く（#7 の文面用・小さなヘルパ）。 */

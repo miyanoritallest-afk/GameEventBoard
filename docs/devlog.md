@@ -7,6 +7,27 @@
 
 ---
 
+## 2026-07-06 — 通知 PR: スクリム直前リマインド（#8 `scrim_starting_soon`）
+
+通知カタログ 3.7 #8。**開始2時間前**に、そのスクリム/練習のチームメンバーへアプリ内通知でリマインドする。試合の #7（`match_starting_soon`）と同じ⑦Cron拡張。試合とスクリムは type を分けて文面を出し分ける（要件定義書 3.7）。**マイグレーション不要**（列追加なし・二重防止は dedup_key 方式）。
+
+### やったこと
+- **文面**（`buildScrimStartingSoonContent`・純粋関数）: 種別（スクリム/練習）で「スクリム」「練習」を出し分け、開始時刻は `fmtJstDateTime` で JST 表示（`scrimKindLabel`/`fmtJstDateTime` を #10 から流用）。title「まもなくスクリムが始まります」・本文に「開始2時間前」・link はチームの日程ページ（`/events/[id]/schedule`）。`NotificationType.ScrimStartingSoon = "scrim_starting_soon"` を追加。テスト3件（type 文字列・スクリム/練習の出し分け）。
+- **取得**（`listScrimsStartingSoon` in cron.ts・admin/RLSバイパス）: 2時間以内に始まる scrims を拾い、`scrims→teams→team_members→registrations→user_id` を埋め込みで辿る（#7 の `listMatchesStartingSoon` と同型・ただし notified_at 列は無いのでフィルタは scheduled_at のみ）。FK 曖昧回避に `teams!scrims_team_id_fkey` ヒント明示。
+- **オーケストレーション**（`runScrimReminders` in cron-notify.ts）: **#9 型の before-check** で二重防止。`hasEventForKey(scrim:<id>:scrim_starting_soon)` が true なら送信済みとみなし skip、初回のみ通知作成。宛先はチームメンバー全員（#10 と違い**登録者も含む**＝当日リマインドは本人も対象）。各件ベストエフォート（1件失敗が全体を止めない）。
+- **接続**（Route）: `/api/cron/notifications` の `Promise.allSettled` に `runScrimReminders` を追加（#7/#8/#9 が独立実行・1つ落ちても他は動く）。レスポンスに `scrimReminders` を追加。
+- lint(0 error) / typecheck / test(351緑・+3) / build 通過。**実機確認済み**（service_role・検証用チームにのり／ひでを紐づけ90分後のスクリムを挿入 → Cron を2回 GET）: 1回目 `scrimsConsidered:1, notificationsCreated:2`＝**のり1件・ひで1件**（登録者のりも宛先に含むことを確認）、2回目 `notificationsCreated:0, skipped:1`＝**dedup_key の before-check で二重防止**が効き増えない。文面「まもなくスクリムが始まります」も確認。検証データ掃除済み。
+
+### 決めたこと（なぜ）
+- **二重防止は dedup_key のみ（列追加なし）**（壁打ち確定）。#7 match は `matches.notified_at` の条件付き UPDATE で枠取りするが、scrims に列を足すとマイグレーション＋DB設計書/ER図更新が要り重い。#9「本日告知」が既に**列なし・dedup_key の before-check だけで二重防止**する実装パターンを持っており、これを流用。Cron は単一実行のため並行時の枠取りは実害が薄く、`notification_events` の dedup_key（find-or-create）＋ `notifications` UNIQUE(user_id, source_event_id) で物理防止できる。列を足さない＝DB設計書更新も不要。
+- **宛先は登録者も含む全メンバー**（#10 は本人除外だが #8 は含む）。#10 は「自分で登録した予定の通知が自分に来る」冗長さを避けたが、#8 は開始2時間前のリマインドなので**本人も当日忘れる**＝除外する理由がない。性質が違うので #10 と不揃いでも筋は通る。
+- **試合とスクリムで type を分ける**（要件定義書 3.7）。文面を「試合が始まります」「スクリムが始まります」で出し分けるため。#7 と `runScrimReminders` は独立関数にして allSettled で並べる（片方の失敗が他方を巻き込まない）。
+
+### 次にやること
+- [ ] ⑤ Discord Bot DM（#8/#10 も DM が本命。「本日21時からスクリム」を DM で）。通知カタログ 3.7 の最後の未実装。
+
+---
+
 ## 2026-07-06 — 通知 PR: スクリム登録通知（#10 `scrim_scheduled`）
 
 通知カタログ 3.7 #10。チーム日程管理（スクリム/練習）の**登録・変更をチームメンバー全員へアプリ内通知**する。#3 チーム承認と同じ「1出来事→チームメンバー全員に並列生成」型。前提の日程機能（この日の別PR）に通知を1本足すだけ。マイグレーション不要（notifications 土台は既存）。
