@@ -9,6 +9,8 @@ import {
   buildEventAnnounceWebhookContent,
   buildMatchStartingSoonContent,
   buildEventMatchesTodayWebhookContent,
+  buildRegistrationRejectedContent,
+  buildTeamApprovedContent,
   fmtJstDateTime,
 } from "../notification-content";
 
@@ -42,6 +44,32 @@ describe("buildRegistrationApprovedContent", () => {
     // title は固定文言（イベント名を混ぜない）。body の name は React 側で自動エスケープされる。
     expect(c.title).toBe("応募が承認されました");
     expect(c.linkUrl).toBe("/events/e-9");
+  });
+});
+
+describe("buildRegistrationRejectedContent (#2)", () => {
+  it("却下の固定 title・イベント名を本文に埋め、link はイベントページ", () => {
+    const c = buildRegistrationRejectedContent({
+      eventId: "e-2",
+      eventTitle: "OSL Season2",
+    });
+    expect(c.title).toBe("応募が承認されませんでした");
+    expect(c.body).toContain("OSL Season2");
+    expect(c.linkUrl).toBe("/events/e-2");
+  });
+});
+
+describe("buildTeamApprovedContent (#3)", () => {
+  it("チーム名・イベント名を本文に埋め、link はイベントページ", () => {
+    const c = buildTeamApprovedContent({
+      eventId: "e-3",
+      eventTitle: "OSL Season2",
+      teamName: "チームA",
+    });
+    expect(c.title).toBe("チームが承認されました");
+    expect(c.body).toContain("OSL Season2");
+    expect(c.body).toContain("チームA");
+    expect(c.linkUrl).toBe("/events/e-3");
   });
 });
 

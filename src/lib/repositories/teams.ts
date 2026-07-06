@@ -523,6 +523,39 @@ export async function findTeamWithStatus(teamId: string) {
 }
 
 /**
+ * #3 チーム承認通知の宛先集約用。チームのメンバー全員の user_id と、イベント名・チーム名を
+ * まとめて取得する（teams→team_members→registrations→user / teams→events）。
+ * 主催者が承認 Server Action から呼ぶ（RLS 0010 で主催者のチームは読める）。null は該当なし。
+ */
+export async function findTeamForNotify(teamId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .select(
+      "id, name, event_id, events(title), team_members(registrations(user_id))",
+    )
+    .eq("id", teamId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const eventTitle =
+    (data.events as { title: string } | null)?.title ?? "イベント";
+  const memberUserIds = (data.team_members ?? [])
+    .map((m) => (m.registrations as { user_id: string } | null)?.user_id)
+    .filter((id): id is string => !!id);
+
+  return {
+    teamId: data.id,
+    teamName: data.name,
+    eventId: data.event_id,
+    eventTitle,
+    memberUserIds,
+  };
+}
+
+/**
  * 編成画面用の一括取得。イベントの全チーム＋メンバー（応募者情報・スコア込み）を返す。
  * RLS（0010）で主催者のイベントのみ返る。表示順はチーム作成順。
  */

@@ -13,6 +13,10 @@
 export const NotificationType = {
   /** 応募が承認された（参加確定）。宛先=応募者本人・直接関係者。 */
   RegistrationApproved: "registration_approved",
+  /** 応募が却下された（3.7 の #2）。宛先=応募者本人・直接関係者。 */
+  RegistrationRejected: "registration_rejected",
+  /** チームが承認された（self確定→成立・3.7 の #3）。宛先=チーム関係者・直接関係者。 */
+  TeamApproved: "team_approved",
   /**
    * 新しい開催回が公開された（＝新シーズン告知。単発イベント含む）。
    * 宛先=シリーズ／主催者フォロワー・フォロー集約（3.7 の #4）。
@@ -66,6 +70,37 @@ export function buildRegistrationApprovedContent(params: {
   return {
     title: "応募が承認されました",
     body: `「${params.eventTitle}」への参加が承認されました。`,
+    linkUrl: `/events/${params.eventId}`,
+  };
+}
+
+/**
+ * #2 応募却下の文面。宛先は応募者本人。link 先は該当イベントページ。
+ * 却下は否定的な結果だが、文面はサーバー固定で淡々と（主催者が文言を編集する領域ではない）。
+ */
+export function buildRegistrationRejectedContent(params: {
+  eventId: string;
+  eventTitle: string;
+}): NotificationContent {
+  return {
+    title: "応募が承認されませんでした",
+    body: `「${params.eventTitle}」への応募は今回は承認されませんでした。`,
+    linkUrl: `/events/${params.eventId}`,
+  };
+}
+
+/**
+ * #3 チーム承認（self 確定→成立）。宛先はチームメンバー全員（直接関係者）。
+ * link 先はイベントページ。チーム名・イベント名は通知時点の値。
+ */
+export function buildTeamApprovedContent(params: {
+  eventId: string;
+  eventTitle: string;
+  teamName: string;
+}): NotificationContent {
+  return {
+    title: "チームが承認されました",
+    body: `「${params.eventTitle}」でチーム「${params.teamName}」の参加が承認されました。`,
     linkUrl: `/events/${params.eventId}`,
   };
 }

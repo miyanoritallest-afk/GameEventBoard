@@ -45,6 +45,7 @@ import {
 import {
   NotificationType,
   buildRegistrationApprovedContent,
+  buildRegistrationRejectedContent,
   buildSeriesSeasonAnnouncedContent,
   buildEventScheduleConfirmedContent,
 } from "@/lib/services/notification-content";
@@ -791,6 +792,33 @@ async function notifyRegistrationApproved(params: {
 }
 
 /**
+ * #2 応募却下を応募者本人へ通知する（直接関係者・宛先は本人1人）。
+ * 承認（#1）と対称。出来事は event に紐づく。ベストエフォート（呼び出し側が try/catch）。
+ */
+async function notifyRegistrationRejected(params: {
+  eventId: string;
+  eventTitle: string;
+  applicantUserId: string;
+}): Promise<void> {
+  const { id: sourceEventId } = await insertNotificationEvent({
+    type: NotificationType.RegistrationRejected,
+    sourceType: "event",
+    sourceId: params.eventId,
+  });
+  const content = buildRegistrationRejectedContent({
+    eventId: params.eventId,
+    eventTitle: params.eventTitle,
+  });
+  await insertNotification({
+    userId: params.applicantUserId,
+    sourceEventId,
+    title: content.title,
+    body: content.body,
+    linkUrl: content.linkUrl,
+  });
+}
+
+/**
  * 応募の「承認/却下」 Server Action（Controller）。主催者のみ。
  *
  * 防御（2テーブル跨ぎの所有権確認＝応募フロー固有の IDOR）:
@@ -842,18 +870,24 @@ export async function decideRegistration(
     };
   }
 
-  // 5. 承認時のみ、応募者本人へ通知（ベストエフォート）。
-  //    通知の失敗で承認業務を巻き添えにしない（要件定義書 3.5.2）。ログのみ残す。
-  if (decision === "approve") {
-    try {
+  // 5. 応募者本人へ結果を通知（承認=#1 / 却下=#2）。ベストエフォート＝通知の失敗で
+  //    承認/却下業務を巻き添えにしない（要件定義書 3.5.2）。ログのみ残す。
+  try {
+    if (decision === "approve") {
       await notifyRegistrationApproved({
         eventId: event.id,
         eventTitle: event.title,
         applicantUserId: reg.user_id,
       });
-    } catch (e) {
-      console.error("[decideRegistration] 承認通知の生成に失敗:", e);
+    } else {
+      await notifyRegistrationRejected({
+        eventId: event.id,
+        eventTitle: event.title,
+        applicantUserId: reg.user_id,
+      });
     }
+  } catch (e) {
+    console.error("[decideRegistration] 結果通知の生成に失敗:", e);
   }
 
   revalidatePath(`/events/${event.id}/registrations`);
