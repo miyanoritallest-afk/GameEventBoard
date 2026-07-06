@@ -11,6 +11,7 @@ import {
   buildEventMatchesTodayWebhookContent,
   buildRegistrationRejectedContent,
   buildTeamApprovedContent,
+  buildScrimScheduledContent,
   fmtJstDateTime,
 } from "../notification-content";
 
@@ -206,5 +207,51 @@ describe("buildEventMatchesTodayWebhookContent", () => {
     expect(msg).toContain("OSL Season2");
     expect(msg).toContain("21:00");
     expect(msg).toContain("https://example.com/events/e-1");
+  });
+});
+
+describe("NotificationType.ScrimScheduled (#10)", () => {
+  it("type 文字列は要件定義書 3.7 #10 の scrim_scheduled", () => {
+    expect(NotificationType.ScrimScheduled).toBe("scrim_scheduled");
+  });
+});
+
+describe("buildScrimScheduledContent (#10)", () => {
+  it("スクリム登録: チーム名・開始時刻(JST)を本文に埋め、link は日程ページ", () => {
+    const c = buildScrimScheduledContent({
+      eventId: "e-10",
+      teamName: "チームA",
+      kind: "scrim",
+      scheduledAt: "2026-07-03T12:00:00.000Z",
+    });
+    expect(c.title).toBe("新しいスクリムの予定が追加されました");
+    expect(c.body).toContain("チームA");
+    expect(c.body).toContain("21:00");
+    expect(c.body).toContain("スクリム");
+    expect(c.linkUrl).toBe("/events/e-10/schedule");
+  });
+
+  it("練習は文面が「練習」で出し分けられる", () => {
+    const c = buildScrimScheduledContent({
+      eventId: "e-10",
+      teamName: "チームA",
+      kind: "practice",
+      scheduledAt: "2026-07-03T12:00:00.000Z",
+    });
+    expect(c.title).toBe("新しい練習の予定が追加されました");
+    expect(c.body).toContain("練習");
+    expect(c.body).not.toContain("スクリム");
+  });
+
+  it("changed=true は「変更されました」の文面になる", () => {
+    const c = buildScrimScheduledContent({
+      eventId: "e-10",
+      teamName: "チームA",
+      kind: "scrim",
+      scheduledAt: "2026-07-03T12:00:00.000Z",
+      changed: true,
+    });
+    expect(c.title).toBe("スクリムの予定が変更されました");
+    expect(c.body).toContain("変更されました");
   });
 });

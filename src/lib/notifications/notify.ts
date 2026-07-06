@@ -11,6 +11,7 @@ import {
   buildSeriesMemberInvitedContent,
   buildEventAnnounceWebhookContent,
   buildTeamApprovedContent,
+  buildScrimScheduledContent,
   NotificationType,
 } from "@/lib/services/notification-content";
 import type { NotificationContent } from "@/lib/services/notification-content";
@@ -228,6 +229,66 @@ export async function notifyTeamApproved(teamId: string): Promise<void> {
   if (failed.length > 0) {
     console.error(
       `[notifyTeamApproved] ${failed.length}/${recipients.length} 件の通知生成に失敗`,
+      (failed[0] as PromiseRejectedResult).reason,
+    );
+  }
+}
+
+/**
+ * #10 スクリム/練習の予定登録・変更を、そのチームのメンバーへ通知する（直接関係者・3.7 の #10）。
+ * 宛先＝チームメンバーの user_id 集合から「登録/編集した本人（actorUserId）」を除いた集合
+ * （自分の操作で自分に通知が来る冗長さを避ける）。1操作＝1出来事を都度採番する（insert）ので、
+ * 登録・変更のたびに通知が届く（#11 と同じ「都度知らせる」方針。1日1回集約はしない）。
+ * source は event（scrim は team 経由で event に紐づく＝日程ページで確認する）。
+ *
+ * ベストエフォート: 呼び出し側（createScrim/editScrim）が try/catch で握り、登録/編集の成功を
+ * 通知失敗で巻き添えにしない。宛先ゼロ（本人しかいない等）なら何もしない。二重は
+ * notifications の UNIQUE(user_id, source_event_id) が最終防衛。
+ */
+export async function notifyScrimScheduled(params: {
+  teamId: string;
+  actorUserId: string;
+  kind: "scrim" | "practice";
+  scheduledAt: string;
+  changed?: boolean;
+}): Promise<void> {
+  const team = await findTeamForNotify(params.teamId);
+  if (!team) return;
+
+  const recipients = aggregateRecipients(
+    [team.memberUserIds],
+    [params.actorUserId],
+  );
+  if (recipients.length === 0) return;
+
+  const { id: sourceEventId } = await insertNotificationEvent({
+    type: NotificationType.ScrimScheduled,
+    sourceType: "event",
+    sourceId: team.eventId,
+  });
+  const content = buildScrimScheduledContent({
+    eventId: team.eventId,
+    teamName: team.teamName,
+    kind: params.kind,
+    scheduledAt: params.scheduledAt,
+    changed: params.changed,
+  });
+
+  const results = await Promise.allSettled(
+    recipients.map((userId) =>
+      insertNotification({
+        userId,
+        sourceEventId,
+        title: content.title,
+        body: content.body,
+        linkUrl: content.linkUrl,
+      }),
+    ),
+  );
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    console.error(
+      `[notifyScrimScheduled] ${failed.length}/${recipients.length} 件の通知生成に失敗（changed=${!!params.changed}）`,
       (failed[0] as PromiseRejectedResult).reason,
     );
   }

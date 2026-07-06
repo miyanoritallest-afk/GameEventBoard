@@ -48,6 +48,11 @@ export const NotificationType = {
    * Cron が1日1回発火（④のインフラ流用・⑦）。
    */
   EventMatchesToday: "event_matches_today",
+  /**
+   * スクリム/練習の予定が登録/変更された（3.7 の #10）。宛先=そのチームのメンバー
+   * （個人・直接関係者）。登録/編集した本人は宛先から除外する。アプリ内通知（⑤DM は後続）。
+   */
+  ScrimScheduled: "scrim_scheduled",
 } as const;
 
 export type NotificationTypeValue =
@@ -238,4 +243,34 @@ export function buildEventMatchesTodayWebhookContent(params: {
     )} から試合があります！`,
     params.eventUrl,
   ].join("\n");
+}
+
+/** スクリム種別の日本語表示（文面用）。scrim=スクリム / practice=練習。 */
+function scrimKindLabel(kind: "scrim" | "practice"): string {
+  return kind === "practice" ? "練習" : "スクリム";
+}
+
+/**
+ * #10 スクリム/練習の予定登録・変更。宛先はそのチームのメンバー（個人・直接関係者）。
+ * 種別（スクリム/練習）と開始時刻(JST)を本文に混ぜる。link 先はチームの日程ページ。
+ * チーム名は通知時点の値。登録と編集で文面を出し分ける（changed で「追加」/「変更」）。
+ */
+export function buildScrimScheduledContent(params: {
+  eventId: string;
+  teamName: string;
+  kind: "scrim" | "practice";
+  scheduledAt: string;
+  changed?: boolean;
+}): NotificationContent {
+  const label = scrimKindLabel(params.kind);
+  const verb = params.changed ? "変更されました" : "追加されました";
+  return {
+    title: params.changed
+      ? `${label}の予定が変更されました`
+      : `新しい${label}の予定が追加されました`,
+    body: `チーム「${params.teamName}」に ${fmtJstDateTime(
+      params.scheduledAt,
+    )} の${label}の予定が${verb}。`,
+    linkUrl: `/events/${params.eventId}/schedule`,
+  };
 }
