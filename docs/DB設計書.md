@@ -412,6 +412,7 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 |----|----|------|------|
 | id | uuid | PK | |
 | team_id | uuid | FK→teams, NOT NULL | スクリムを行う自チーム |
+| kind | scrim_kind | NOT NULL, DEFAULT 'scrim' | 種別（scrim=練習試合 / practice=練習）。0035 で追加 |
 | created_by | uuid | FK→users, NOT NULL | 登録者 |
 | scheduled_at | timestamptz | NOT NULL | 練習試合の日時 |
 | opponent_name | text | | 相手チーム名（外部チームは自由入力） |
@@ -420,6 +421,8 @@ CHECK: current_count >= 0 / (capacity IS NULL OR current_count <= capacity)
 | stream_url | text | | 配信URL（任意） |
 | created_at | timestamptz | DEFAULT now() | |
 > 勝敗は順位に影響しない（standings とは無関係）。スクリム登録/変更時に対象チームのメンバーへ個人向け通知（アプリ内＋Discord DM）。
+>
+> **実装状況（チーム日程管理・0035）**: 0001 で RLS 有効化のみだったポリシーを整備。閲覧(SELECT)=チームメンバー（`is_team_member`）または イベント主催者（`is_team_event_organizer`）／作成・編集・削除(INSERT/UPDATE/DELETE)=チームメンバー（**権限ゆるく＝代表限定にしない**「チーム共有カレンダー」）。両判定は team_members→registrations→user を辿る security definer 関数（can_report_match と同型）。`kind` 追加で「スクリム/練習」を区別。**日程一覧 `/events/[id]/schedule`** は scrims（自チーム分・RLS で自動フィルタ）と matches（公式戦・全件）を Service で統合し、種別の色分け・自チームが絡む公式戦の濃淡・開始+2h 経過の消化済み判定で表示（公式戦データは matches のまま＝表示だけ統合）。
 
 ### 3.17 follows（フォロー）
 | 列 | 型 | 制約 | 説明 |
