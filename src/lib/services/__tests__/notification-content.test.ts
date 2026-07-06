@@ -12,6 +12,7 @@ import {
   buildRegistrationRejectedContent,
   buildTeamApprovedContent,
   buildScrimScheduledContent,
+  buildScrimStartingSoonContent,
   fmtJstDateTime,
 } from "../notification-content";
 
@@ -253,5 +254,40 @@ describe("buildScrimScheduledContent (#10)", () => {
     });
     expect(c.title).toBe("スクリムの予定が変更されました");
     expect(c.body).toContain("変更されました");
+  });
+});
+
+describe("NotificationType.ScrimStartingSoon (#8)", () => {
+  it("type 文字列は要件定義書 3.7 #8 の scrim_starting_soon", () => {
+    expect(NotificationType.ScrimStartingSoon).toBe("scrim_starting_soon");
+  });
+});
+
+describe("buildScrimStartingSoonContent (#8)", () => {
+  it("スクリム: チーム名・開始時刻(JST)を本文に埋め、link は日程ページ", () => {
+    const c = buildScrimStartingSoonContent({
+      eventId: "e-8",
+      teamName: "チームA",
+      kind: "scrim",
+      scheduledAt: "2026-07-03T12:00:00.000Z",
+    });
+    expect(c.title).toBe("まもなくスクリムが始まります");
+    expect(c.body).toContain("チームA");
+    expect(c.body).toContain("21:00");
+    expect(c.body).toContain("スクリム");
+    expect(c.body).toContain("開始2時間前");
+    expect(c.linkUrl).toBe("/events/e-8/schedule");
+  });
+
+  it("練習は文面が「練習」で出し分けられる", () => {
+    const c = buildScrimStartingSoonContent({
+      eventId: "e-8",
+      teamName: "チームA",
+      kind: "practice",
+      scheduledAt: "2026-07-03T12:00:00.000Z",
+    });
+    expect(c.title).toBe("まもなく練習が始まります");
+    expect(c.body).toContain("練習");
+    expect(c.body).not.toContain("スクリム");
   });
 });

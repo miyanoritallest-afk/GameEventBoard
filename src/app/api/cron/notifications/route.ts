@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   runMatchReminders,
+  runScrimReminders,
   runTodayMatchAnnounce,
 } from "@/lib/notifications/cron-notify";
 
@@ -8,6 +9,7 @@ import {
  * ⑦ 定期通知の Cron エンドポイント（Route Handler）。
  * Vercel Cron（vercel.json の schedule）が数分間隔で GET する。実行内容:
  *   #7 試合開始2時間前リマインド（出場メンバーへアプリ内通知）
+ *   #8 スクリム開始2時間前リマインド（チームメンバーへアプリ内通知）
  *   #9 「本日◯時から各試合」の全体告知（告知チャンネルへ Webhook・1日1回）
  *
  * 保護（必須）: Authorization: Bearer <CRON_SECRET> を検証する。CRON_SECRET は環境変数。
@@ -33,9 +35,10 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const now = new Date();
 
-  // #7 と #9 は独立。片方が落ちても他方は動かす（allSettled）。
-  const [reminders, announce] = await Promise.allSettled([
+  // #7 / #8 / #9 は独立。1つが落ちても他は動かす（allSettled）。
+  const [reminders, scrimReminders, announce] = await Promise.allSettled([
     runMatchReminders(admin, now),
+    runScrimReminders(admin, now),
     runTodayMatchAnnounce(admin, now),
   ]);
 
@@ -45,6 +48,10 @@ export async function GET(request: Request) {
       reminders.status === "fulfilled"
         ? reminders.value
         : { error: String(reminders.reason) },
+    scrimReminders:
+      scrimReminders.status === "fulfilled"
+        ? scrimReminders.value
+        : { error: String(scrimReminders.reason) },
     todayAnnounce:
       announce.status === "fulfilled"
         ? announce.value

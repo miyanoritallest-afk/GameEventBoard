@@ -56,6 +56,28 @@ export async function markMatchNotified(
 }
 
 /**
+ * これから2時間以内に開始し、まだリマインド未送信のスクリム/練習を取得する（#8）。
+ * scrims は #7 の matches と違い notified_at 列を持たない（列追加なし方針）。二重送信は
+ * オーケストレーション側の dedup_key（#9 と同じ before-check）＋ notifications UNIQUE で防ぐ。
+ * ここは「2時間以内に始まる予定」を拾うだけ（notified_at フィルタは無い）。
+ * 宛先・チーム名・event_id はチーム経由で埋め込む（scrims→teams→team_members→registrations→user）。
+ */
+export async function listScrimsStartingSoon(admin: Admin, now: Date) {
+  const horizon = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const { data, error } = await admin
+    .from("scrims")
+    .select(
+      `id, kind, scheduled_at, team_id,
+       teams!scrims_team_id_fkey(id, name, event_id, team_members(registrations(user_id)))`,
+    )
+    .gte("scheduled_at", now.toISOString())
+    .lte("scheduled_at", horizon.toISOString());
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
  * 本日（JST）に scheduled_at がある試合を1件以上持つ、公開済みイベントを取得する（#9）。
  * 「本日◯時から各試合」の全体告知の対象。discord_webhook_url を持つイベントに絞る
  * （投稿先が無いイベントは告知しても skipped になるだけなので取得段で除く）。

@@ -53,6 +53,12 @@ export const NotificationType = {
    * （個人・直接関係者）。登録/編集した本人は宛先から除外する。アプリ内通知（⑤DM は後続）。
    */
   ScrimScheduled: "scrim_scheduled",
+  /**
+   * スクリム/練習が始まる（開始2時間前リマインド・3.7 の #8）。宛先=そのチームのメンバー
+   * （個人・直接関係者）。#10 と違い登録者も含め全メンバーへ（当日リマインドは本人も対象）。
+   * Cron が相対発火（⑦）。アプリ内通知（⑤DM は後続）。試合の #7 と type を分ける。
+   */
+  ScrimStartingSoon: "scrim_starting_soon",
 } as const;
 
 export type NotificationTypeValue =
@@ -271,6 +277,27 @@ export function buildScrimScheduledContent(params: {
     body: `チーム「${params.teamName}」に ${fmtJstDateTime(
       params.scheduledAt,
     )} の${label}の予定が${verb}。`,
+    linkUrl: `/events/${params.eventId}/schedule`,
+  };
+}
+
+/**
+ * #8 スクリム/練習の開始2時間前リマインド。宛先はそのチームのメンバー（個人・アプリ内）。
+ * 種別（スクリム/練習）と開始時刻(JST)を本文に混ぜる。link 先はチームの日程ページ。
+ * 試合の #7 と type を分け、文面を出し分ける（要件定義書 3.7）。チーム名は通知時点の値。
+ */
+export function buildScrimStartingSoonContent(params: {
+  eventId: string;
+  teamName: string;
+  kind: "scrim" | "practice";
+  scheduledAt: string;
+}): NotificationContent {
+  const label = scrimKindLabel(params.kind);
+  return {
+    title: `まもなく${label}が始まります`,
+    body: `チーム「${params.teamName}」の${label}が ${fmtJstDateTime(
+      params.scheduledAt,
+    )} に始まります（開始2時間前）。`,
     linkUrl: `/events/${params.eventId}/schedule`,
   };
 }
