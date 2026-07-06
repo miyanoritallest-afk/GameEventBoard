@@ -10,6 +10,7 @@ import {
   findViewerTeamId,
 } from "@/lib/repositories/scrims";
 import { jstLocalToUtcIso } from "@/lib/datetime-local";
+import { notifyScrimScheduled } from "@/lib/notifications/notify";
 import { scrimSchema } from "./schema";
 
 /**
@@ -86,6 +87,19 @@ export async function createScrim(
     memo: v.memo,
   });
 
+  // #10 チームメンバーへ「予定が追加された」通知（本人＝登録者は除外）。
+  // ベストエフォート: 通知の失敗で登録の成功を巻き添えにしない（try/catch でログのみ）。
+  try {
+    await notifyScrimScheduled({
+      teamId,
+      actorUserId: user.id,
+      kind: v.kind,
+      scheduledAt: v.scheduledAtUtc,
+    });
+  } catch (e) {
+    console.error("[createScrim] スクリム登録通知の生成に失敗", e);
+  }
+
   revalidatePath(`/events/${eventId}/schedule`);
   return { success: true };
 }
@@ -124,6 +138,20 @@ export async function editScrim(
   });
   if (updated === 0) {
     return { error: "更新に失敗しました。画面を更新してお試しください。" };
+  }
+
+  // #10 チームメンバーへ「予定が変更された」通知（本人＝編集者は除外）。
+  // ベストエフォート: 通知の失敗で編集の成功を巻き添えにしない（try/catch でログのみ）。
+  try {
+    await notifyScrimScheduled({
+      teamId,
+      actorUserId: user.id,
+      kind: v.kind,
+      scheduledAt: v.scheduledAtUtc,
+      changed: true,
+    });
+  } catch (e) {
+    console.error("[editScrim] スクリム変更通知の生成に失敗", e);
   }
 
   revalidatePath(`/events/${eventId}/schedule`);
