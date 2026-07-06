@@ -855,6 +855,7 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
+          kind: Database["public"]["Enums"]["scrim_kind"]
           memo: string | null
           opponent_name: string | null
           opponent_team_id: string | null
@@ -866,6 +867,7 @@ export type Database = {
           created_at?: string
           created_by: string
           id?: string
+          kind?: Database["public"]["Enums"]["scrim_kind"]
           memo?: string | null
           opponent_name?: string | null
           opponent_team_id?: string | null
@@ -877,6 +879,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           id?: string
+          kind?: Database["public"]["Enums"]["scrim_kind"]
           memo?: string | null
           opponent_name?: string | null
           opponent_team_id?: string | null
@@ -1378,6 +1381,20 @@ export type Database = {
         }
         Returns: number
       }
+      is_team_member: {
+        Args: {
+          p_team_id: string
+          p_uid: string
+        }
+        Returns: boolean
+      }
+      is_team_event_organizer: {
+        Args: {
+          p_team_id: string
+          p_uid: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       delivery_channel: "discord_dm" | "discord_webhook"
@@ -1402,6 +1419,7 @@ export type Database = {
       peak_tier: "none" | "master" | "gm" | "champion"
       reg_status: "pending" | "approved" | "rejected" | "withdrawn"
       role: "tank" | "dps" | "support"
+      scrim_kind: "scrim" | "practice"
       series_role: "owner" | "admin"
       team_formation: "self" | "organizer" | "none"
       team_status: "pending" | "approved" | "rejected"
@@ -1557,6 +1575,7 @@ export const Constants = {
       peak_tier: ["none", "master", "gm", "champion"],
       reg_status: ["pending", "approved", "rejected", "withdrawn"],
       role: ["tank", "dps", "support"],
+      scrim_kind: ["scrim", "practice"],
       series_role: ["owner", "admin"],
       team_formation: ["self", "organizer", "none"],
       team_status: ["pending", "approved", "rejected"],

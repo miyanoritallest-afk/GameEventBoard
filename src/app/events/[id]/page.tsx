@@ -270,6 +270,12 @@ export default async function EventDetailPage({
               >
                 観戦ビューでまとめて見る →
               </Link>
+              <Link
+                href={`/events/${event.id}/schedule`}
+                className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
+              >
+                日程（スクリム・練習）
+              </Link>
               {showGroupStage && (
                 <>
                   <Link
