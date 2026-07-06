@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
+import { notifyTeamApproved } from "@/lib/notifications/notify";
 import {
   insertTeam,
   findTeamById,
@@ -566,6 +567,13 @@ export async function approveTeam(teamId: string): Promise<TeamActionState> {
     return {
       error: "承認に失敗しました。画面を更新してからお試しください。",
     };
+  }
+
+  // #3 チーム承認をメンバー全員へ通知（ベストエフォート＝失敗しても承認は成功）。
+  try {
+    await notifyTeamApproved(teamId);
+  } catch (e) {
+    console.error("[approveTeam] チーム承認通知の生成に失敗:", e);
   }
 
   revalidatePath(`/events/${team.event_id}/teams`);

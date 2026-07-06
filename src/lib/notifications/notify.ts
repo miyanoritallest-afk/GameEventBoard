@@ -5,10 +5,12 @@ import {
   insertDelivery,
 } from "@/lib/repositories/notifications";
 import { listFollowerIds } from "@/lib/repositories/follows";
+import { findTeamForNotify } from "@/lib/repositories/teams";
 import { aggregateRecipients } from "@/lib/services/notification-fanout";
 import {
   buildSeriesMemberInvitedContent,
   buildEventAnnounceWebhookContent,
+  buildTeamApprovedContent,
   NotificationType,
 } from "@/lib/services/notification-content";
 import type { NotificationContent } from "@/lib/services/notification-content";
@@ -182,5 +184,51 @@ export async function announceEventPublishedToWebhook(params: {
       targetRef,
       error: result.error,
     });
+  }
+}
+
+/**
+ * #3 チーム承認（self 確定→成立）を、そのチームのメンバー全員へ通知する（直接関係者）。
+ * 宛先はチームメンバーの user_id 集合（aggregateRecipients で重複排除）。1出来事＝1チーム承認。
+ * 二重は notifications の UNIQUE(user_id, source_event_id) が弾く。
+ *
+ * ベストエフォート: 呼び出し側（approveTeam）が try/catch で握り、承認を通知失敗で
+ * 巻き添えにしない。宛先ゼロ（メンバー不在）なら何もしない。
+ */
+export async function notifyTeamApproved(teamId: string): Promise<void> {
+  const team = await findTeamForNotify(teamId);
+  if (!team) return;
+
+  const recipients = aggregateRecipients([team.memberUserIds], []);
+  if (recipients.length === 0) return;
+
+  const { id: sourceEventId } = await insertNotificationEvent({
+    type: NotificationType.TeamApproved,
+    sourceType: "event",
+    sourceId: team.eventId,
+  });
+  const content = buildTeamApprovedContent({
+    eventId: team.eventId,
+    eventTitle: team.eventTitle,
+    teamName: team.teamName,
+  });
+
+  const results = await Promise.allSettled(
+    recipients.map((userId) =>
+      insertNotification({
+        userId,
+        sourceEventId,
+        title: content.title,
+        body: content.body,
+        linkUrl: content.linkUrl,
+      }),
+    ),
+  );
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    console.error(
+      `[notifyTeamApproved] ${failed.length}/${recipients.length} 件の通知生成に失敗`,
+      (failed[0] as PromiseRejectedResult).reason,
+    );
   }
 }
