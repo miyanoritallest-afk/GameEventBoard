@@ -8,15 +8,19 @@ import {
   adminUpsertNotificationEvent,
   adminInsertNotification,
   adminInsertDelivery,
+  listDiscordTargetsForUsers,
 } from "@/lib/repositories/cron";
+import type { DiscordDmTarget } from "@/lib/repositories/cron";
 import { aggregateRecipients } from "@/lib/services/notification-fanout";
 import {
   NotificationType,
   buildMatchStartingSoonContent,
   buildScrimStartingSoonContent,
   buildEventMatchesTodayWebhookContent,
+  buildDirectMessageContent,
 } from "@/lib/services/notification-content";
-import { postToDiscordWebhook } from "@/lib/notifications/discord";
+import type { NotificationContent } from "@/lib/services/notification-content";
+import { postToDiscordWebhook, sendDiscordDM } from "@/lib/notifications/discord";
 
 /**
  * Cron（⑦ 定期通知）のオーケストレーション。**admin クライアント（RLS バイパス）** を受け取り、
@@ -45,6 +49,85 @@ function webhookTargetRef(url: string): string {
     return new URL(url).host;
   } catch {
     return "invalid-url";
+  }
+}
+
+/**
+ * リマインド（#7/#8）で作った個人通知を、opt-in 済みユーザーへ Discord DM でも送る（ベスト
+ * エフォート）。アプリ内通知（アプリ内は本命）は既に作られている前提で、その上乗せ配信。
+ *
+ * - Bot トークン未設定なら**何もしない**（feature 無効時に users 取得や skipped 行を溜めない）。
+ * - 宛先ごとに discord_id・opt-in を admin で引き、opt-in=false / discord_id 無しは送らない。
+ * - 送信の成否は notification_deliveries に channel='discord_dm' で記録し、失敗は握って続行。
+ * - target_ref には discord_id（snowflake・秘匿情報ではない）を入れ、失敗の切り分けに使う。
+ *
+ * notificationIds は user_id → notification_id の Map（通知作成時に採番したもの）。DM 配信を
+ * 個人通知に紐づける。id を引けなかった宛先（二重集約で既存 id 不明）は notification_id=null で
+ * 記録する（配信の事実は残す）。
+ *
+ * **この関数は例外を投げない**（内部で全て握る）。呼び出し側（リマインド本体）の try は個人通知
+ * 作成の失敗を数える枠であり、DM 上乗せの失敗（users 取得の一時エラー含む）をそこに混ぜない。
+ * 混ぜると #8 は出来事が既に記録済みで次回 skip され、DM が二度と飛ばなくなる（本体を巻き添え）。
+ */
+async function sendReminderDMs(
+  admin: Admin,
+  content: NotificationContent,
+  recipients: string[],
+  notificationIds: Map<string, string | null>,
+): Promise<void> {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  // トークン未設定＝feature 無効。users 取得も skipped 行の記録もせず即戻る
+  // （毎 Cron・毎リマインドの無駄クエリと notification_deliveries の skipped 洪水を防ぐ）。
+  if (!botToken) return;
+
+  // users 取得の一時エラーはここで握る（本体の errors に混ぜない・下記の巻き添え防止）。
+  let targets: Map<string, DiscordDmTarget>;
+  try {
+    targets = await listDiscordTargetsForUsers(admin, recipients);
+  } catch (e) {
+    console.error("[sendReminderDMs] DM 宛先(users)の取得に失敗。DM は見送る:", e);
+    return;
+  }
+  const dmText = buildDirectMessageContent(content, appBaseUrl());
+
+  for (const userId of recipients) {
+    const target: DiscordDmTarget | undefined = targets.get(userId);
+    // discord_id が無い / opt-out は送信対象外（skip・記録もしない＝ノイズを増やさない）。
+    if (!target || !target.optIn) continue;
+
+    const notificationId = notificationIds.get(userId) ?? null;
+    try {
+      const result = await sendDiscordDM(botToken, target.discordId, dmText);
+      if (result.ok) {
+        await adminInsertDelivery(admin, {
+          channel: "discord_dm",
+          status: "sent",
+          notificationId,
+          targetRef: target.discordId,
+          sentAt: new Date().toISOString(),
+        });
+      } else if (result.skipped) {
+        // 送信条件未達（opt-in 済みだが送れない稀ケース）。送らなかった事実だけ残す。
+        await adminInsertDelivery(admin, {
+          channel: "discord_dm",
+          status: "skipped",
+          notificationId,
+          targetRef: target.discordId,
+          error: result.reason,
+        });
+      } else {
+        await adminInsertDelivery(admin, {
+          channel: "discord_dm",
+          status: "failed",
+          notificationId,
+          targetRef: target.discordId,
+          error: result.error,
+        });
+      }
+    } catch (e) {
+      // delivery 記録自体の失敗も握る（DM 上乗せがリマインド本体を巻き添えにしない）。
+      console.error(`[sendReminderDMs] DM 配信の記録に失敗 (user=${userId}):`, e);
+    }
   }
 }
 
@@ -110,16 +193,20 @@ export async function runMatchReminders(
         eventTitle: await eventTitle(admin, match.event_id),
         scheduledAt: match.scheduled_at as string,
       });
+      const notificationIds = new Map<string, string | null>();
       for (const userId of recipients) {
-        await adminInsertNotification(admin, {
+        const { id } = await adminInsertNotification(admin, {
           userId,
           sourceEventId,
           title: content.title,
           body: content.body,
           linkUrl: content.linkUrl,
         });
+        notificationIds.set(userId, id);
         created += 1;
       }
+      // アプリ内通知の上乗せとして DM を送る（ベストエフォート・DM 失敗は握る）。
+      await sendReminderDMs(admin, content, recipients, notificationIds);
     } catch (e) {
       errors += 1;
       console.error(`[runMatchReminders] 試合 ${match.id} の通知に失敗:`, e);
@@ -211,16 +298,20 @@ export async function runScrimReminders(
         kind: scrim.kind,
         scheduledAt: scrim.scheduled_at as string,
       });
+      const notificationIds = new Map<string, string | null>();
       for (const userId of recipients) {
-        await adminInsertNotification(admin, {
+        const { id } = await adminInsertNotification(admin, {
           userId,
           sourceEventId,
           title: content.title,
           body: content.body,
           linkUrl: content.linkUrl,
         });
+        notificationIds.set(userId, id);
         created += 1;
       }
+      // アプリ内通知の上乗せとして DM を送る（ベストエフォート・DM 失敗は握る）。
+      await sendReminderDMs(admin, content, recipients, notificationIds);
     } catch (e) {
       errors += 1;
       console.error(`[runScrimReminders] スクリム ${scrim.id} の通知に失敗:`, e);

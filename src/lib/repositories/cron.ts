@@ -159,8 +159,10 @@ export async function adminUpsertNotificationEvent(
 }
 
 /**
- * 通知（notifications）を admin で1件作成する（Cron 用）。二重は UNIQUE(user_id,
- * source_event_id) が弾く（重複コードは無視して成功扱い＝ベストエフォート集約）。
+ * 通知（notifications）を admin で1件作成し、その notification_id を返す（Cron 用）。
+ * 二重は UNIQUE(user_id, source_event_id) が弾く（重複コードは無視して成功扱い＝ベストエフォート
+ * 集約）。DM 配信を notification_deliveries に紐づけるため id が要るので、二重（23505）時は
+ * 既存行の id を引き直して返す。引けなければ null（DM は紐づけなしで送るか skip する側で判断）。
  */
 export async function adminInsertNotification(
   admin: Admin,
@@ -171,37 +173,99 @@ export async function adminInsertNotification(
     body?: string | null;
     linkUrl?: string | null;
   },
-): Promise<void> {
+): Promise<{ id: string | null }> {
+  const id = crypto.randomUUID();
   const { error } = await admin.from("notifications").insert({
-    id: crypto.randomUUID(),
+    id,
     user_id: params.userId,
     source_event_id: params.sourceEventId,
     title: params.title,
     body: params.body ?? null,
     link_url: params.linkUrl ?? null,
   });
-  // 23505 = unique_violation（同じ出来事で既に通知済み）。二重は握って成功扱い。
-  if (error && error.code !== "23505") throw error;
+  if (!error) return { id };
+  // 23505 = unique_violation（同じ出来事で既に通知済み）。二重は握り、既存 id を引き直す。
+  if (error.code === "23505") {
+    const { data, error: selErr } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("user_id", params.userId)
+      .eq("source_event_id", params.sourceEventId)
+      .maybeSingle();
+    // 引き直し自体が失敗しても本体は成功扱い（ベストエフォート集約）。ただし id=null で返ると
+    // DM 配信が紐づけなし（notification_id=null）になるため、切り分け用にログだけ残す。
+    if (selErr) {
+      console.error(
+        "[adminInsertNotification] 既存通知 id の引き直しに失敗（DM は紐づけなしで続行）:",
+        selErr,
+      );
+    }
+    return { id: data?.id ?? null };
+  }
+  throw error;
 }
 
 /**
- * 外部配信（Webhook）の結果を admin で記録する（Cron 用・#9）。
+ * 外部配信（Webhook / DM）の結果を admin で記録する（Cron 用・#9/#7/#8）。
+ * channel 既定は discord_webhook（#9 の既存呼び出しを壊さない）。DM は channel='discord_dm' と
+ * notificationId（紐づく個人通知）を渡す。target_ref には送信先識別（Webhook はホスト・DM は
+ * discord_id）を入れ、失敗の切り分けに使う。
  */
 export async function adminInsertDelivery(
   admin: Admin,
   params: {
     status: Database["public"]["Enums"]["delivery_status"];
+    channel?: Database["public"]["Enums"]["delivery_channel"];
+    notificationId?: string | null;
     targetRef?: string | null;
     error?: string | null;
     sentAt?: string | null;
   },
 ): Promise<void> {
   const { error } = await admin.from("notification_deliveries").insert({
-    channel: "discord_webhook",
+    channel: params.channel ?? "discord_webhook",
     status: params.status,
+    notification_id: params.notificationId ?? null,
     target_ref: params.targetRef ?? null,
     error: params.error ?? null,
     sent_at: params.sentAt ?? null,
   });
   if (error) throw error;
+}
+
+/** DM 送信対象の Discord 識別情報（opt-in している人だけが送信対象）。 */
+export type DiscordDmTarget = {
+  userId: string;
+  discordId: string;
+  optIn: boolean;
+};
+
+/**
+ * 指定ユーザー群の Discord DM 送信情報（discord_id・opt-in）を admin で引く（Cron 用）。
+ * 返すのは user_id をキーにした Map（呼び出し側が宛先ループで引けるように）。discord_id は
+ * users で unique/not null だが、防御的に空文字は落とす。opt-in の判定・skip は呼び出し側で行う
+ * （ここは取得のみ）。
+ */
+export async function listDiscordTargetsForUsers(
+  admin: Admin,
+  userIds: string[],
+): Promise<Map<string, DiscordDmTarget>> {
+  const result = new Map<string, DiscordDmTarget>();
+  if (userIds.length === 0) return result;
+
+  const { data, error } = await admin
+    .from("users")
+    .select("id, discord_id, discord_dm_opt_in")
+    .in("id", userIds);
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    if (!row.discord_id) continue;
+    result.set(row.id, {
+      userId: row.id,
+      discordId: row.discord_id,
+      optIn: row.discord_dm_opt_in,
+    });
+  }
+  return result;
 }

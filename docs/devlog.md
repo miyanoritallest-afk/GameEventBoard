@@ -7,6 +7,39 @@
 
 ---
 
+## 2026-07-07 — 通知 PR: Discord DM 送信基盤＋リマインド配線（⑤ #7/#8）
+
+通知カタログ最後の未実装＝**個人宛 Discord DM**。既存はアプリ内通知＋Discord Webhook（全体告知）まで。今回は **DM 送信基盤**を作り、まず**リマインド系（#7 試合直前・#8 スクリム直前・どちらも⑦Cron発火）**に配線する。DM は「アプリ内通知（本命・必ず残る）」への**上乗せ配信**＝ベストエフォート。**マイグレーション不要**（`delivery_channel` enum の `discord_dm`・`users.discord_id`・`users.discord_dm_opt_in` は 0001 で既存）。
+
+### 決めたこと（なぜ）
+- **Bot は非常駐（Vercel 関数から REST 直叩き）**（壁打ち確定）。今回は送信専用でユーザーからの受信・コマンド応答は不要。常駐ゲートウェイ接続（discord.js の常時プロセス）は別サーバー・別デプロイ・別監視が要り過剰。送信に Bot トークンは要るが常駐は要らない、の切り分け。アーキ設計書 5章の未確定項目を確定に更新。
+- **送るのはリマインド系だけ（#7/#8）から**（壁打ち確定）。DM の本命がリマインド。1機能=1PR で小さく出し、1経路でトークン運用・opt-in 判定・delivery 記録を通してから横展開（#3 承認等の Server Action 経路は次PR）。
+- **即送信・ベストエフォート**（Webhook #④と同じ流儀）。通知作成の直後に DM も送る。#7/#8 は宛先＝チームメンバー数人なのでレート制限の実害小。凝ったリトライは今回作らない（429/失敗は `failed` 記録で終わり・必要なら次のCron周回で再送検討）。
+- **opt-in 判定は入れる／トグルUIは別PR**。送信側で `discord_dm_opt_in=false` と `discord_id` 無しを除外（必須）。ユーザーが自分で切り替える設定画面は次PRに分けて軽く出す。当面は全員 default `true`。
+- **トークン未設定でも通す**。`DISCORD_BOT_TOKEN` 未設定なら DM は `skipped` 記録で送らないだけ（ビルド・他処理・既存テストは通る）。CRON_SECRET と同じ運用。宮本さん側の宿題はトークン発行→サーバー招待→env 設定のみ（実装完了後に手順を渡す）。
+
+### やったこと
+- **送信基盤**（`sendDiscordDM` in discord.ts）: Bot トークンで `POST /users/@me/channels`（DMチャンネルを開く）→`POST /channels/{id}/messages`（送信）の2段。Webhook と同じ `{ ok } | 失敗` 型・5秒タイムアウト・例外を投げないベストエフォート。`allowed_mentions:{parse:[]}` でメンション誤爆防止。トークン未設定は `skipped`（理由付き）。
+- **DM 文面**（`buildDirectMessageContent`・純粋関数）: 既存 `NotificationContent`（title/body/相対linkUrl）を DM 1メッセージに整形し、末尾リンクを **絶対URL**化（Discord から踏めるよう baseUrl と結合）。body が null なら title＋リンクのみ。テスト2件（絶対URL化・body null）。
+- **Repository**（cron.ts）: ① `adminInsertNotification` を **notification_id を返す**よう変更（DM 配信を個人通知に紐づけるため。二重=23505 時は既存 id を引き直す）。② `adminInsertDelivery` に `channel`（既定 `discord_webhook`＝#9非破壊）・`notificationId` を追加。③ `listDiscordTargetsForUsers` 新設（宛先の `discord_id`・opt-in を admin で引き Map で返す）。
+- **オーケストレーション**（`sendReminderDMs` in cron-notify.ts）: 宛先ごとに opt-in/discord_id を確認し、opt-out・id無しは送らない。トークン未設定は `skipped`、成功は `sent`、失敗は `failed` を `notification_deliveries`（channel='discord_dm'・notification_id 紐付け・target_ref=discord_id）に記録。DM 失敗はすべて握り、リマインド本体を巻き添えにしない。`runMatchReminders`(#7)・`runScrimReminders`(#8) の通知作成ループ後に呼ぶ。
+- **env**: `DISCORD_BOT_TOKEN`（サーバー専用・未設定でも通る）を追加。`.env.local.example` は `.gitignore` の `.env*` で管理外のためコミットには含まれない（ローカルには追記済み）。項目の周知は本 devlog と下記「デプロイ時の宿題」に記す。
+- lint(0 error・既存warning 1のみ) / typecheck / test(353緑・+2) 通過。
+
+### Claude Code Review 反映（4件修正）
+- **DM 上乗せがリマインド本体を巻き添えにする穴を修正**（correctness・最重要）: `sendReminderDMs` の宛先取得（`listDiscordTargetsForUsers`＝users の DB 読み）が**呼び出し側の try 内**で await され、一時的な読み取り失敗が本体の catch に伝播していた。#8 スクリムは出来事(dedup_key)を既に記録済みのため、この throw で `errors` が増えるだけでなく**次回 Cron で skip され DM が二度と飛ばない**。docstring は「例外を投げない」と書いていたが実際は投げていた。→ 宛先取得を**関数内 try で握って見送り**に変更（本体を巻き添えにしない）。
+- **トークン未設定時の無駄クエリ＋skipped 行の洪水を修正**（efficiency）: `DISCORD_BOT_TOKEN` 未設定（feature 無効）でも、毎 Cron・毎リマインドで users を引き、opt-in 済み全員に `status='skipped'` の delivery 行を書いていた。→ **トークン未設定なら即 return**（取得も記録もしない）。宮本さんがトークンを入れるまでは完全に no-op。
+- **2段 fetch のタイムアウト共有を修正**（correctness・軽）: `sendDiscordDM` の「DMチャンネルを開く→送る」2段が1つの AbortController(5秒)を共有し、開くのが遅いと送信の猶予が食われ「開けたのに送信だけ timeout」になり得た。→ `fetchWithTimeout` に切り出し**各リクエストに個別タイマー**。
+- **23505 引き直しの握り潰しにログ追加**（軽）: 二重時の既存 id 引き直し SELECT のエラーを無視して `id:null`（DM 紐づけなし）になっていた。→ 本体はベストエフォートのまま、切り分け用に `console.error` を追加。
+- 再 lint / typecheck / test(353緑) 通過。
+
+### 次にやること
+- [ ] 宮本さん: Discord Developer Portal で Bot トークン発行→OW2サーバーに招待→`.env.local` と Vercel に `DISCORD_BOT_TOKEN` 設定（手順は別途）。設定後に実機で DM 到達を確認。
+- [ ] DM 配線を Server Action 経路（#2 却下・#3 承認・#10 スクリム登録・#11 招待 等）へ横展開（次PR）。
+- [ ] `discord_dm_opt_in` の切替 UI（設定画面トグル）を追加（別PR）。
+
+---
+
 ## 2026-07-06 — 通知 PR: スクリム直前リマインド（#8 `scrim_starting_soon`）
 
 通知カタログ 3.7 #8。**開始2時間前**に、そのスクリム/練習のチームメンバーへアプリ内通知でリマインドする。試合の #7（`match_starting_soon`）と同じ⑦Cron拡張。試合とスクリムは type を分けて文面を出し分ける（要件定義書 3.7）。**マイグレーション不要**（列追加なし・二重防止は dedup_key 方式）。
