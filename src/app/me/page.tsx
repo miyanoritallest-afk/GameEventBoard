@@ -25,31 +25,41 @@ export default async function MePage() {
   const battleTag = profile?.battle_tag ?? "";
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-lg px-6 py-10">
-        <h1 className="text-2xl font-bold">マイページ</h1>
+        <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-[color:var(--mp-fg-subtle)]">
+          <span className="h-px w-6 bg-[color:var(--mp-brand)]" />
+          PROFILE
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">マイページ</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           プロフィールの確認とバトルタグの登録ができます。
         </p>
 
         {/* プロフィール表示（Discord 由来は編集不可） */}
-        <section className="mt-6 rounded-xl border border-border bg-card p-6">
+        <section className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e1)]">
           <div className="flex items-center gap-4">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={avatarUrl}
                 alt=""
-                className="size-14 rounded-full border border-border"
+                className="size-14 rounded-full border-2 border-[color:var(--mp-brand)]/40"
               />
             ) : (
-              <div className="flex size-14 items-center justify-center rounded-full border border-border bg-muted text-lg font-bold">
+              <div className="flex size-14 items-center justify-center rounded-full bg-[color:var(--mp-surface-3)] text-lg font-bold text-[color:var(--mp-brand)]">
                 {discordName.charAt(0).toUpperCase()}
               </div>
             )}
             <div>
-              <p className="text-lg font-semibold">{discordName}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-lg font-semibold text-foreground">
+                {discordName}
+              </p>
+              <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 rounded-full bg-[color:var(--mp-discord)]"
+                />
                 Discord アカウント（変更不可）
               </p>
             </div>
@@ -57,7 +67,7 @@ export default async function MePage() {
         </section>
 
         {/* バトルタグ編集 */}
-        <section className="mt-4 rounded-xl border border-border bg-card p-6">
+        <section className="mt-4 rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e1)]">
           <BattleTagForm defaultBattleTag={battleTag} />
         </section>
 

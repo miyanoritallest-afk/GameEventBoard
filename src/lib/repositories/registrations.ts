@@ -86,7 +86,7 @@ export async function listMyParticipatingEvents(userId: string) {
   const { data, error } = await supabase
     .from("registrations")
     .select(
-      "id, status, events(id, slug, title, status, starts_at, recruit_deadline, games(name))",
+      "id, status, events(id, slug, title, status, starts_at, recruit_deadline, games(name), organizer_display_name, organizer:users!events_organizer_id_fkey(discord_name))",
     )
     .eq("user_id", userId)
     .in("status", ["pending", "approved"])
