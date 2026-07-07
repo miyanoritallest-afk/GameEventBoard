@@ -200,6 +200,25 @@ export function buildEventAnnounceWebhookContent(params: {
 }
 
 /**
+ * アプリ内通知（NotificationContent）を、個人宛 Discord DM の本文（1文字列）に整形する。
+ * DM は個人宛なので、既存の title/body をそのまま流用し、末尾に**絶対URL**のリンクを付ける
+ * （Discord のメッセージからは相対パスを踏めないため baseUrl と結合する）。
+ *
+ * 純粋関数（副作用なし）。baseUrl は末尾スラッシュ無しを想定（呼び出し側で正規化済み）。
+ * content.body が null の通知は title とリンクだけを送る。Discord content 上限2000字は、
+ * 元の title/body がフォーム側で長さ制限済みのため実質気にしない。
+ */
+export function buildDirectMessageContent(
+  content: NotificationContent,
+  baseUrl: string,
+): string {
+  const lines = [`**${content.title}**`];
+  if (content.body) lines.push(content.body);
+  lines.push(`${baseUrl}${content.linkUrl}`);
+  return lines.join("\n");
+}
+
+/**
  * UTC(ISO) を JST の「M/D HH:mm」表示に整形する（通知文面用の共通ヘルパ）。
  * 純粋関数（Intl 依存のみ・副作用なし）。null は "未定"。
  */

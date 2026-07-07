@@ -13,6 +13,7 @@ import {
   buildTeamApprovedContent,
   buildScrimScheduledContent,
   buildScrimStartingSoonContent,
+  buildDirectMessageContent,
   fmtJstDateTime,
 } from "../notification-content";
 
@@ -289,5 +290,32 @@ describe("buildScrimStartingSoonContent (#8)", () => {
     expect(c.title).toBe("まもなく練習が始まります");
     expect(c.body).toContain("練習");
     expect(c.body).not.toContain("スクリム");
+  });
+});
+
+describe("buildDirectMessageContent (#7/#8 DM)", () => {
+  it("title・body・絶対URL リンクを1メッセージに組む", () => {
+    const dm = buildDirectMessageContent(
+      {
+        title: "まもなくスクリムが始まります",
+        body: "チーム「A」のスクリムが 7/3 21:00 に始まります。",
+        linkUrl: "/events/e-8/schedule",
+      },
+      "https://app.example.com",
+    );
+    expect(dm).toContain("まもなくスクリムが始まります");
+    expect(dm).toContain("チーム「A」のスクリム");
+    // 相対 linkUrl を baseUrl と結合した絶対URLになる（Discord から踏めるように）。
+    expect(dm).toContain("https://app.example.com/events/e-8/schedule");
+    // 相対のまま漏れていないこと（絶対URL化の確認）。
+    expect(dm).not.toMatch(/(^|\n)\/events\/e-8\/schedule/);
+  });
+
+  it("body が null の通知は title とリンクだけを送る（body 行を出さない）", () => {
+    const dm = buildDirectMessageContent(
+      { title: "お知らせ", body: null, linkUrl: "/events/e-1" },
+      "https://app.example.com",
+    );
+    expect(dm).toBe("**お知らせ**\nhttps://app.example.com/events/e-1");
   });
 });
