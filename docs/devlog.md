@@ -7,6 +7,37 @@
 
 ---
 
+## 2026-07-07 — デザイン刷新 第2画面: イベント一覧（＋フィルタ機能・@layer 退行修正）
+
+イベント一覧を Claude Design のデザイン言語（`.theme-matchpoint`）でリデザイン。あわせてデザインに含まれていた**フィルタ機能（タブ・ゲーム絞り込み・並び替え・件数）を実装**。作業中に**第1画面の退行バグ（`.theme-matchpoint` が Tailwind v4 で出力から落ちて白背景化）も発見・修正**。
+
+### やったこと
+- **一覧を3カラムのカードグリッドに**（`events/page.tsx`）: 見出し（EVENTS ラベル＋件数＋「＋イベントを作成」）、フィルタタブ（すべて/募集中/開催中/終了・件数バッジ付き）、ゲーム/並び順ドロップダウン、カード（ゲームチップ＋状態バッジ＋日時 tnum＋主催者アバター＋矢印）、空状態。
+- **フィルタ・並び替えを URL クエリ駆動で実装**（`?tab=&game=&sort=`）: Server Component が searchParams を読んで絞り込む。状態は URL が持つ（クライアント状態管理は最小）。`FilterSelect`（Client 島）で select 変更→即 `router.push`。**`dangerouslySetInnerHTML` は使わない**（当初 inline script で書きかけたがガイドライン禁止に気づき Client 島へ修正）。
+- **フィルタ/状態グルーピングを純粋 Service に切り出し**（`lib/services/event-list-filter.ts`）: タブ↔status 群の対応（募集中=published/recruiting、開催中=closed/ongoing、終了=finished）、URL クエリの `normalizeTab`/`normalizeSort`（不正値を安全な既定へ丸める）、`countByTab`、`statusTone`。テスト13件（SQLi 様の不正 tab 値が all に丸まる検証含む）。
+- **Repository 拡張**（`events.ts`）: `listPublishedEvents` に filterStatuses/sort/gameId 引数と主催者名の埋め込みを追加（全て Supabase クエリビルダ経由・SQLi 非該当）。`listGamesInPublishedEvents`（ゲーム絞り込みドロップダウン用）を新設。
+- lint / typecheck / build（Compiled successfully）/ test(366緑・+13) 通過。**実機確認済み**（3カラム描画・タブ遷移・並び替えの URL 反映・ダーク配色を Playwright で確認）。
+
+### 退行修正（重要）: `.theme-matchpoint` が効かない
+- **症状**: 第1画面（イベント詳細・マージ済み）を含め `.theme-matchpoint` の CSS 変数が適用されず**白背景**になっていた（`--mp-bg` 空・ルールがスタイルシートに存在しない）。
+- **原因**: Tailwind v4 は素の CSS クラス（`globals.css` 直書きの `.theme-matchpoint`）を出力から落とす/順序が崩れることがある。dev HMR では一時的に効いていたが、ビルドし直すと消えていた。
+- **対応**: `.theme-matchpoint` を **`@layer components` で囲む**（必ず emit・base の後に適用）。両画面ともダーク描画に復帰。
+
+### 決めたこと（なぜ）
+- **フィルタは URL クエリ駆動**（クライアント状態でなく）。App Router の素直な形・リロード/共有に強い・Server Component で完結。
+- **件数バッジはゲーム絞り込み後の母集合から算出**（Claude Code Review 反映）。ゲームを選ぶとタブ件数もそのゲーム内になり、バッジと実表示件数が一致する。この修正で表示用の絞り込みも母集合の**メモリ内フィルタ**に変え、DB クエリを1本削減（タブ切替でクエリを撃たない）。
+- **状態→バッジ色の意味づけを Service に集約**（一覧・詳細で共通化の下地）。
+
+### Claude Code Review 反映
+- **タブ件数とゲーム絞り込みの不整合を修正**（correctness）: 件数を「ゲーム絞り込み後」の母集合から数えるよう変更。副次的に表示用の status 絞り込みをメモリ内フィルタ化し、2本目の DB クエリを削減。
+- （low・据え置き）`FilterSelect` は非制御 select（`defaultValue`）。ナビゲーションで再マウントされる前提に依存するが現状問題なし。
+
+### 次にやること
+- [ ] デザイン言語をチーム編成・対戦表へ展開（[[design-iteration-flow]]）。
+- [ ] 全画面が揃ったら `.theme-matchpoint` を `:root/.dark`（サイト全体）へ昇格。
+
+---
+
 ## 2026-07-07 — デザイン刷新 第1画面: イベント詳細ページ（ダーク/OW2 調）
 
 Claude Design で確立したデザイン言語（brand `#FF6A2B` / accent `#22D3EE` / 状態色 / ダーク階層 / Geist+Noto Sans JP / radius 6-18px / 影 e1-e3）を、最初の代表画面「イベント詳細ページ」に実装。無彩色の「AI っぽさ」から OW2 らしいダーク・e スポーツ調へ。**先行適用スコープ限定**（他画面に影響を出さない）。

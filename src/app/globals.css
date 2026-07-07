@@ -139,48 +139,53 @@
  * bg-background / text-foreground / bg-primary 等の Tailwind クラス・shadcn コンポーネントが
  * そのまま新配色で描画されるようにする（クラスの総書き換えを避ける）。追加のブランド固有色は
  * --mp-* として持たせ、任意の要素から使えるようにする。
+ *
+ * Tailwind v4 では素の CSS クラスが出力から落ちる/順序が崩れることがあるため、@layer components
+ * に入れて必ず emit・base の後に適用されるようにする（.theme-matchpoint が効かない不具合の対策）。
  */
-.theme-matchpoint {
-  /* ブランド固有トークン（Claude Design のダーク体系） */
-  --mp-bg: #0b0e14;
-  --mp-surface: #141a24;
-  --mp-surface-2: #1b2230;
-  --mp-surface-3: #242d3d;
-  --mp-border: #29323f;
-  --mp-border-strong: #3a4657;
-  --mp-fg: #edf1f8;
-  --mp-fg-muted: #97a2b6;
-  --mp-fg-subtle: #667084;
-  --mp-brand: #ff6a2b;
-  --mp-brand-hover: #ff7e48;
-  --mp-brand-press: #e85a1e;
-  --mp-on-brand: #21110a;
-  --mp-accent: #22d3ee;
-  --mp-success: #34d399;
-  --mp-warning: #f5b93d;
-  --mp-live: #22d3ee;
-  --mp-danger: #f65c4e;
-  --mp-e1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --mp-e2: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --mp-e3: 0 12px 32px rgba(0, 0, 0, 0.5);
+@layer components {
+  .theme-matchpoint {
+    /* ブランド固有トークン（Claude Design のダーク体系） */
+    --mp-bg: #0b0e14;
+    --mp-surface: #141a24;
+    --mp-surface-2: #1b2230;
+    --mp-surface-3: #242d3d;
+    --mp-border: #29323f;
+    --mp-border-strong: #3a4657;
+    --mp-fg: #edf1f8;
+    --mp-fg-muted: #97a2b6;
+    --mp-fg-subtle: #667084;
+    --mp-brand: #ff6a2b;
+    --mp-brand-hover: #ff7e48;
+    --mp-brand-press: #e85a1e;
+    --mp-on-brand: #21110a;
+    --mp-accent: #22d3ee;
+    --mp-success: #34d399;
+    --mp-warning: #f5b93d;
+    --mp-live: #22d3ee;
+    --mp-danger: #f65c4e;
+    --mp-e1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --mp-e2: 0 4px 14px rgba(0, 0, 0, 0.45);
+    --mp-e3: 0 12px 32px rgba(0, 0, 0, 0.5);
 
-  /* shadcn セマンティック変数をこのスコープで上書き（既存クラスがそのまま新配色に） */
-  --background: var(--mp-bg);
-  --foreground: var(--mp-fg);
-  --card: var(--mp-surface);
-  --card-foreground: var(--mp-fg);
-  --popover: var(--mp-surface-2);
-  --popover-foreground: var(--mp-fg);
-  --primary: var(--mp-brand);
-  --primary-foreground: var(--mp-on-brand);
-  --secondary: var(--mp-surface-2);
-  --secondary-foreground: var(--mp-fg);
-  --muted: var(--mp-surface-2);
-  --muted-foreground: var(--mp-fg-muted);
-  --accent: var(--mp-surface-3);
-  --accent-foreground: var(--mp-fg);
-  --destructive: var(--mp-danger);
-  --border: var(--mp-border);
-  --input: var(--mp-border-strong);
-  --ring: var(--mp-brand);
+    /* shadcn セマンティック変数をこのスコープで上書き（既存クラスがそのまま新配色に） */
+    --background: var(--mp-bg);
+    --foreground: var(--mp-fg);
+    --card: var(--mp-surface);
+    --card-foreground: var(--mp-fg);
+    --popover: var(--mp-surface-2);
+    --popover-foreground: var(--mp-fg);
+    --primary: var(--mp-brand);
+    --primary-foreground: var(--mp-on-brand);
+    --secondary: var(--mp-surface-2);
+    --secondary-foreground: var(--mp-fg);
+    --muted: var(--mp-surface-2);
+    --muted-foreground: var(--mp-fg-muted);
+    --accent: var(--mp-surface-3);
+    --accent-foreground: var(--mp-fg);
+    --destructive: var(--mp-danger);
+    --border: var(--mp-border);
+    --input: var(--mp-border-strong);
+    --ring: var(--mp-brand);
+  }
 }

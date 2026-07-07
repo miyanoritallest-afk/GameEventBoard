@@ -141,20 +141,70 @@ export async function findEventBySlug(slug: string) {
 }
 
 /**
- * 公開済みイベントの一覧を取得する（新しい順）。
+ * 公開済みイベントの一覧を取得する。
  * アプリ層で status='draft' を除外（RLS 0005 と二重で下書き漏れを防ぐ）。
- * 一覧は概要表示なので必要な列だけ取る。
+ * 一覧は概要表示なので必要な列＋主催者名（display_name 優先・Discord 名フォールバック）だけ取る。
+ *
+ * filterStatuses: 指定があればその status 群に絞る（フィルタタブ用）。空/未指定は全公開状態。
+ * sort: "soon"=開催日が近い順（starts_at 昇順・null は末尾）、"new"=新着順（created_at 降順）。
+ * gameId: 指定があればそのゲームに絞る。
+ *
+ * SQLi 対策: すべて Supabase クエリビルダのメソッド経由（in/eq/order）。生 SQL は組まない。
+ * status 値は呼び出し側（Server Component）が enum の許可値だけを渡す前提だが、
+ * 不正値が来ても .in() はパラメータ化されるため安全（該当 0 件になるだけ）。
  */
-export async function listPublishedEvents() {
+export async function listPublishedEvents(params?: {
+  filterStatuses?: Database["public"]["Enums"]["event_status"][];
+  sort?: "soon" | "new";
+  gameId?: string;
+}) {
+  const supabase = await createClient();
+  let query = supabase
+    .from("events")
+    .select(
+      "id, slug, title, status, starts_at, recruit_deadline, organizer_display_name, games(name), organizer:users!events_organizer_id_fkey(discord_name)",
+    )
+    .neq("status", "draft");
+
+  if (params?.filterStatuses && params.filterStatuses.length > 0) {
+    query = query.in("status", params.filterStatuses);
+  }
+  if (params?.gameId) {
+    query = query.eq("game_id", params.gameId);
+  }
+
+  // 並び替え。開催日順は null（未定）を末尾へ。既定は新着順。
+  if (params?.sort === "soon") {
+    query = query.order("starts_at", { ascending: true, nullsFirst: false });
+  } else {
+    query = query.order("created_at", { ascending: false });
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * 公開イベントで実際に使われているゲームの一覧（一覧のゲーム絞り込みドロップダウン用）。
+ * 公開イベントが 0 件のゲームは出さない（選んでも 0 件になるだけなので）。重複排除して返す。
+ */
+export async function listGamesInPublishedEvents() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("events")
-    .select("id, slug, title, status, starts_at, recruit_deadline, games(name)")
-    .neq("status", "draft")
-    .order("created_at", { ascending: false });
-
+    .select("game_id, games(name)")
+    .neq("status", "draft");
   if (error) throw error;
-  return data;
+
+  const seen = new Map<string, { id: string; name: string }>();
+  for (const row of data ?? []) {
+    const name = (row.games as { name: string } | null)?.name;
+    if (row.game_id && name && !seen.has(row.game_id)) {
+      seen.set(row.game_id, { id: row.game_id, name });
+    }
+  }
+  return [...seen.values()];
 }
 
 /**
