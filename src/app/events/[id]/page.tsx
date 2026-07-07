@@ -1,5 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  Eye,
+  CalendarDays,
+  LayoutGrid,
+  Table2,
+  Trophy,
+  type LucideIcon,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById, findEventBySlug } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
@@ -129,251 +137,434 @@ export default async function EventDetailPage({
   // トーナメントの呼称（トーナメント単独なら「トーナメント」・予選ありなら「決勝トーナメント」）。
   const tournamentLabel = tournamentStageLabel(event.format);
 
+  // 開催中かどうか（ライブ表示のパルス用）。状態ラベルは既存ロジックを流用。
+  const isLive = event.status === "ongoing";
+
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-3xl px-6 py-10">
-        {event.status === "draft" ? (
-          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-            このイベントは下書きです。{isOrganizer ? "内容を確認して公開できます。" : ""}
-          </p>
-        ) : (
-          <p className="rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
-            ✓ このイベントは公開されています
-          </p>
-        )}
-
-        <h1 className="mt-6 text-2xl font-bold">{event.title}</h1>
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span className="rounded bg-muted px-2 py-0.5">{gameName}</span>
-          <span className="rounded bg-muted px-2 py-0.5">状態: {statusLabel}</span>
-          <span className="rounded bg-muted px-2 py-0.5">主催: {organizerName}</span>
-          <span className="rounded bg-muted px-2 py-0.5">
-            形式: {eventFormatLabel(event.format)}
-          </span>
-        </div>
-
-        {/* フォロー導線（非主催者のみ）。イベント／主催者をフォローできる。
-            未ログインでもボタンは出す（押下で /login へ）。通知が届くのは③以降。 */}
-        {canFollow && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <FollowButton
-              targetType="event"
-              targetId={event.id}
-              initialFollowing={followingEvent}
-              isLoggedIn={viewerId !== null}
-              redirectTo={`/events/${event.id}`}
-              label="このイベント"
-            />
-            <FollowButton
-              targetType="user"
-              targetId={event.organizer_id}
-              initialFollowing={followingOrganizer}
-              isLoggedIn={viewerId !== null}
-              redirectTo={`/events/${event.id}`}
-              label={`主催者(${organizerName})`}
-            />
-          </div>
-        )}
-
-        {event.description && (
-          <p className="mt-4 whitespace-pre-wrap text-sm text-foreground/90">
-            {event.description}
-          </p>
-        )}
-
-        <dl className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-border bg-card p-5 text-sm sm:grid-cols-2">
-          <Row label="開催開始" value={fmtJst(event.starts_at)} />
-          <Row label="開催終了" value={fmtJst(event.ends_at)} />
-          <Row label="募集締切" value={fmtJst(event.recruit_deadline)} />
-          <Row
-            label="定員（チーム数）"
-            value={event.capacity != null ? String(event.capacity) : "未設定"}
-          />
-          <Row
-            label="ロールスワップ"
-            value={event.role_swap_allowed ? "許可" : "不可"}
-          />
-          <Row label="申告シーズン数" value={String(event.declared_seasons)} />
-          <Row
-            label="到達ボーナス"
-            value={`マスター+${event.bonus_master} / GM+${event.bonus_gm} / チャンピオン+${event.bonus_champion}`}
-          />
-        </dl>
-
-        {/* 応募導線（非主催者・公開中）。応募済みなら状態表示。
-            未応募は、スコアあり(require_score)なら専用フォームへ誘導、なしなら即時応募。 */}
-        {canApply &&
-          (myRegistration ? (
-            <div className="mt-6 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm text-primary">
-              <p>
-                ✓ 応募済み（
-                {REG_STATUS_LABEL[myRegistration.status] ??
-                  myRegistration.status}
-                ）
-              </p>
-              {/* 応募者は他の応募者を見て編成を試算できる（self 応募の前提）。 */}
-              <div className="mt-2 flex items-center gap-4">
-                <Link
-                  href={`/events/${event.id}/registrations`}
-                  className="text-xs underline hover:no-underline"
-                >
-                  応募者一覧を見る
-                </Link>
-                <Link
-                  href={`/events/${event.id}/teams`}
-                  className="text-xs underline hover:no-underline"
-                >
-                  チーム編成を試算する
-                </Link>
-              </div>
-            </div>
-          ) : event.require_score ? (
-            <div className="mt-6 rounded-xl border border-border bg-card p-5">
-              <h2 className="text-sm font-semibold">このイベントに応募する</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                希望ロールとランクを申告して応募します。
-              </p>
-              <Link
-                href={`/events/${event.id}/apply`}
-                className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                応募フォームへ
-              </Link>
-            </div>
-          ) : (
-            <ApplyButton
-              eventId={event.id}
-              defaultDisplayName={discordName ?? ""}
-              defaultBattleTag={battleTag ?? ""}
-            />
-          ))}
-
-        {/* 本戦セクション（ブロック分け・対戦表・順位表・決勝Tへの導線）。
-            主催者・応募者の双方に同じ導線を出して一元化する。各ページ側で
-            主催者=編集可 / 応募者=閲覧のみ（read-only）に出し分く。
-            導線はイベント形式（format）に応じて出し分ける（PR-2）。 */}
-        {canViewTournament && (
-          <section className="mt-6 rounded-xl border border-border bg-card p-5">
-            <h2 className="text-sm font-semibold">本戦</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {showGroupStage && showTournamentStage
-                ? "ブロックの組み分けと、対戦表・順位表・決勝トーナメントを確認できます。"
-                : showGroupStage
-                  ? "ブロックの組み分けと、対戦表・順位表を確認できます。"
-                  : `${tournamentLabel}を確認できます。`}
-              {!isOrganizer && "（閲覧のみ）"}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link
-                href={`/events/${event.id}/watch`}
-                className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                観戦ビューでまとめて見る →
-              </Link>
-              <Link
-                href={`/events/${event.id}/schedule`}
-                className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
-              >
-                日程（スクリム・練習）
-              </Link>
-              {showGroupStage && (
-                <>
-                  <Link
-                    href={`/events/${event.id}/groups`}
-                    className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
-                  >
-                    ブロック分けを見る →
-                  </Link>
-                  <Link
-                    href={`/events/${event.id}/matches`}
-                    className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
-                  >
-                    対戦表・順位表を見る →
-                  </Link>
-                </>
-              )}
-              {showTournamentStage && (
-                <Link
-                  href={`/events/${event.id}/tournament`}
-                  className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
-                >
-                  {tournamentLabel}を見る →
-                </Link>
-              )}
-            </div>
-          </section>
-        )}
-
-        {isOrganizer && event.status === "draft" && (
-          <PublishButton eventId={event.id} />
-        )}
-
-        {/* 主催者向けの管理導線（編集はいつでも、削除は下書きのみ）。 */}
-        {isOrganizer && (
-          <div className="mt-6 flex items-center gap-4">
-            <Link
-              href={`/events/${event.id}/edit`}
-              className="text-sm text-primary hover:underline"
-            >
-              編集する
-            </Link>
-            {/* シリーズ化（単発→好評→シリーズ化）。未所属なら化ボタン・所属済みなら導線。 */}
-            {event.series_id ? (
-              <Link
-                href={`/series/${event.series_id}`}
-                className="text-sm text-primary hover:underline"
-              >
-                シリーズを見る
-              </Link>
-            ) : (
-              <SeriesifyButton eventId={event.id} />
-            )}
-            {event.status === "draft" && (
-              <DeleteDraftButton eventId={event.id} />
-            )}
-            {event.status !== "draft" && (
-              <Link
-                href={`/events/${event.id}/registrations`}
-                className="text-sm text-primary hover:underline"
-              >
-                応募者を見る
-              </Link>
-            )}
-            {event.status !== "draft" && (
-              <Link
-                href={`/events/${event.id}/teams`}
-                className="text-sm text-primary hover:underline"
-              >
-                チーム編成
-              </Link>
-            )}
-            <Link
-              href="/events/mine"
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              自分のイベント一覧
-            </Link>
-          </div>
-        )}
-
-        <div className="mt-6">
-          <Link
-            href="/events/new"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← もう1件作成する
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-6xl px-6 py-8">
+        {/* パンくず */}
+        <nav className="text-sm text-muted-foreground">
+          <Link href="/events" className="hover:text-foreground">
+            イベント一覧
           </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">{event.title}</span>
+        </nav>
+
+        {/* ヒーロー：状態バッジ＋ゲームチップ、タイトル、主催・形式・日時メタ */}
+        <header className="mt-5 rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e2)]">
+          <div className="flex flex-wrap items-center gap-2">
+            {event.status === "draft" ? (
+              <StatusBadge tone="muted" label="下書き" />
+            ) : isLive ? (
+              <StatusBadge tone="live" label="開催中" pulse />
+            ) : (
+              <StatusBadge tone="success" label={statusLabel} check />
+            )}
+            <Chip>{gameName}</Chip>
+            <Chip>{eventFormatLabel(event.format)}</Chip>
+          </div>
+
+          <h1 className="mt-4 font-[family-name:var(--mp-font,inherit)] text-3xl font-bold tracking-tight text-foreground">
+            {event.title}
+          </h1>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-2">
+              <span
+                aria-hidden
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--mp-surface-3)] text-xs font-bold text-[color:var(--mp-brand)]"
+              >
+                {organizerName.slice(0, 1)}
+              </span>
+              主催 <span className="text-foreground">{organizerName}</span>
+            </span>
+            <span>
+              状態 <span className="text-foreground">{statusLabel}</span>
+            </span>
+            <span className="tabular-nums">
+              開催{" "}
+              <span className="text-foreground">{fmtJst(event.starts_at)}</span>
+            </span>
+          </div>
+
+          {event.status === "draft" && isOrganizer && (
+            <p className="mt-4 rounded-lg border border-[color:var(--mp-warning)]/40 bg-[color:var(--mp-warning)]/10 px-3 py-2 text-sm text-[color:var(--mp-warning)]">
+              このイベントは下書きです。内容を確認して公開できます。
+            </p>
+          )}
+        </header>
+
+        {/* 2カラム：左＝本文・メタ・本戦導線 / 右＝アクションレール（sticky） */}
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
+          {/* 左カラム */}
+          <div className="flex flex-col gap-6">
+            {event.description && (
+              <section className="rounded-2xl border border-border bg-card p-6">
+                <h2 className="text-sm font-semibold text-muted-foreground">
+                  概要
+                </h2>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                  {event.description}
+                </p>
+              </section>
+            )}
+
+            {/* メタ facts */}
+            <section className="rounded-2xl border border-border bg-card p-6">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                イベント情報
+              </h2>
+              <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+                <Fact label="開催開始" value={fmtJst(event.starts_at)} mono />
+                <Fact label="開催終了" value={fmtJst(event.ends_at)} mono />
+                <Fact
+                  label="募集締切"
+                  value={fmtJst(event.recruit_deadline)}
+                  mono
+                  tone="warning"
+                />
+                <Fact
+                  label="定員（チーム数）"
+                  value={
+                    event.capacity != null ? String(event.capacity) : "未設定"
+                  }
+                  mono
+                />
+                <Fact
+                  label="ロールスワップ"
+                  value={event.role_swap_allowed ? "許可" : "不可"}
+                />
+                <Fact
+                  label="申告シーズン数"
+                  value={String(event.declared_seasons)}
+                  mono
+                />
+                <div className="sm:col-span-2">
+                  <Fact
+                    label="到達ボーナス"
+                    value={`マスター+${event.bonus_master} / GM+${event.bonus_gm} / チャンピオン+${event.bonus_champion}`}
+                  />
+                </div>
+              </dl>
+            </section>
+
+            {/* 本戦導線（タイル化）。導線・出し分けの条件は既存ロジックのまま。 */}
+            {canViewTournament && (
+              <section className="rounded-2xl border border-border bg-card p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-muted-foreground">
+                    本戦
+                  </h2>
+                  {!isOrganizer && (
+                    <span className="text-xs text-[color:var(--mp-fg-subtle)]">
+                      閲覧のみ
+                    </span>
+                  )}
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <TournamentTile
+                    href={`/events/${event.id}/watch`}
+                    icon={Eye}
+                    title="観戦ビュー"
+                    desc="対戦・順位をまとめて見る"
+                    brand
+                  />
+                  <TournamentTile
+                    href={`/events/${event.id}/schedule`}
+                    icon={CalendarDays}
+                    title="日程"
+                    desc="スクリム・練習の予定"
+                  />
+                  {showGroupStage && (
+                    <>
+                      <TournamentTile
+                        href={`/events/${event.id}/groups`}
+                        icon={LayoutGrid}
+                        title="ブロック分け"
+                        desc="予選の組み分け"
+                      />
+                      <TournamentTile
+                        href={`/events/${event.id}/matches`}
+                        icon={Table2}
+                        title="対戦表・順位表"
+                        desc="予選リーグの結果"
+                      />
+                    </>
+                  )}
+                  {showTournamentStage && (
+                    <TournamentTile
+                      href={`/events/${event.id}/tournament`}
+                      icon={Trophy}
+                      title={tournamentLabel}
+                      desc="決勝ブラケット"
+                    />
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* 右レール（sticky） */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
+            {/* 応募カード（非主催者・公開中）。状態別に出し分け（既存ロジック）。 */}
+            {canApply &&
+              (myRegistration ? (
+                <div className="rounded-2xl border border-[color:var(--mp-success)]/40 bg-[color:var(--mp-success)]/10 p-5">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[color:var(--mp-success)]">
+                    <span aria-hidden>✓</span> 応募済み（
+                    {REG_STATUS_LABEL[myRegistration.status] ??
+                      myRegistration.status}
+                    ）
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <Link
+                      href={`/events/${event.id}/registrations`}
+                      className="text-sm text-foreground/90 underline-offset-2 hover:underline"
+                    >
+                      応募者一覧を見る →
+                    </Link>
+                    <Link
+                      href={`/events/${event.id}/teams`}
+                      className="text-sm text-foreground/90 underline-offset-2 hover:underline"
+                    >
+                      チーム編成を試算する →
+                    </Link>
+                  </div>
+                </div>
+              ) : event.require_score ? (
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-[var(--mp-e1)]">
+                  <h2 className="text-sm font-semibold">
+                    このイベントに応募する
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    希望ロールとランクを申告して応募します。
+                  </p>
+                  <Link
+                    href={`/events/${event.id}/apply`}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-[color:var(--mp-brand-hover)]"
+                  >
+                    応募フォームへ
+                  </Link>
+                </div>
+              ) : (
+                <ApplyButton
+                  eventId={event.id}
+                  defaultDisplayName={discordName ?? ""}
+                  defaultBattleTag={battleTag ?? ""}
+                />
+              ))}
+
+            {/* フォロー（非主催者のみ）。既存ロジックのまま。 */}
+            {canFollow && (
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <h2 className="text-sm font-semibold text-muted-foreground">
+                  フォロー
+                </h2>
+                <div className="mt-3 flex flex-col gap-2">
+                  <FollowButton
+                    targetType="event"
+                    targetId={event.id}
+                    initialFollowing={followingEvent}
+                    isLoggedIn={viewerId !== null}
+                    redirectTo={`/events/${event.id}`}
+                    label="このイベント"
+                  />
+                  <FollowButton
+                    targetType="user"
+                    targetId={event.organizer_id}
+                    initialFollowing={followingOrganizer}
+                    isLoggedIn={viewerId !== null}
+                    redirectTo={`/events/${event.id}`}
+                    label={`主催者(${organizerName})`}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 主催者メニュー（既存の管理導線をレールに集約）。 */}
+            {isOrganizer && (
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <h2 className="text-sm font-semibold text-muted-foreground">
+                  主催者メニュー
+                </h2>
+                {event.status === "draft" && (
+                  <div className="mt-3">
+                    <PublishButton eventId={event.id} />
+                  </div>
+                )}
+                <div className="mt-3 flex flex-col gap-2 text-sm">
+                  <Link
+                    href={`/events/${event.id}/edit`}
+                    className="text-foreground/90 underline-offset-2 hover:underline"
+                  >
+                    編集する
+                  </Link>
+                  {event.status !== "draft" && (
+                    <Link
+                      href={`/events/${event.id}/registrations`}
+                      className="text-foreground/90 underline-offset-2 hover:underline"
+                    >
+                      応募者を見る
+                    </Link>
+                  )}
+                  {event.status !== "draft" && (
+                    <Link
+                      href={`/events/${event.id}/teams`}
+                      className="text-foreground/90 underline-offset-2 hover:underline"
+                    >
+                      チーム編成
+                    </Link>
+                  )}
+                  {event.series_id ? (
+                    <Link
+                      href={`/series/${event.series_id}`}
+                      className="text-foreground/90 underline-offset-2 hover:underline"
+                    >
+                      シリーズを見る
+                    </Link>
+                  ) : (
+                    <SeriesifyButton eventId={event.id} />
+                  )}
+                  {event.status === "draft" && (
+                    <DeleteDraftButton eventId={event.id} />
+                  )}
+                  <Link
+                    href="/events/mine"
+                    className="text-muted-foreground underline-offset-2 hover:underline"
+                  >
+                    自分のイベント一覧
+                  </Link>
+                </div>
+              </div>
+            )}
+          </aside>
         </div>
       </div>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/** ヒーローの状態バッジ。tone で配色、pulse=ライブの点滅、check=✓表示。 */
+function StatusBadge({
+  tone,
+  label,
+  pulse,
+  check,
+}: {
+  tone: "success" | "live" | "muted";
+  label: string;
+  pulse?: boolean;
+  check?: boolean;
+}) {
+  const color =
+    tone === "success"
+      ? "var(--mp-success)"
+      : tone === "live"
+        ? "var(--mp-live)"
+        : "var(--mp-fg-subtle)";
   return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value}</dd>
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+      style={{
+        color,
+        backgroundColor: `color-mix(in oklab, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in oklab, ${color} 40%, transparent)`,
+      }}
+    >
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 rounded-full ${pulse ? "animate-pulse" : ""}`}
+        style={{ backgroundColor: color }}
+      />
+      {check ? `✓ ${label}` : label}
+    </span>
+  );
+}
+
+/** ゲーム名・形式などの小さなチップ。 */
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
+/** メタ情報の1項目。mono=等幅（日時・数値の桁揃え）、tone=warning で締切強調。 */
+function Fact({
+  label,
+  value,
+  mono,
+  tone,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  tone?: "warning";
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <dt className="text-xs text-[color:var(--mp-fg-subtle)]">{label}</dt>
+      <dd
+        className={`text-sm font-medium ${mono ? "font-mono tabular-nums" : ""} ${
+          tone === "warning"
+            ? "text-[color:var(--mp-warning)]"
+            : "text-foreground"
+        }`}
+      >
+        {value}
+      </dd>
     </div>
+  );
+}
+
+/** 本戦導線のタイル。brand=ブランド色で強調（観戦ビュー用）。icon は Lucide アイコン。 */
+function TournamentTile({
+  href,
+  icon: Icon,
+  title,
+  desc,
+  brand,
+}: {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+  brand?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group flex items-center gap-3 rounded-xl border p-4 transition ${
+        brand
+          ? "border-[color:var(--mp-brand)]/40 bg-[color:var(--mp-brand)]/10 hover:bg-[color:var(--mp-brand)]/15"
+          : "border-border bg-[color:var(--mp-surface-2)] hover:border-[color:var(--mp-border-strong)]"
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+          brand
+            ? "bg-[color:var(--mp-brand)]/20 text-[color:var(--mp-brand)]"
+            : "bg-[color:var(--mp-surface-3)] text-[color:var(--mp-fg-muted)]"
+        }`}
+      >
+        <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+      </span>
+      <span className="min-w-0">
+        <span
+          className={`block text-sm font-semibold ${
+            brand ? "text-[color:var(--mp-brand)]" : "text-foreground"
+          }`}
+        >
+          {title}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {desc}
+        </span>
+      </span>
+    </Link>
   );
 }

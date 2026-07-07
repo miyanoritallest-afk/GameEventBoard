@@ -31,7 +31,7 @@ export function ApplyButton({
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <h2 className="text-sm font-semibold">このイベントに応募する</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         参加表明を送ります。主催者の承認後に参加が確定します。
