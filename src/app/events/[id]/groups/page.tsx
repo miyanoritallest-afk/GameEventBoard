@@ -101,34 +101,102 @@ export default async function EventGroupsPage({
     ? (unassignedRaw ?? []).map((t) => toBoardTeam(t as unknown as TeamJoin))
     : [];
 
+  // シード番号（表示用の派生値）: 全チームを平均スコア降順で並べた順位を各チームに付ける。
+  // スコアの高い順に #1, #2, ...。スコアが null のチームは末尾（seed なし）。
+  // 純粋な表示用（DB には保存しない）。Claude Design 案のシードチップ表示に使う。
+  {
+    const all = [...groups.flatMap((g) => g.teams), ...unassigned];
+    const scored = all
+      .filter((t) => t.score !== null)
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    scored.forEach((t, i) => {
+      t.seed = i + 1;
+    });
+  }
+
+  // 立場ラベル（観戦者には Organizer を出さない）。
+  const roleLabel = isOrganizer ? "Organizer" : "Viewer";
+  // ゲーム名（ヒーローのゲームチップ用）。
+  const gameName = (event.games as { name: string } | null)?.name ?? "-";
+  const totalTeams =
+    groups.reduce((n, g) => n + g.teams.length, 0) + unassigned.length;
+
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-[1600px] px-6 py-10">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">ブロック分け</h1>
-          <div className="flex items-center gap-4">
-            {/* 対戦表・順位表への導線は観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
-            <Link
-              href={`/events/${event.id}/matches`}
-              className="text-sm text-primary hover:underline"
-            >
-              対戦表・順位表へ →
-            </Link>
-            <Link
-              href={`/events/${event.id}/watch`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              観戦ビューへ
-            </Link>
-            <Link
-              href={`/events/${event.slug ?? event.id}`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              ← イベントに戻る
-            </Link>
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* パンくず（イベント一覧 → イベント名 → ブロック分け）。 */}
+        <nav className="text-sm text-muted-foreground">
+          <Link
+            href="/events"
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            イベント一覧
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <Link
+            href={`/events/${event.slug ?? event.id}`}
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            {event.title}
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">ブロック分け</span>
+        </nav>
+
+        {/* ヒーロー：モードラベル＋タイトル・イベント名、ゲームチップ、承認チーム数。 */}
+        <header className="mt-5 rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e2)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-[color:var(--mp-brand)]">
+                <span className="h-px w-6 bg-[color:var(--mp-brand)]" />
+                GROUP STAGE
+                <span className="text-[color:var(--mp-fg-subtle)]">·</span>
+                <span className="text-[color:var(--mp-fg-subtle)]">
+                  {roleLabel}
+                </span>
+              </p>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                ブロック分け
+              </h1>
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {event.title}
+              </p>
+            </div>
+
+            {/* 対戦表・観戦ビューへの導線（観戦者にも出す・フェーズB）。 */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5 text-sm">
+              <Link
+                href={`/events/${event.id}/matches`}
+                className="text-[color:var(--mp-brand)] underline-offset-2 hover:underline"
+              >
+                対戦表・順位表へ →
+              </Link>
+              <Link
+                href={`/events/${event.id}/watch`}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                観戦ビューへ →
+              </Link>
+            </div>
           </div>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
+
+          {/* ゲームチップ（赤ドット＋ゲーム名）＋ 承認チーム数。 */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full bg-[color:var(--mp-danger)]"
+              />
+              {gameName}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+              承認チーム{" "}
+              <span className="font-semibold text-foreground tabular-nums">
+                {totalTeams}
+              </span>
+            </span>
+          </div>
+        </header>
 
         <GroupsBoard
           eventId={event.id}
