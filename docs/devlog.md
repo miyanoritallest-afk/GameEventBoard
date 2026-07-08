@@ -7,6 +7,28 @@
 
 ---
 
+## 2026-07-08 — D&D 持ち上げゴーストをカーソル追従に（横長カードのズレ修正）
+
+チーム編成・ブロック分けの D&D で、**横長カードの右側を掴むとゴーストとカーソルが大きくズレる**問題を修正した。
+
+### 問題
+既定の `DragOverlay` は掴んだ元カードの左上を基準にゴーストを追従させる。メンバーカード／チームカードは横長（幅 ~282px）で、ゴーストは幅固定（230/236px）なので、カードの右側を掴むと**ゴーストがカーソルのはるか左に出る**（実測: カード右端付近を掴むとゴースト中心がカーソルから左に約137px、左端がカーソルから約253px ズレる）。直感的でない。
+
+### 修正
+- **`snapCenterToCursor` modifier を自前で実装**（`src/lib/dnd/snap-center-to-cursor.ts`）。掴んだ瞬間のポインタ座標（`activatorEvent`）とゴースト矩形（`draggingNodeRect`）から、ゴースト中心が掴んだ座標に一致するよう `transform` を補正する（`@dnd-kit/modifiers` の同名 modifier 相当・**依存追加なし**。`@dnd-kit/utilities` の `getEventCoordinates` を使用）。
+- 両画面の `DragOverlay` に `modifiers={[snapCenterToCursor]}` を渡す（teams-board.tsx / groups-board.tsx）。**`DndContext` ではなく `DragOverlay` にのみ**渡すのが要点。ゴーストの見た目位置だけを変え、衝突判定（`collisionDetection`=pointerWithin）には影響させない。
+
+### 実機確認（Playwright・DB変更なし）
+- 修正前: カード右端付近を掴む→カーソル(700,400)でゴースト中心が(563,398) ＝ X に -137px ズレ。
+- 修正後: 同操作でゴースト中心(701,398) ＝ **ズレ X+1 / Y-2px にほぼ解消**。
+- **ドロップ判定は無傷**を確認: 横長カードの右端を掴んでカーソルをドロップ先ゾーンに置くと、そのゾーンが正しく `isOver`（発光）になり、ゴースト中心もカーソルに一致。modifier がゴーストの見た目だけに効き、判定はカーソル座標のままであることを実証。ドロップはせず ESC でキャンセル（保存なし）。
+- `npm run check`（lint 0 error／typecheck OK／test 366 passed）。
+
+### 次にやること
+- [ ] 残り画面（対戦表・順位／決勝T／観戦ビュー）のデザイン刷新。
+
+---
+
 ## 2026-07-08 — デザイン刷新 第7画面: ブロック分け（予選）
 
 予選ブロック分けページ（主催者/応募者/観戦者）を Claude Design のデザイン言語（`.theme-matchpoint`）でリデザイン。チーム編成（第6画面）の資産（ヒーロー・D&Dゴースト・ドロップ発光・カードホバー）を流用。**判定・保存ロジック（dnd-kit の onDragEnd・assignTeam/unassignTeam/autoAssignGroups・楽観更新・3モード出し分け・対戦表生成後のロック）は一切触らず**、見た目・アニメ・表示用の派生値だけを刷新した。案HTMLは `docs/design-refs/groups-organizer.html`（デコード済み軽量版）に保管。

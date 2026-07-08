@@ -34,6 +34,7 @@ import {
   unassignTeam,
   autoAssignGroups,
 } from "./actions";
+import { snapCenterToCursor } from "@/lib/dnd/snap-center-to-cursor";
 
 /** ボード用のチーム表現（page.tsx で DB から整形して渡す）。 */
 export type BoardTeam = {
@@ -573,8 +574,13 @@ export function GroupsBoard({
         </div>
       </div>
 
-      {/* ドラッグ中のプレビュー（持ち上げゴースト）。幅固定・-2deg 回転・オレンジ淵。 */}
-      <DragOverlay dropAnimation={null} className="!cursor-grabbing">
+      {/* ドラッグ中のプレビュー（持ち上げゴースト）。幅固定・-2deg 回転・オレンジ淵。
+          snapCenterToCursor: 横長カードの右側を掴んでもゴースト中心が指の下に来るよう追従させる。 */}
+      <DragOverlay
+        dropAnimation={null}
+        className="!cursor-grabbing"
+        modifiers={[snapCenterToCursor]}
+      >
         {activeTeam ? (
           <DragGhost team={activeTeam} showScore={showScore} />
         ) : null}

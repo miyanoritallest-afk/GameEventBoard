@@ -21,6 +21,7 @@ import {
   swapCandidates,
   type MemberScore,
 } from "@/lib/services/team-score";
+import { snapCenterToCursor } from "@/lib/dnd/snap-center-to-cursor";
 import {
   createTeam,
   deleteTeam,
@@ -1034,8 +1035,13 @@ export function TeamsBoard({
       </div>
 
       {/* ドラッグ中のプレビュー（持ち上げゴースト）。Claude Design の .drag-ghost に合わせ、
-          幅を固定して横長化を防ぎ、-2deg 傾け・オレンジ淵・大きい影で「持ち上げている」感を出す。 */}
-      <DragOverlay dropAnimation={null} className="!cursor-grabbing">
+          幅を固定して横長化を防ぎ、-2deg 傾け・オレンジ淵・大きい影で「持ち上げている」感を出す。
+          snapCenterToCursor: 横長カードの右側を掴んでもゴースト中心が指の下に来るよう追従させる。 */}
+      <DragOverlay
+        dropAnimation={null}
+        className="!cursor-grabbing"
+        modifiers={[snapCenterToCursor]}
+      >
         {activeMember ? (
           <DragGhost member={activeMember} showScore={showScore} />
         ) : null}
