@@ -129,12 +129,17 @@ function RoleGlyph({ role, px }: { role: string; px: number }) {
   return null;
 }
 
-/** ロールのアイコンチップ（色付き丸背景＋アイコン）。未知ロールは何も出さない。 */
+/**
+ * ロールのアイコンチップ（色付き丸背景＋アイコン）。未知ロールは何も出さない。
+ * rank を渡すと右上に希望順の数字バッジ（①②③相当）を出す（Claude Design の .pref .rank）。
+ * 第1希望は背景を濃く（.18）、第2/3希望は小さく薄く（opacity）して優先度を一目で示す。
+ */
 function RoleIcon({
   role,
   size = 20,
   dim = false,
   title,
+  rank,
 }: {
   role: string;
   /** チップの一辺(px)。 */
@@ -142,6 +147,8 @@ function RoleIcon({
   /** 第2・3希望など控えめ表示（半透明）。 */
   dim?: boolean;
   title?: string;
+  /** 希望順（1始まり）。渡すと右上に数字バッジを出す。 */
+  rank?: number;
 }) {
   const color = ROLE_COLOR[role];
   if (!color) return null;
@@ -149,35 +156,45 @@ function RoleIcon({
     <span
       title={title ?? ROLE_LABEL[role] ?? role}
       aria-label={ROLE_LABEL[role] ?? role}
-      className="inline-flex shrink-0 items-center justify-center rounded-md"
+      className="relative inline-flex shrink-0 items-center justify-center rounded-md"
       style={{
         width: size,
         height: size,
         color,
-        backgroundColor: `color-mix(in oklab, ${color} ${dim ? 12 : 22}%, transparent)`,
-        opacity: dim ? 0.55 : 1,
+        // 第1希望（dim=false）は背景を濃く（.18）、第2/3（dim）は薄く（.12）。
+        backgroundColor: `color-mix(in oklab, ${color} ${dim ? 12 : 18}%, transparent)`,
+        opacity: dim ? 0.7 : 1,
       }}
     >
       <RoleGlyph role={role} px={Math.round(size * 0.62)} />
+      {rank !== undefined && (
+        <span
+          aria-hidden
+          className="absolute -right-1.5 -top-1.5 grid h-3.5 w-3.5 place-items-center rounded-full border border-[color:var(--mp-border-strong)] bg-[color:var(--mp-surface)] text-[8px] font-semibold leading-none text-[color:var(--mp-fg-muted)] tabular-nums"
+        >
+          {rank}
+        </span>
+      )}
     </span>
   );
 }
 
 /**
  * 希望ロールの表示（第1〜第3希望）。矢印区切りをやめ、アイコンで並べて優先度を視覚化する
- * （第1希望を大きく・第2/3希望を小さく薄く）。null/空は落とす。
+ * （第1希望を大きく濃く・第2/3希望を小さく薄く）＋右上に希望順の数字バッジ。null/空は落とす。
  */
 function PreferredRoles({ roles }: { roles: (string | null)[] }) {
   const list = roles.filter((r): r is string => !!r);
   if (list.length === 0) return null;
   return (
-    <span className="inline-flex items-center gap-1 align-middle">
+    <span className="inline-flex items-center gap-1.5 align-middle">
       {list.map((r, i) => (
         <RoleIcon
           key={`${r}-${i}`}
           role={r}
-          size={i === 0 ? 22 : 16}
+          size={i === 0 ? 26 : i === 1 ? 22 : 19}
           dim={i > 0}
+          rank={i + 1}
           title={`第${i + 1}希望: ${ROLE_LABEL[r] ?? r}`}
         />
       ))}
@@ -1016,10 +1033,11 @@ export function TeamsBoard({
         </div>
       </div>
 
-      {/* ドラッグ中のプレビュー。 */}
-      <DragOverlay>
+      {/* ドラッグ中のプレビュー（持ち上げゴースト）。Claude Design の .drag-ghost に合わせ、
+          幅を固定して横長化を防ぎ、-2deg 傾け・オレンジ淵・大きい影で「持ち上げている」感を出す。 */}
+      <DragOverlay dropAnimation={null} className="!cursor-grabbing">
         {activeMember ? (
-          <MemberCard member={activeMember} showScore={showScore} overlay />
+          <DragGhost member={activeMember} showScore={showScore} />
         ) : null}
       </DragOverlay>
     </DndContext>
@@ -1074,9 +1092,9 @@ function Pool({
   return (
     <div
       ref={setNodeRef}
-      className={`flex max-h-[calc(100vh-9rem)] flex-col rounded-2xl border p-4 transition lg:sticky lg:top-6 lg:self-start ${
+      className={`flex max-h-[calc(100vh-9rem)] flex-col rounded-2xl border p-4 transition-[box-shadow,background-color,border-color] duration-150 lg:sticky lg:top-6 lg:self-start ${
         isOver
-          ? "border-[color:var(--mp-brand)] bg-[color:var(--mp-brand)]/8 ring-1 ring-[color:var(--mp-brand)]/50"
+          ? "border-[color:var(--mp-brand)] bg-[color:var(--mp-brand)]/[0.06] shadow-[0_0_0_2px_var(--mp-brand),0_0_22px_-2px_color-mix(in_oklab,var(--mp-brand)_50%,transparent)]"
           : "border-border bg-card"
       }`}
     >
@@ -1439,11 +1457,11 @@ function Zone({
       {title && <p className="text-xs font-medium">{title}</p>}
       <div
         ref={setNodeRef}
-        className={`mt-1.5 space-y-2 rounded-lg border p-2 transition ${
+        className={`mt-1.5 space-y-2 rounded-lg border p-2 transition-[box-shadow,background-color,border-color] duration-150 ${
           compact ? "min-h-[3rem]" : ""
         } ${
           isOver
-            ? "border-[color:var(--mp-brand)] bg-[color:var(--mp-brand)]/8 ring-1 ring-[color:var(--mp-brand)]/50"
+            ? "border-[color:var(--mp-brand)] bg-[color:var(--mp-brand)]/[0.12] shadow-[0_0_0_2.5px_var(--mp-brand),0_0_30px_-2px_color-mix(in_oklab,var(--mp-brand)_70%,transparent)]"
             : "border-dashed border-border"
         }`}
       >
@@ -1530,13 +1548,15 @@ function MemberCard({
       {...(overlay || !canDrag ? {} : listeners)}
       {...(overlay || !canDrag ? {} : attributes)}
       onClick={onSelect}
-      className={`rounded-lg border px-3 py-2 ${
-        canDrag && !overlay ? "cursor-grab" : ""
+      className={`rounded-lg border px-3 py-2 transition-[border-color,background-color,box-shadow,transform] duration-150 ${
+        canDrag && !overlay
+          ? "cursor-grab hover:-translate-y-px hover:border-[color:var(--mp-border-strong)] hover:bg-[color:var(--mp-surface-3)] hover:shadow-[var(--mp-e1)]"
+          : ""
       } ${
         selected
           ? "border-primary bg-primary/15"
           : "border-border bg-muted/40"
-      } ${isDragging ? "opacity-40" : ""} ${overlay ? "shadow-lg" : ""}`}
+      } ${isDragging ? "opacity-35" : ""} ${overlay ? "shadow-lg" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">
@@ -1603,6 +1623,54 @@ function MemberCard({
         >
           代表にする
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 持ち上げゴースト（DragOverlay 内の表示）。Claude Design の .drag-ghost 準拠。
+ * カード全体を運ぶのではなく専用の小さなプレビューにすることで、
+ * ・幅を固定して横長化を防ぐ
+ * ・-2deg 傾け・オレンジ淵・大きい影で「掴んで浮かせている」触感を出す
+ * 名前・スコア・希望ロール（数字バッジ付き）だけを最小構成で見せる。
+ */
+function DragGhost({
+  member,
+  showScore,
+}: {
+  member: BoardMember;
+  showScore: boolean;
+}) {
+  const score = effective(member);
+  const roles = member.preferredRoles.filter((r): r is string => !!r);
+  return (
+    <div
+      className="w-[230px] rounded-lg border border-[color:var(--mp-brand)] bg-[color:var(--mp-surface-2)] px-3 py-2.5"
+      style={{
+        transform: "rotate(-2deg)",
+        boxShadow:
+          "0 18px 40px rgba(0,0,0,.6), 0 0 0 1px color-mix(in oklab, var(--mp-brand) 40%, transparent)",
+        opacity: 0.96,
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-semibold">
+          {member.displayName}
+        </span>
+        {showScore && (
+          <span className="shrink-0 text-sm font-semibold tabular-nums">
+            {score === null ? "—" : Math.round(score * 10) / 10}
+          </span>
+        )}
+      </div>
+      {roles.length > 0 && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <span className="text-[10px] text-[color:var(--mp-fg-subtle)]">
+            希望
+          </span>
+          <PreferredRoles roles={member.preferredRoles} />
+        </div>
       )}
     </div>
   );

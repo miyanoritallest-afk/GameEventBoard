@@ -7,6 +7,36 @@
 
 ---
 
+## 2026-07-08 — チーム編成 D&D 磨き込み ＋ ロール色が消えていた不具合の修正
+
+第6画面（チーム編成）の実機を見て、Claude Design 案との乖離が4点あることが判明したので磨き込んだ。あわせて **ロール識別色（青/赤/緑）が本番出力から丸ごと消えていた不具合**を発見・修正した（案では色付きだったが実装で白くなっていた）。参照用に **Claude Design の案HTML（デコード済み軽量版）を `docs/design-refs/` に保管**し、今後の乖離を構造的に防ぐ運用にした。
+
+### 根本原因（ロール色が白くなっていた不具合）
+- `--mp-tank`/`--mp-dps`/`--mp-support` は `globals.css` の `@layer components` 内 `.theme-matchpoint` に定義していたが、**Tailwind v4 のビルドがこの3変数だけを出力から tree-shake していた**（`getComputedStyle(.theme-matchpoint).getPropertyValue('--mp-tank')` が空文字になることを Playwright で確認）。
+- 原因は**参照経路の違い**: 他の `--mp-*` は `text-[color:var(--mp-brand)]` のような Tailwind クラス構文で使われ content スキャンに載る。一方ロール3色は `teams-board.tsx` の JS 文字列（`tank: "var(--mp-tank)"`）→ インライン `style` でしか使われず、スキャンで拾えず「未使用」と判断されて削られていた。
+- **修正**: この3変数を `@layer` の外の素のトップレベル `.theme-matchpoint {}` ルールで再宣言。素のルールは最適化対象外で必ず出力に残る。→ アイコンの実効色が青 `rgb(91,147,240)`／赤 `rgb(242,104,90)`／緑 `rgb(69,192,138)` になることを実機確認。
+
+### D&D 磨き込み（4点・Claude Design 案 `docs/design-refs/team-formation-organizer.html` 準拠）
+- **希望順の数字バッジ**（`RoleIcon`/`PreferredRoles`）: アイコン右上に希望順（1/2/3）の小さな丸バッジ（案の `.pref .rank`）。第1希望を大きく濃く・第2/3を小さく薄くする既存表現に「順番の明示」を追加。「左から順」が一目で分からない問題を解消。
+- **持ち上げゴースト**（新規 `DragGhost` ＋ `DragOverlay`）: カード全体を運ぶのをやめ、幅 230px 固定・`-2deg` 回転・オレンジ淵（`--mp-brand`）・大きい影＋グローの専用プレビューに（案の `.drag-ghost`）。ドラッグ中カードが横長化する問題を解消。
+- **ドロップ先の発光強化**（`Zone`/`Pool` の `isOver`）: ring だけ→**オレンジ2px枠＋外周グロー**（`box-shadow`）に。案の `.drop-target.can-drop/.hot` の「光る」感を dnd-kit の `isOver` に翻訳。
+- **カードのホバー発光**（`MemberCard`）: hover で枠を `--mp-border-strong` へ・背景を `--mp-surface-3` へ・影＋1px 浮き上げ（案の `.app-card:hover`）。
+
+### 決めたこと（なぜ）
+- **案HTMLをリポジトリに残す運用に変更**（`docs/design-refs/`）。案が手元に無いと乖離しても突き合わせる基準がなく、実際にロール色・希望順・D&Dアニメが抜け落ちた。Claude Design の standalone エクスポート（画像 data URI 込みで 7MB 超）は重いので、`__bundler/template` を JSON デコードした軽量版（CSS/JSX が読める 472KB）だけを置く。手順は `docs/design-refs/README.md`。
+- **ロジックは今回も無変更**。onDragEnd・割当・保存 Server Action・3モード出し分けは一切触らず、見た目・アニメ・CSS変数の出力のみ修正。
+
+### 実機確認（Playwright）
+- ロール色が青/赤/緑で解決されることを `getComputedStyle` で確認。
+- ドラッグ中の状態を pointer イベントで再現し、ゴーストが **幅230px・matrix(-2deg 相当)・オレンジ淵・影＋グロー**、ドロップ先（プール）が**オレンジ枠＋グローで発光**、掴んだ元カードが薄くなる（`opacity-35`）ことを確認。ESC でキャンセルし DB 変更なし。
+- `npm run check`（lint 0 error／typecheck OK／test 366 passed）。
+
+### 次にやること
+- [ ] 昇格作業（`.theme-matchpoint` → `:root/.dark`）の際、**tree-shake で消えていたロール3色を含め、全 `--mp-*` が本番出力に残ることを確認**する（サイト全体化で `@layer` 構成が変わるため再発チェック）。
+- [ ] 残り画面（対戦表・ブロック分け・決勝T・観戦ビュー）も、案HTMLを `docs/design-refs/` に保管してから着手する。
+
+---
+
 ## 2026-07-08 — デザイン刷新 第6画面: チーム編成（ロール色/アイコン・ヒーロー・スコアバー）
 
 チーム編成ページ（主催者/応募者/観戦者の3ビュー）を Claude Design のデザイン言語（`.theme-matchpoint`）でリデザイン。**判定ロジック（dnd-kit の onDragEnd・割当/満員/上限判定・保存 Server Action・3モード出し分け）は一切触らず**、見た目・レイアウト・ロール表記・D&D のフィードバックだけを刷新した。
