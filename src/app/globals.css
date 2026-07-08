@@ -166,6 +166,10 @@
     --mp-danger: #f65c4e;
     --mp-discord: #5865f2;
     --mp-discord-hover: #3b45b5;
+    /* OW2 の3ロール識別色（チーム編成のロールアイコン・希望ロール・フィルタで共通） */
+    --mp-tank: #5b93f0;
+    --mp-dps: #f2685a;
+    --mp-support: #45c08a;
     --mp-e1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --mp-e2: 0 4px 14px rgba(0, 0, 0, 0.45);
     --mp-e3: 0 12px 32px rgba(0, 0, 0, 0.5);
