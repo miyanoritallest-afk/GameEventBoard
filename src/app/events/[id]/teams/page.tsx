@@ -9,6 +9,7 @@ import {
 } from "@/lib/repositories/teams";
 import { canViewEvent } from "@/lib/services/event-status";
 import {
+  eventFormatLabel,
   hasGroupStage,
   tournamentStageLabel,
 } from "@/lib/services/event-format";
@@ -114,48 +115,131 @@ export default async function EventTeamsPage({
       ? (unassignedRaw ?? []).map((reg) => toBoardMember(reg as unknown as RegJoin, {}))
       : [];
 
+  // ヘッダーのメタ表示用の派生値（ゲーム名・チーム人数・立場ラベル）。
+  const gameName = (event.games as { name: string } | null)?.name ?? "-";
+  const teamSize = (event.games as { team_size: number } | null)?.team_size ?? 5;
+  // 立場に応じたモード名（英字ラベル）。観戦者には "Organizer" を出さない。
+  const roleLabel = isOrganizer
+    ? "Organizer"
+    : myRegistration !== null
+      ? "Applicant"
+      : "Spectator";
+  // 編成/参加チーム（観戦者は純粋閲覧なので「参加チーム」）。
+  const pageTitle =
+    isOrganizer || myRegistration !== null ? "チーム編成" : "参加チーム";
+
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
       {/* 編成画面は判断材料を横に並べるため広い幅を取る（他ページの max-w-3xl/6xl より広い）。 */}
-      <div className="mx-auto max-w-[1600px] px-6 py-10">
-        <div className="flex items-center justify-between">
-          {/* 観戦者には「編成」でなく「参加チーム」と見せる（純粋閲覧）。 */}
-          <h1 className="text-2xl font-bold">
-            {isOrganizer || myRegistration !== null ? "チーム編成" : "参加チーム"}
-          </h1>
-          <div className="flex items-center gap-4">
-            {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。
-                予選を持つ形式はブロック分けへ、トーナメントのみは決勝Tへ誘導する（PR-2）。 */}
-            {hasGroupStage(event.format) ? (
+      <div className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* パンくず（イベント一覧 → イベント名 → チーム編成）。リンクはブランド色でホバー。 */}
+        <nav className="text-sm text-muted-foreground">
+          <Link
+            href="/events"
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            イベント一覧
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <Link
+            href={`/events/${event.slug ?? event.id}`}
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            {event.title}
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">{pageTitle}</span>
+        </nav>
+
+        {/* ヒーロー：モードラベル＋タイトル・イベント名、ゲームチップ、編成メタ（形式/上限/定員）。 */}
+        <header className="mt-5 rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e2)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              {/* モードラベル: Team Builder · <立場>。観戦者には Organizer を出さない。 */}
+              <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-[color:var(--mp-brand)]">
+                <span className="h-px w-6 bg-[color:var(--mp-brand)]" />
+                TEAM BUILDER
+                <span className="text-[color:var(--mp-fg-subtle)]">·</span>
+                <span className="text-[color:var(--mp-fg-subtle)]">
+                  {roleLabel}
+                </span>
+              </p>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                {pageTitle}
+              </h1>
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {event.title}
+              </p>
+            </div>
+
+            {/* 本戦・観戦ビューへの導線（観戦者にも出す・フェーズB）。 */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5 text-sm">
+              {hasGroupStage(event.format) ? (
+                <Link
+                  href={`/events/${event.id}/groups`}
+                  className="text-[color:var(--mp-brand)] underline-offset-2 hover:underline"
+                >
+                  ブロック分けへ →
+                </Link>
+              ) : (
+                <Link
+                  href={`/events/${event.id}/tournament`}
+                  className="text-[color:var(--mp-brand)] underline-offset-2 hover:underline"
+                >
+                  {tournamentStageLabel(event.format)}へ →
+                </Link>
+              )}
               <Link
-                href={`/events/${event.id}/groups`}
-                className="text-sm text-primary hover:underline"
+                href={`/events/${event.id}/watch`}
+                className="text-muted-foreground hover:text-foreground"
               >
-                ブロック分けへ →
+                観戦ビューへ →
               </Link>
-            ) : (
-              <Link
-                href={`/events/${event.id}/tournament`}
-                className="text-sm text-primary hover:underline"
-              >
-                {tournamentStageLabel(event.format)}へ →
-              </Link>
-            )}
-            <Link
-              href={`/events/${event.id}/watch`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              観戦ビューへ
-            </Link>
-            <Link
-              href={`/events/${event.slug ?? event.id}`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              ← イベントに戻る
-            </Link>
+            </div>
           </div>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
+
+          {/* ゲームチップ（赤ドット＋ゲーム名）。他画面の EventCard と同じ体系に寄せる。 */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full bg-[color:var(--mp-danger)]"
+              />
+              {gameName}
+            </span>
+          </div>
+
+          {/* 編成メタ: 形式（＋人数）/ 平均スコア上限 / 定員。等幅で判断材料を並べる。 */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <span>
+              形式{" "}
+              <span className="text-foreground">
+                {eventFormatLabel(event.format)}
+              </span>{" "}
+              <span className="tabular-nums">
+                （{teamSize}v{teamSize}）
+              </span>
+            </span>
+            {event.require_score && (
+              <span>
+                平均スコア上限{" "}
+                <span className="tabular-nums text-foreground">
+                  {event.team_score_cap === null
+                    ? "なし"
+                    : event.team_score_cap.toLocaleString("ja-JP")}
+                </span>
+              </span>
+            )}
+            <span>
+              定員{" "}
+              <span className="tabular-nums text-foreground">
+                {event.capacity === null
+                  ? "未設定"
+                  : `${event.capacity.toLocaleString("ja-JP")} チーム`}
+              </span>
+            </span>
+          </div>
+        </header>
 
         <TeamsBoard
           eventId={event.id}
@@ -166,9 +250,7 @@ export default async function EventTeamsPage({
           myRegistrationId={myRegistration?.id ?? null}
           showScore={event.require_score}
           roleSwapAllowed={event.role_swap_allowed}
-          teamSize={
-            (event.games as { team_size: number } | null)?.team_size ?? 5
-          }
+          teamSize={teamSize}
           teamScoreCap={event.team_score_cap}
           initialTeams={teams}
           initialUnassigned={unassigned}

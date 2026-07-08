@@ -74,6 +74,117 @@ const ROLE_LABEL: Record<string, string> = {
   support: "サポート",
 };
 
+/**
+ * OW2 の3ロールのアイコンと識別色（CSS 変数）。希望ロール・担当ロール・フィルタで共通利用。
+ * 色は globals.css の .theme-matchpoint（--mp-tank/dps/support）。
+ * アイコンは OW2 公式ロールマーク準拠のシンプルなラインSVG（タンク=盾・DPS=照準・サポート=十字）。
+ * Claude Design の生成物に合わせ、ゲーム内アイコンから一目でロールを連想できるようにする。
+ */
+const ROLE_COLOR: Record<string, string> = {
+  tank: "var(--mp-tank)",
+  dps: "var(--mp-dps)",
+  support: "var(--mp-support)",
+};
+
+/** OW2 ロールマーク準拠のパス（stroke で描く。fill は none）。 */
+function RoleGlyph({ role, px }: { role: string; px: number }) {
+  const common = {
+    viewBox: "0 0 24 24",
+    width: px,
+    height: px,
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  if (role === "tank") {
+    // 盾のシルエット。
+    return (
+      <svg {...common} aria-hidden>
+        <path d="M12 3l7 2.6v5.2c0 4.3-3 7.2-7 8.7-4-1.5-7-4.4-7-8.7V5.6z" />
+      </svg>
+    );
+  }
+  if (role === "dps") {
+    // 照準（円＋十字）。
+    return (
+      <svg {...common} aria-hidden>
+        <circle cx="12" cy="12" r="6.5" />
+        <line x1="12" y1="1.5" x2="12" y2="5" />
+        <line x1="12" y1="19" x2="12" y2="22.5" />
+        <line x1="1.5" y1="12" x2="5" y2="12" />
+        <line x1="19" y1="12" x2="22.5" y2="12" />
+      </svg>
+    );
+  }
+  if (role === "support") {
+    // 十字（プラス）。
+    return (
+      <svg {...common} aria-hidden>
+        <path d="M12 5.5v13M5.5 12h13" />
+      </svg>
+    );
+  }
+  return null;
+}
+
+/** ロールのアイコンチップ（色付き丸背景＋アイコン）。未知ロールは何も出さない。 */
+function RoleIcon({
+  role,
+  size = 20,
+  dim = false,
+  title,
+}: {
+  role: string;
+  /** チップの一辺(px)。 */
+  size?: number;
+  /** 第2・3希望など控えめ表示（半透明）。 */
+  dim?: boolean;
+  title?: string;
+}) {
+  const color = ROLE_COLOR[role];
+  if (!color) return null;
+  return (
+    <span
+      title={title ?? ROLE_LABEL[role] ?? role}
+      aria-label={ROLE_LABEL[role] ?? role}
+      className="inline-flex shrink-0 items-center justify-center rounded-md"
+      style={{
+        width: size,
+        height: size,
+        color,
+        backgroundColor: `color-mix(in oklab, ${color} ${dim ? 12 : 22}%, transparent)`,
+        opacity: dim ? 0.55 : 1,
+      }}
+    >
+      <RoleGlyph role={role} px={Math.round(size * 0.62)} />
+    </span>
+  );
+}
+
+/**
+ * 希望ロールの表示（第1〜第3希望）。矢印区切りをやめ、アイコンで並べて優先度を視覚化する
+ * （第1希望を大きく・第2/3希望を小さく薄く）。null/空は落とす。
+ */
+function PreferredRoles({ roles }: { roles: (string | null)[] }) {
+  const list = roles.filter((r): r is string => !!r);
+  if (list.length === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      {list.map((r, i) => (
+        <RoleIcon
+          key={`${r}-${i}`}
+          role={r}
+          size={i === 0 ? 22 : 16}
+          dim={i > 0}
+          title={`第${i + 1}希望: ${ROLE_LABEL[r] ?? r}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 const POOL_ID = "pool"; // 未割当プールの droppable id
 
 /**
@@ -501,43 +612,6 @@ export function TeamsBoard({
     });
   }
 
-  /**
-   * 「チームへ送る」ボタン（⑫）。D&D の代わりにクリックで割当する。
-   * 割当先ロールは出場ゾーン基準＝メンバーの第1希望（DnD の既定と同じ）。
-   * 試算モードは SIM 枠への追加のみ（保存しない）。実モードは assignMember を呼ぶ。
-   */
-  function handleAssignToTeam(registrationId: string, teamId: string) {
-    const member = findMember(registrationId);
-    if (!member) return;
-    const role = member.preferredRoles[0] ?? member.role ?? "tank";
-    setError(null);
-    const prevTeams = teams;
-    const prevUnassigned = unassigned;
-
-    // 全所在から外して対象チームの出場へ入れる（楽観）。
-    const detachedTeams = teams.map((t) => ({
-      ...t,
-      members: t.members.filter((m) => m.registrationId !== registrationId),
-    }));
-    setUnassigned(unassigned.filter((m) => m.registrationId !== registrationId));
-    setTeams(
-      detachedTeams.map((t) =>
-        t.id === teamId
-          ? {
-              ...t,
-              members: [...t.members, { ...member, role, position: "regular" }],
-            }
-          : t,
-      ),
-    );
-    if (readOnly) return; // 試算モードは保存しない（SIM 枠への追加のみ）。
-    startTransition(async () => {
-      const r = await assignMember({ registrationId, teamId, role });
-      if (r.error) rollback(prevTeams, prevUnassigned, r.error);
-      else flashSaved();
-    });
-  }
-
   /** 交代実行: out（レギュラー）と in（リザーブ）の position を入れ替える。 */
   function handleSwap(teamId: string, outId: string, inId: string) {
     setError(null);
@@ -734,8 +808,8 @@ export function TeamsBoard({
 
       {/* 主催者: self 応募の承認待ちセクション（編成画面上部）。 */}
       {isOrganizer && pendingTeams.length > 0 && (
-        <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
-          <h2 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+        <div className="mt-4 rounded-2xl border border-[color:var(--mp-warning)]/40 bg-[color:var(--mp-warning)]/5 p-4">
+          <h2 className="text-sm font-semibold text-[color:var(--mp-warning)]">
             承認待ちのチーム応募（{pendingTeams.length}）
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -758,7 +832,7 @@ export function TeamsBoard({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-semibold">
-                        <span className="mr-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                        <span className="mr-1.5 rounded bg-[color:var(--mp-warning)]/20 px-1.5 py-0.5 text-xs font-medium text-[color:var(--mp-warning)] tabular-nums">
                           #{pIndex + 1}
                         </span>
                         {team.name}
@@ -827,11 +901,6 @@ export function TeamsBoard({
             showScore={showScore}
             sort={poolSort}
             onSortChange={setPoolSort}
-            // 「チームへ送る」先候補。試算モードは SIM 枠のみ・実モードは全チーム。
-            assignTargets={teams
-              .filter((t) => (readOnly ? t.id === SIM_TEAM_ID : true))
-              .map((t) => ({ id: t.id, name: t.name }))}
-            onAssign={handleAssignToTeam}
           />
         )}
 
@@ -961,14 +1030,14 @@ export function TeamsBoard({
 function StatusBadge({ status }: { status: TeamStatus }) {
   if (status === "approved") {
     return (
-      <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary align-middle">
-        承認済み
+      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[color:var(--mp-success)]/15 px-2 py-0.5 text-xs font-medium text-[color:var(--mp-success)] align-middle">
+        ✓ 承認済み
       </span>
     );
   }
   if (status === "pending") {
     return (
-      <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400 align-middle">
+      <span className="ml-2 rounded-full bg-[color:var(--mp-warning)]/15 px-2 py-0.5 text-xs font-medium text-[color:var(--mp-warning)] align-middle">
         承認待ち
       </span>
     );
@@ -982,8 +1051,9 @@ function StatusBadge({ status }: { status: TeamStatus }) {
 
 /**
  * 未割当プール（droppable）。
- * 応募者が多いと縦に長くなるため、並び替え（⑫）と「チームへ送る」ボタンで
- * 探す/割り当てる負担を下げる。members は表示用に整形済み（応募順 or 絞込/ソート後）。
+ * 応募者が多いと縦に長くなるため、並び替え（⑫）で探す負担を下げ、リストは欄内スクロール
+ * にする（見出し・並び替えは固定、カード群だけスクロール）。割当は D&D に統一する。
+ * members は表示用に整形済み（応募順 or 絞込/ソート後）。
  */
 function Pool({
   members,
@@ -991,8 +1061,6 @@ function Pool({
   showScore,
   sort,
   onSortChange,
-  assignTargets,
-  onAssign,
 }: {
   members: BoardMember[];
   /** 絞り込み前の未割当総数（見出し表示用）。 */
@@ -1000,17 +1068,16 @@ function Pool({
   showScore: boolean;
   sort: PoolSort;
   onSortChange: (s: PoolSort) => void;
-  /** 「チームへ送る」先候補（空なら送るボタンを出さない）。 */
-  assignTargets: { id: string; name: string }[];
-  onAssign: (registrationId: string, teamId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: POOL_ID });
   const filtered = members.length !== totalCount;
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl border p-4 ${
-        isOver ? "border-primary bg-primary/5" : "border-border bg-card"
+      className={`flex max-h-[calc(100vh-9rem)] flex-col rounded-2xl border p-4 transition lg:sticky lg:top-6 lg:self-start ${
+        isOver
+          ? "border-[color:var(--mp-brand)] bg-[color:var(--mp-brand)]/8 ring-1 ring-[color:var(--mp-brand)]/50"
+          : "border-border bg-card"
       }`}
     >
       <h2 className="text-sm font-semibold text-muted-foreground">
@@ -1033,7 +1100,8 @@ function Pool({
         </select>
       </label>
 
-      <div className="mt-3 space-y-2">
+      {/* 応募者が増えても欄内スクロールで対応（Claude Design 案）。スクロール→チームへ D&D。 */}
+      <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {members.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             {filtered
@@ -1042,13 +1110,7 @@ function Pool({
           </p>
         ) : (
           members.map((m) => (
-            <MemberCard
-              key={m.registrationId}
-              member={m}
-              showScore={showScore}
-              assignTargets={assignTargets}
-              onAssign={(teamId) => onAssign(m.registrationId, teamId)}
-            />
+            <MemberCard key={m.registrationId} member={m} showScore={showScore} />
           ))
         )}
       </div>
@@ -1115,36 +1177,58 @@ function TeamCard({
   }, [team.members, selectedReserve, teamScoreCap]);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-[var(--mp-e1)]">
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="font-semibold">
             {team.name}
             {showStatus && <StatusBadge status={team.status} />}
           </h3>
           {showScore && (
-            <p className="mt-0.5 text-xs">
-              平均{" "}
-              <span
-                className={`font-semibold tabular-nums ${
-                  overCap ? "text-destructive" : "text-foreground"
-                }`}
-              >
-                {score === null ? "—" : score.toFixed(1)}
-              </span>
-              {teamScoreCap !== null && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  / 上限 {teamScoreCap.toFixed(1)}{" "}
-                  {score !== null &&
-                    (overCap ? (
-                      <span className="text-destructive">⚠ 超過</span>
-                    ) : (
-                      <span className="text-primary">✓ 上限内</span>
-                    ))}
+            <div className="mt-1.5">
+              <div className="flex items-baseline gap-1.5 text-xs">
+                <span className="text-[color:var(--mp-fg-subtle)]">平均</span>
+                <span
+                  className={`text-sm font-semibold tabular-nums ${
+                    overCap
+                      ? "text-[color:var(--mp-danger)]"
+                      : "text-foreground"
+                  }`}
+                >
+                  {score === null ? "—" : score.toFixed(1)}
                 </span>
+                {teamScoreCap !== null && (
+                  <span className="text-[color:var(--mp-fg-subtle)] tabular-nums">
+                    / 上限 {teamScoreCap.toFixed(1)}
+                  </span>
+                )}
+                {teamScoreCap !== null &&
+                  score !== null &&
+                  (overCap ? (
+                    <span className="text-[color:var(--mp-danger)]">
+                      ⚠ 超過
+                    </span>
+                  ) : (
+                    <span className="text-[color:var(--mp-success)]">
+                      ✓ 上限内
+                    </span>
+                  ))}
+              </div>
+              {/* スコアバー: 上限に対する充填率を可視化（上限ありのときのみ）。 */}
+              {teamScoreCap !== null && teamScoreCap > 0 && (
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--mp-surface-3)]">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, ((score ?? 0) / teamScoreCap) * 100)}%`,
+                      backgroundColor: overCap
+                        ? "var(--mp-danger)"
+                        : "var(--mp-success)",
+                    }}
+                  />
+                </div>
               )}
-            </p>
+            </div>
           )}
         </div>
         {!readOnly && (
@@ -1152,7 +1236,7 @@ function TeamCard({
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={onDelete}
-            className="text-xs text-muted-foreground hover:text-destructive"
+            className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-[color:var(--mp-danger)]/10 hover:text-[color:var(--mp-danger)]"
           >
             チーム削除
           </button>
@@ -1192,7 +1276,13 @@ function TeamCard({
                 position="regular"
                 role={role}
                 title={
-                  <span className="text-primary/80">{ROLE_LABEL[role]}</span>
+                  <span
+                    className="inline-flex items-center gap-1.5 font-semibold"
+                    style={{ color: ROLE_COLOR[role] }}
+                  >
+                    <RoleIcon role={role} size={18} />
+                    {ROLE_LABEL[role]}
+                  </span>
                 }
                 members={regulars.filter((m) => m.role === role)}
                 readOnly={readOnly}
@@ -1349,10 +1439,12 @@ function Zone({
       {title && <p className="text-xs font-medium">{title}</p>}
       <div
         ref={setNodeRef}
-        className={`mt-1.5 space-y-2 rounded-md border p-2 ${
+        className={`mt-1.5 space-y-2 rounded-lg border p-2 transition ${
           compact ? "min-h-[3rem]" : ""
         } ${
-          isOver ? "border-primary bg-primary/5" : "border-dashed border-border"
+          isOver
+            ? "border-[color:var(--mp-brand)] bg-[color:var(--mp-brand)]/8 ring-1 ring-[color:var(--mp-brand)]/50"
+            : "border-dashed border-border"
         }`}
       >
         {members.length === 0 ? (
@@ -1403,8 +1495,6 @@ function MemberCard({
   selected = false,
   onSelect,
   draggable: canDrag = true,
-  assignTargets = [],
-  onAssign,
   isCaptain = false,
   onSetCaptain,
 }: {
@@ -1416,9 +1506,6 @@ function MemberCard({
   onSelect?: () => void;
   /** ドラッグ可能か。試算モードの他人の実チームは false（カード固定）。 */
   draggable?: boolean;
-  /** 「チームへ送る」先（プールのカードのみ。空なら出さない・⑫）。 */
-  assignTargets?: { id: string; name: string }[];
-  onAssign?: (teamId: string) => void;
   /** このメンバーが代表（captain）か。代表バッジ表示用。 */
   isCaptain?: boolean;
   /** 代表に指名する（主催者・実チームのみ。未指定なら代表操作を出さない）。 */
@@ -1494,8 +1581,11 @@ function MemberCard({
         </div>
       </div>
       {roles.length > 0 && (
-        <div className="mt-0.5 text-xs text-muted-foreground">
-          希望 {roles.map((r) => ROLE_LABEL[r] ?? r).join("→")}
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="text-[10px] text-[color:var(--mp-fg-subtle)]">
+            希望
+          </span>
+          <PreferredRoles roles={member.preferredRoles} />
         </div>
       )}
 
@@ -1513,30 +1603,6 @@ function MemberCard({
         >
           代表にする
         </button>
-      )}
-
-      {/* 「チームへ送る」セレクト（プールのカードのみ）。クリック割当で D&D を不要にする（⑫）。
-          pointer-down 伝播を止めて誤ドラッグを防ぐ。選ぶと割当して選択をリセット。 */}
-      {!overlay && onAssign && assignTargets.length > 0 && (
-        <select
-          value=""
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            const teamId = e.target.value;
-            if (teamId) onAssign(teamId);
-            e.currentTarget.value = "";
-          }}
-          aria-label={`${member.displayName} をチームへ送る`}
-          className="mt-1.5 w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
-        >
-          <option value="">▾ チームへ送る…</option>
-          {assignTargets.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
       )}
     </div>
   );
