@@ -138,38 +138,43 @@ export default async function EventTournamentPage({
     stream_url?: string | null;
     streamer_name?: string | null;
   };
-  const matches: BoardBracketMatch[] = ((tournamentRaw ?? []) as TMatchRow[]).map(
-    (m) => {
-      const result = resultByMatch.get(m.id) ?? null;
-      // 結果入力できるのは「主催者 or この試合のどちらかのチームの代表」。
-      const canReport =
-        isOrganizer ||
-        (m.team_a_id != null && captainTeamIdSet.has(m.team_a_id)) ||
-        (m.team_b_id != null && captainTeamIdSet.has(m.team_b_id));
-      return {
-        id: m.id,
-        round: m.round ?? 1,
-        position: m.bracket_position ?? 0,
-        teamAId: m.team_a_id,
-        teamBId: m.team_b_id,
-        teamAName: m.team_a_id ? teamNameById.get(m.team_a_id) ?? null : null,
-        teamBName: m.team_b_id ? teamNameById.get(m.team_b_id) ?? null : null,
-        teamAScore: result?.team_a_score ?? null,
-        teamBScore: result?.team_b_score ?? null,
-        winnerTeamId: result?.winner_team_id ?? null,
-        potgA: result?.potg_a ?? 0,
-        potgB: result?.potg_b ?? 0,
-        bestOf: m.best_of,
-        hasResult: result !== null,
-        canReport,
-        replayCodes: result?.replay_codes ?? [],
-        scheduledAtLocal: utcIsoToJstLocal(m.scheduled_at ?? null),
-        streamUrl: m.stream_url ?? null,
-        streamerName: m.streamer_name ?? null,
-        isOrganizer,
-      };
-    },
-  );
+  const tMatchRows = (tournamentRaw ?? []) as TMatchRow[];
+  // 最終ラウンド（3位決定戦の判定に使う）。3位決定戦は最終round・position=1 に置かれる。
+  const maxRound = tMatchRows.reduce((n, m) => Math.max(n, m.round ?? 1), 0);
+  const matches: BoardBracketMatch[] = tMatchRows.map((m) => {
+    const result = resultByMatch.get(m.id) ?? null;
+    const round = m.round ?? 1;
+    const position = m.bracket_position ?? 0;
+    // 結果入力できるのは「主催者 or この試合のどちらかのチームの代表」。
+    const canReport =
+      isOrganizer ||
+      (m.team_a_id != null && captainTeamIdSet.has(m.team_a_id)) ||
+      (m.team_b_id != null && captainTeamIdSet.has(m.team_b_id));
+    return {
+      id: m.id,
+      round,
+      position,
+      teamAId: m.team_a_id,
+      teamBId: m.team_b_id,
+      teamAName: m.team_a_id ? teamNameById.get(m.team_a_id) ?? null : null,
+      teamBName: m.team_b_id ? teamNameById.get(m.team_b_id) ?? null : null,
+      teamAScore: result?.team_a_score ?? null,
+      teamBScore: result?.team_b_score ?? null,
+      winnerTeamId: result?.winner_team_id ?? null,
+      potgA: result?.potg_a ?? 0,
+      potgB: result?.potg_b ?? 0,
+      bestOf: m.best_of,
+      hasResult: result !== null,
+      canReport,
+      replayCodes: result?.replay_codes ?? [],
+      scheduledAtLocal: utcIsoToJstLocal(m.scheduled_at ?? null),
+      streamUrl: m.stream_url ?? null,
+      streamerName: m.streamer_name ?? null,
+      isOrganizer,
+      // 3位決定戦（最終ラウンド・position=1）。ブラケット本線から分離して扱う。
+      isThirdPlace: maxRound >= 2 && round === maxRound && position === 1,
+    };
+  });
 
   // 生成前のシード順プレビュー（主催者向け補助）。形式で抽出方法が変わる（PR-3）。
   // - 予選あり: 現在の進出数設定で各ブロック上位N を抽出。

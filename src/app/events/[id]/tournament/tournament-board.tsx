@@ -47,6 +47,7 @@ import {
   mapsPlayed,
 } from "@/lib/services/match-result";
 import { formatLocalInputForDisplay } from "@/lib/datetime-local";
+import { ScoreStepper } from "../_components/score-stepper";
 
 type Podium = {
   champion: string | null;
@@ -98,6 +99,8 @@ export type BoardBracketMatch = {
   streamerName: string | null;
   /** 閲覧者が主催者か（配信編集の出し分け）。 */
   isOrganizer: boolean;
+  /** 3位決定戦（最終ラウンド・position=1）か。ブラケット本線から分離して扱う。 */
+  isThirdPlace: boolean;
 };
 
 type PreviewSeed = { seed: number; teamId: string; teamName: string };
@@ -114,9 +117,11 @@ function roundLabel(round: number, totalRounds: number): string {
 /** 試合の状態を求める（BYE / 勝者待ち / 対戦カード / 終了）。 */
 type MatchState = "bye" | "locked" | "ready" | "done";
 function matchState(m: BoardBracketMatch): MatchState {
-  // 1回戦で片側だけ空 = BYE（不戦勝・前試合待ちの「未定」とは区別）。
-  if (m.round === 1 && (m.teamAId === null) !== (m.teamBId === null)) return "bye";
+  // 結果ありは常に「終了」（BYE より優先）。チーム削除で片側 null になった実試合を
+  // 誤って BYE 扱いにしないため、この判定を先に行う。
   if (m.hasResult) return "done";
+  // 結果なしの1回戦で片側だけ空 = BYE（不戦勝・前試合待ちの「未定」とは区別）。
+  if (m.round === 1 && (m.teamAId === null) !== (m.teamBId === null)) return "bye";
   if (m.teamAId !== null && m.teamBId !== null) return "ready";
   return "locked";
 }
@@ -173,20 +178,17 @@ export function TournamentBoard({
   // 生成可否（PR-3）。予選を持つ形式は順位機能必須、トーナメントのみは順位機能不要。
   const canGenerate = groupStage ? rankingEnabled : true;
 
-  // ラウンドごとに束ねる（position 昇順）。3位決定戦（最終round・position1）は本線から分離。
+  // ラウンドごとに束ねる（position 昇順）。3位決定戦は本線から分離する（isThirdPlace で判定）。
   const rounds: BoardBracketMatch[][] = [];
   for (let r = 1; r <= totalRounds; r++) {
     rounds.push(
       initialMatches
-        .filter((m) => m.round === r && !(r === totalRounds && m.position === 1))
+        .filter((m) => m.round === r && !m.isThirdPlace)
         .sort((a, b) => a.position - b.position),
     );
   }
   const finalMatch = rounds[totalRounds - 1]?.[0] ?? null;
-  const thirdPlaceMatch =
-    initialMatches.find(
-      (m) => m.round === totalRounds && m.position === 1,
-    ) ?? null;
+  const thirdPlaceMatch = initialMatches.find((m) => m.isThirdPlace) ?? null;
 
   // 開いているモーダルの試合を最新データから引き直す（保存後や他者更新を反映）。
   const openMatch =
@@ -321,9 +323,12 @@ export function TournamentBoard({
         </>
       )}
 
-      {/* 試合モーダル（カードクリックで開く）。最新データ（openMatch）を渡す。 */}
+      {/* 試合モーダル（カードクリックで開く）。最新データ（openMatch）を渡す。
+          key にサーバー確定値を含め、保存や他者更新でデータが変わったら再マウントして
+          編集フィールドのシード（useState 初期値）を最新化する。 */}
       {openId && openMatch && (
         <MatchModal
+          key={`${openMatch.id}:${openMatch.teamAScore}:${openMatch.teamBScore}:${openMatch.potgA}:${openMatch.potgB}:${openMatch.scheduledAtLocal}:${openMatch.streamUrl ?? ""}:${openMatch.streamerName ?? ""}`}
           match={openMatch}
           totalRounds={totalRounds}
           readOnly={readOnly}
@@ -753,10 +758,11 @@ function slotState(
   state: MatchState,
 ): SlotVisual {
   const teamId = slot === "a" ? match.teamAId : match.teamBId;
+  // 結果ありは勝敗色を優先（チーム削除で teamId が null でも winnerTeamId で判定）。
+  if (state === "done") return match.winnerTeamId === teamId ? "win" : "lose";
   if (state === "bye" && teamId === null) return "bye";
   if (teamId === null) return "tbd";
-  if (state !== "done") return "neutral";
-  return match.winnerTeamId === teamId ? "win" : "lose";
+  return "neutral";
 }
 
 /** スコア付きスロット。勝者は強調、未確定は「未定」、BYE は「BYE / 不戦勝」。 */
@@ -1056,8 +1062,8 @@ function OrganizerToolbar({
   );
 }
 
-/** トーナメントで設定できる BO（奇数のみ・引分なし）。 */
-const ODD_BO_OPTIONS = [1, 3, 5, 7];
+/** トーナメントで設定できる BO（奇数のみ・引分なし・groupBestOf は最大15）。 */
+const ODD_BO_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15];
 
 /** ラウンド別 BO 編集の1行（ラベル＋BOピル＋locked注記）。 */
 function RoundBoRow({
@@ -1164,8 +1170,7 @@ function MatchModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const isThirdPlace = match.round === totalRounds && match.position === 1;
-  const roundName = isThirdPlace
+  const roundName = match.isThirdPlace
     ? "3位決定戦"
     : roundLabel(match.round, totalRounds);
 
@@ -1248,14 +1253,24 @@ function MatchModal({
   }
 
   function handleSchedule() {
+    setValidationError(null);
     startTransition(async () => {
-      await updateSchedule({ matchId: match.id, scheduledAtLocal: scheduledAt });
+      const res = await updateSchedule({ matchId: match.id, scheduledAtLocal: scheduledAt });
+      if (res.error) {
+        setValidationError(res.error);
+        return;
+      }
       router.refresh();
     });
   }
   function handleStream() {
+    setValidationError(null);
     startTransition(async () => {
-      await updateStream({ matchId: match.id, streamUrl, streamerName });
+      const res = await updateStream({ matchId: match.id, streamUrl, streamerName });
+      if (res.error) {
+        setValidationError(res.error);
+        return;
+      }
       router.refresh();
     });
   }
@@ -1528,52 +1543,6 @@ function MatchModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-/** スコア/POTG のステッパー（±ボタン・editable=false は数値のみ）。 */
-function ScoreStepper({
-  label,
-  value,
-  onChange,
-  editable,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  editable: boolean;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <span className="max-w-[150px] truncate font-sans text-xs font-semibold text-muted-foreground">
-        {label}
-      </span>
-      <div className="flex items-center gap-2">
-        {editable && (
-          <button
-            type="button"
-            aria-label={`${label} を減らす`}
-            onClick={() => onChange(value - 1)}
-            className="grid h-[38px] w-8 place-items-center rounded-md border border-[color:var(--mp-border-strong)] bg-[color:var(--mp-surface-3)] text-[17px] leading-none transition hover:border-[color:var(--mp-brand)] hover:bg-[color:var(--mp-surface-2)]"
-          >
-            −
-          </button>
-        )}
-        <span className={`text-center font-mono text-[28px] font-bold ${editable ? "w-[38px]" : ""}`}>
-          {value}
-        </span>
-        {editable && (
-          <button
-            type="button"
-            aria-label={`${label} を増やす`}
-            onClick={() => onChange(value + 1)}
-            className="grid h-[38px] w-8 place-items-center rounded-md border border-[color:var(--mp-border-strong)] bg-[color:var(--mp-surface-3)] text-[17px] leading-none transition hover:border-[color:var(--mp-brand)] hover:bg-[color:var(--mp-surface-2)]"
-          >
-            ＋
-          </button>
-        )}
-      </div>
     </div>
   );
 }

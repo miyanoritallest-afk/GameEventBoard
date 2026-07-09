@@ -7,6 +7,28 @@
 
 ---
 
+## 2026-07-09 — 決勝トーナメント（第9画面）のコードレビュー指摘6件を修正
+
+第9画面（PR#97）に `/code-review high` を回し、検出6件を全修正した。うち2件は今回入れてしまった実リグレッション。UI・整形のみで判定・保存ロジックは引き続き未変更。
+
+### 直した指摘
+1. **BYE 誤判定（リグレッション）** — `matchState` が BYE 判定（1回戦・片側null）を `hasResult` より先に行っていた。DBの外部キーが `on delete set null` のため、結果入力済みの試合でチームが削除されると片側nullになり、**戦って決着した試合が「不戦勝」表示になりスコアが隠れる**不具合。`hasResult` を最優先に並べ替え。`slotState` も同様に done を先頭へ（削除チームの決着試合が「未定」表示になるのも解消）。
+2. **BOピルが [1,3,5,7] のみ（リグレッション）** — `groupBestOf` は Zod で 1〜15 許容なのに、ラウンド別BOピルを4択に絞ってしまい **bestOf≥9 のラウンドが現在値も見えず変更不能**だった。旧 select と同じ `[1,3,5,7,9,11,13,15]` に戻した。
+3. **日時・配信保存のエラー握り潰し** — `handleSchedule`/`handleStream` が `res.error` を読まず無条件 refresh していた。エラーを `validationError` に出すよう修正（旧 MatchDetail から引き継いだ挙動）。
+4. **モーダルの useState 再シードなし** — 保存後・他者更新後に古い値が残る問題。`MatchModal` に**サーバー確定値を含む key** を付け、データが変わったら再マウントして編集フィールドを最新化。第8画面の live-resolution より確実。
+5. **ScoreStepper のコピペ** — matches-board と byte 完全一致だったため `_components/score-stepper.tsx` に共通化し両画面で import。※MatchModal 本体は needsConfirm 確認・エラー処理・呼び出し配線が両画面で乖離しており、共通化するとかえって複雑化＋マージ済みファイルへの波及でレビュー負荷が増すため**今回は共通化を見送り**（判断を記録）。
+6. **3位決定戦の magic number 散在** — `round===totalRounds && position===1` がボードとモーダルの複数箇所に散っていた。`BoardBracketMatch.isThirdPlace` を page.tsx で立て、判定を1箇所に集約。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 366 passed）。`npm run build` 全ルート成功。
+- 実機ドライブは今回も未実施（Playwright のブラウザプロファイルが別セッションでロック中＋tournamentページは OAuth・実データが要る）。オーナーのローカルブラウザで確認予定。
+
+### 次にやること
+- [ ] 実機確認（生成→BYE表示→結果入力→勝ち上がり線→表彰台→観戦者クリック閲覧）。
+- [ ] 残り画面（観戦ビュー）のデザイン刷新。
+
+---
+
 ## 2026-07-09 — デザイン刷新 第9画面: 決勝トーナメント（本格ブラケット化）
 
 決勝トーナメントページ（主催者/参加者/観戦者）を Claude Design 案（`.theme-matchpoint`）で**全面リデザイン**。この画面はもともと Claude Design に任せる前提で簡素なままだったため、第8画面（対戦表）以上に構造から作り替えた（縦積みの素朴なカラム → **コネクタ線付き本格ブラケット＋表彰台＋下部管理ツール＋セルクリックモーダル**）。**判定・保存ロジック（generateTournament・reportTournamentResult の needsConfirm 連鎖・recompute・swap・updateRoundBestOf・BYE/3位決定戦のデータ表現）は一切触らず**、UI とデータ整形のみ差し替え。案HTMLは `docs/design-refs/tournament-organizer.html`（軽量版）に保管。
