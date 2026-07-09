@@ -175,7 +175,7 @@ export async function generateTournament(
  *
  * 防御:
  * 1. ログイン → 主催者確認。
- * 2. Zod 検証（round / thirdPlace / bestOf。BO は奇数 1〜15 のみ）。
+ * 2. Zod 検証（round / thirdPlace / bestOf。BO は奇数 1〜7 のみ）。
  * 3. 結果のあるラウンドはロック: 対象編集グループに結果のある試合が1件でもあれば拒否
  *    （BO 変更でスコアが不整合になるのを防ぐ。結果を取り消してから変更する運用）。
  * 4. 対象ラウンドの全試合（3位決定戦は分離）の best_of を更新する。
