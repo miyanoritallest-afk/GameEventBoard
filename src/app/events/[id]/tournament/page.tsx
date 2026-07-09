@@ -138,38 +138,43 @@ export default async function EventTournamentPage({
     stream_url?: string | null;
     streamer_name?: string | null;
   };
-  const matches: BoardBracketMatch[] = ((tournamentRaw ?? []) as TMatchRow[]).map(
-    (m) => {
-      const result = resultByMatch.get(m.id) ?? null;
-      // 結果入力できるのは「主催者 or この試合のどちらかのチームの代表」。
-      const canReport =
-        isOrganizer ||
-        (m.team_a_id != null && captainTeamIdSet.has(m.team_a_id)) ||
-        (m.team_b_id != null && captainTeamIdSet.has(m.team_b_id));
-      return {
-        id: m.id,
-        round: m.round ?? 1,
-        position: m.bracket_position ?? 0,
-        teamAId: m.team_a_id,
-        teamBId: m.team_b_id,
-        teamAName: m.team_a_id ? teamNameById.get(m.team_a_id) ?? null : null,
-        teamBName: m.team_b_id ? teamNameById.get(m.team_b_id) ?? null : null,
-        teamAScore: result?.team_a_score ?? null,
-        teamBScore: result?.team_b_score ?? null,
-        winnerTeamId: result?.winner_team_id ?? null,
-        potgA: result?.potg_a ?? 0,
-        potgB: result?.potg_b ?? 0,
-        bestOf: m.best_of,
-        hasResult: result !== null,
-        canReport,
-        replayCodes: result?.replay_codes ?? [],
-        scheduledAtLocal: utcIsoToJstLocal(m.scheduled_at ?? null),
-        streamUrl: m.stream_url ?? null,
-        streamerName: m.streamer_name ?? null,
-        isOrganizer,
-      };
-    },
-  );
+  const tMatchRows = (tournamentRaw ?? []) as TMatchRow[];
+  // 最終ラウンド（3位決定戦の判定に使う）。3位決定戦は最終round・position=1 に置かれる。
+  const maxRound = tMatchRows.reduce((n, m) => Math.max(n, m.round ?? 1), 0);
+  const matches: BoardBracketMatch[] = tMatchRows.map((m) => {
+    const result = resultByMatch.get(m.id) ?? null;
+    const round = m.round ?? 1;
+    const position = m.bracket_position ?? 0;
+    // 結果入力できるのは「主催者 or この試合のどちらかのチームの代表」。
+    const canReport =
+      isOrganizer ||
+      (m.team_a_id != null && captainTeamIdSet.has(m.team_a_id)) ||
+      (m.team_b_id != null && captainTeamIdSet.has(m.team_b_id));
+    return {
+      id: m.id,
+      round,
+      position,
+      teamAId: m.team_a_id,
+      teamBId: m.team_b_id,
+      teamAName: m.team_a_id ? teamNameById.get(m.team_a_id) ?? null : null,
+      teamBName: m.team_b_id ? teamNameById.get(m.team_b_id) ?? null : null,
+      teamAScore: result?.team_a_score ?? null,
+      teamBScore: result?.team_b_score ?? null,
+      winnerTeamId: result?.winner_team_id ?? null,
+      potgA: result?.potg_a ?? 0,
+      potgB: result?.potg_b ?? 0,
+      bestOf: m.best_of,
+      hasResult: result !== null,
+      canReport,
+      replayCodes: result?.replay_codes ?? [],
+      scheduledAtLocal: utcIsoToJstLocal(m.scheduled_at ?? null),
+      streamUrl: m.stream_url ?? null,
+      streamerName: m.streamer_name ?? null,
+      isOrganizer,
+      // 3位決定戦（最終ラウンド・position=1）。ブラケット本線から分離して扱う。
+      isThirdPlace: maxRound >= 2 && round === maxRound && position === 1,
+    };
+  });
 
   // 生成前のシード順プレビュー（主催者向け補助）。形式で抽出方法が変わる（PR-3）。
   // - 予選あり: 現在の進出数設定で各ブロック上位N を抽出。
@@ -220,36 +225,122 @@ export default async function EventTournamentPage({
     })),
   );
 
+  // ヒーロー用の派生値（対戦表画面と同じ作法）。
+  const gameName = (event.games as { name: string } | null)?.name ?? "-";
+  const roleLabel = isOrganizer
+    ? "Organizer"
+    : myRegistration !== null
+      ? "Participant"
+      : "Viewer";
+  // 参加チーム数（ブラケットに実在する一意なチーム）。
+  const teamCount = new Set(
+    matches.flatMap((m) => [m.teamAId, m.teamBId]).filter((id): id is string => id !== null),
+  ).size;
+  const roundCount = matches.reduce((n, m) => Math.max(n, m.round), 0);
+  // 決着（優勝が確定しているか）。
+  const champion = podium.champion;
+
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">{tournamentLabel}</h1>
-          <div className="flex items-center gap-4">
-            {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
-            {showMatchesLink && (
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* パンくず（イベント一覧 → イベント名 → 決勝トーナメント）。 */}
+        <nav className="text-sm text-muted-foreground">
+          <Link
+            href="/events"
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            イベント一覧
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <Link
+            href={`/events/${event.slug ?? event.id}`}
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            {event.title}
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">{tournamentLabel}</span>
+        </nav>
+
+        {/* ヒーロー：ラベル＋タイトル＋イベント名、ゲームチップ、進捗、導線。 */}
+        <header className="mt-5 rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e2)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-[color:var(--mp-accent)]">
+                <span className="h-px w-6 bg-[color:var(--mp-accent)]" />
+                BRACKET
+                <span className="text-[color:var(--mp-fg-subtle)]">·</span>
+                <span className="text-[color:var(--mp-fg-subtle)]">{roleLabel}</span>
+              </p>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                {tournamentLabel}
+              </h1>
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {event.title}
+              </p>
+            </div>
+
+            {/* 導線（観戦者にも出す・フェーズB）。 */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5 text-sm">
+              {showMatchesLink && (
+                <Link
+                  href={`/events/${event.id}/matches`}
+                  className="text-[color:var(--mp-brand)] underline-offset-2 hover:underline"
+                >
+                  ← 対戦表・順位表へ
+                </Link>
+              )}
               <Link
-                href={`/events/${event.id}/matches`}
-                className="text-sm text-primary hover:underline"
+                href={`/events/${event.id}/watch`}
+                className="text-muted-foreground hover:text-foreground"
               >
-                ← 対戦表・順位表へ
+                観戦ビューへ →
               </Link>
-            )}
-            <Link
-              href={`/events/${event.id}/watch`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              観戦ビューへ
-            </Link>
-            <Link
-              href={`/events/${event.slug ?? event.id}`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              イベントに戻る
-            </Link>
+              <Link
+                href={`/events/${event.slug ?? event.id}`}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                イベントに戻る
+              </Link>
+            </div>
           </div>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
+
+          {/* チップ: ゲーム / 参加数 / ラウンド数 / 決着状況。 */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--mp-danger)]" />
+              {gameName}
+            </span>
+            {teamCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+                参加{" "}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {teamCount}
+                </span>
+                チーム
+              </span>
+            )}
+            {roundCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+                ラウンド{" "}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {roundCount}
+                </span>
+              </span>
+            )}
+            {champion ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--mp-gold)]/32 bg-[color:var(--mp-gold)]/10 px-3 py-1 text-xs font-medium text-[color:var(--mp-gold)]">
+                🏆 優勝 <span className="font-semibold">{champion}</span>
+              </span>
+            ) : (
+              roundCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+                  決着 <span className="font-semibold text-foreground">進行中</span>
+                </span>
+              )
+            )}
+          </div>
+        </header>
 
         <TournamentBoard
           eventId={event.id}

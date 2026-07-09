@@ -163,6 +163,8 @@
     --mp-success: #34d399;
     --mp-warning: #f5b93d;
     --mp-gold: #f5c451;
+    --mp-silver: #c7d0de;
+    --mp-bronze: #d68a52;
     --mp-live: #22d3ee;
     --mp-danger: #f65c4e;
     --mp-discord: #5865f2;
@@ -198,16 +200,19 @@
 }
 
 /*
- * ロール識別色（--mp-tank/dps/support）と順位ゴールド（--mp-gold）は @layer の外の
- * 素のルールで再宣言する。これらは Tailwind のクラス構文だけでなく、tsx の
- * インライン style（JS 文字列 "var(--mp-...)"）でも参照される。Tailwind v4 は @layer components
- * 内の宣言を content スキャン結果に応じて最適化するため、クラス構文で拾えない変数が
- * 出力から tree-shake され無色になる不具合が起きていた（ロールアイコンが白くなる等）。
- * 素のトップレベルルールは最適化対象外で必ず出力に残るため、ここで確実に定義する。
+ * ロール識別色（--mp-tank/dps/support）・順位ゴールド（--mp-gold）・表彰台の銀銅
+ * （--mp-silver/--mp-bronze）は @layer の外の素のルールで再宣言する。これらは Tailwind の
+ * クラス構文だけでなく、tsx のインライン style（JS 文字列 "var(--mp-...)"）でも参照される。
+ * Tailwind v4 は @layer components 内の宣言を content スキャン結果に応じて最適化するため、
+ * クラス構文で拾えない変数が出力から tree-shake され無色になる不具合が起きていた
+ * （ロールアイコンが白くなる等）。素のトップレベルルールは最適化対象外で必ず出力に残るため、
+ * ここで確実に定義する。
  */
 .theme-matchpoint {
   --mp-tank: #5b93f0;
   --mp-dps: #f2685a;
   --mp-support: #45c08a;
   --mp-gold: #f5c451;
+  --mp-silver: #c7d0de;
+  --mp-bronze: #d68a52;
 }

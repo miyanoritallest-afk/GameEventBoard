@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — 決勝トーナメント（主催者）</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] Geist / Geist Mono / Noto Sans JP の @font-face（外部フォント・data URIなし）はリポジトリ保管のため除去。実装では system font / 既存 --font 変数にフォールバック。 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --success:#34D399; --warning:#F5B93D; --live:#22D3EE; --danger:#F65C4E;
+    --gold:#F5C451; --silver:#C7D0DE; --bronze:#D68A52;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 32px rgba(0,0,0,.5);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.6;
+    font-feature-settings:"palt" 1;
+    background:
+      radial-gradient(1100px 520px at 86% -8%, rgba(255,106,43,.09), transparent 58%),
+      radial-gradient(820px 460px at 4% 2%, rgba(34,211,238,.06), transparent 54%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── Site header ── */
+  .site-header { border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(20,26,36,.72),rgba(11,14,20,.72)); backdrop-filter:blur(8px); position:sticky; top:0; z-index:40; }
+  .header-inner { max-width:1600px; margin:0 auto; padding:0 34px; height:60px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand-nav { display:flex; align-items:center; gap:34px; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+  .brand-nav nav { display:flex; gap:22px; font-size:13.5px; color:var(--fg-muted); }
+  .brand-nav nav a.active { color:var(--fg); font-weight:500; }
+  .brand-nav nav a:hover { color:var(--fg); }
+  .header-right { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+  .bell { position:relative; width:36px; height:36px; display:grid; place-items:center; border-radius:var(--r-md); cursor:pointer; }
+  .bell:hover { background:var(--surface-2); }
+  .bell .count { position:absolute; top:-1px; right:-1px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger); color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 2px var(--bg); }
+  .header-user { display:inline-flex; align-items:center; gap:9px; padding:5px 6px 5px 5px; border-radius:999px; }
+  .header-user .av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#5865F2,#3B45B5); display:grid; place-items:center; font-family:var(--font-sans); font-size:11px; font-weight:700; color:#fff; }
+  .header-user .nm { color:var(--fg); font-weight:500; }
+
+  /* ── Buttons ── */
+  .btn { font-family:var(--font-sans); font-weight:600; border-radius:var(--r-md); border:1px solid transparent; cursor:pointer; transition:background .15s,border-color .15s,transform .05s,box-shadow .15s; display:inline-flex; align-items:center; justify-content:center; gap:7px; line-height:1; white-space:nowrap; }
+  .btn:active { transform:translateY(1px); }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn-primary { background:var(--brand); color:var(--on-brand); box-shadow:0 0 0 1px rgba(255,106,43,.35),0 6px 18px rgba(255,106,43,.2); }
+  .btn-primary:hover { background:var(--brand-hover); }
+  .btn-secondary { background:var(--surface-3); color:var(--fg); border-color:var(--border-strong); }
+  .btn-secondary:hover { background:var(--surface-2); border-color:var(--fg-subtle); }
+  .btn-ghost { background:transparent; color:var(--fg-muted); border-color:var(--border); }
+  .btn-ghost:hover { background:var(--surface); color:var(--fg); }
+  .btn-md { font-size:13px; padding:9px 15px; }
+  .btn-sm { font-size:12px; padding:6px 11px; }
+  .btn-xs { font-size:11.5px; padding:5px 9px; border-radius:var(--r-sm); }
+  .btn-lg { font-size:14.5px; padding:12px 22px; }
+  .btn-danger { background:transparent; color:var(--fg-muted); border-color:var(--border-strong); }
+  .btn-danger:hover { background:rgba(246,92,78,.12); color:var(--danger); border-color:rgba(246,92,78,.4); }
+
+  /* ── Page shell ── */
+  .page { max-width:1600px; margin:0 auto; padding:26px 34px 130px; }
+  .crumbs { display:flex; align-items:center; gap:9px; font-size:12px; color:var(--fg-subtle); margin-bottom:16px; font-family:var(--font-sans); }
+  .crumbs a { color:var(--fg-muted); font-weight:500; }
+  .crumbs a:hover { color:var(--fg); }
+  .crumbs .sep { color:var(--border-strong); }
+  .crumbs .here { color:var(--fg); font-weight:600; }
+
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 8px; display:flex; align-items:center; gap:9px; }
+  .kicker::before { content:""; width:20px; height:2px; background:var(--accent); }
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  h1.page-title { font-family:var(--font-sans); font-weight:800; font-size:28px; line-height:1.15; letter-spacing:-.02em; margin:0; }
+  .page-title .ev { color:var(--fg-muted); font-weight:600; font-size:16px; margin-left:12px; }
+  .head-meta { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center; }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--fg-muted); background:var(--surface-3); border:1px solid var(--border); padding:4px 10px; border-radius:999px; }
+  .chip .k { color:var(--fg-subtle); }
+  .chip .v { color:var(--fg); font-weight:600; }
+  .chip.decided { color:var(--gold); background:rgba(245,196,81,.1); border-color:rgba(245,196,81,.32); }
+  .chip.decided .v { color:var(--gold); }
+  .head-actions { display:flex; gap:9px; align-items:center; flex-direction:column; align-items:flex-end; }
+
+  .nav-links { display:flex; gap:7px; flex-wrap:wrap; margin-top:14px; }
+
+  /* role switcher */
+  .modeseg { display:inline-flex; background:var(--surface-3); border:1px solid var(--border); border-radius:999px; padding:3px; gap:2px; }
+  .modeseg button { font-family:var(--font-sans); font-size:12px; font-weight:600; color:var(--fg-muted); background:transparent; border:none; padding:6px 13px; border-radius:999px; cursor:pointer; transition:background .14s,color .14s; }
+  .modeseg button.on { background:var(--surface); color:var(--fg); box-shadow:var(--e1); }
+  .modeseg button:hover:not(.on) { color:var(--fg); }
+
+  /* role banners */
+  .role-banner { display:flex; margin-top:22px; align-items:center; gap:12px; padding:12px 18px; border-radius:var(--r-xl); font-size:12.5px; color:var(--fg-muted); }
+  .role-banner .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .role-banner b { color:var(--fg); font-weight:600; }
+  .rb-part { background:linear-gradient(90deg,rgba(255,106,43,.12),transparent); border:1px solid rgba(255,106,43,.32); }
+  .rb-part .dot { background:var(--brand); box-shadow:0 0 10px var(--brand); }
+  .rb-spec { background:linear-gradient(90deg,rgba(34,211,238,.1),transparent); border:1px solid rgba(34,211,238,.3); }
+  .rb-spec .dot { background:var(--live); box-shadow:0 0 10px var(--live); }
+
+  .section-title { font-family:var(--font-sans); font-weight:800; font-size:16px; letter-spacing:-.01em; display:flex; align-items:center; gap:10px; margin:0; }
+  .section-title .bar { width:3px; height:16px; border-radius:2px; background:var(--brand); }
+  .section-title .sub { font-family:var(--font-jp); font-weight:400; font-size:12px; color:var(--fg-subtle); }
+
+  /* ══════ PODIUM ══════ */
+  .podium-panel { margin-top:24px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2xl); box-shadow:var(--e1); padding:20px 24px 26px; position:relative; overflow:hidden; }
+  .podium-panel::before { content:""; position:absolute; inset:0; background:radial-gradient(520px 200px at 50% -40%, rgba(245,196,81,.12), transparent 70%); pointer-events:none; }
+  .podium-head { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; position:relative; }
+  .podium { display:flex; align-items:flex-end; justify-content:center; gap:18px; margin-top:22px; position:relative; }
+  .pod { display:flex; flex-direction:column; align-items:center; gap:12px; width:220px; max-width:30vw; }
+  .pod .medal { font-size:30px; line-height:1; filter:drop-shadow(0 3px 8px rgba(0,0,0,.5)); }
+  .pod .card { width:100%; border-radius:var(--r-lg) var(--r-lg) 0 0; border:1px solid var(--border-strong); border-bottom:none; background:var(--surface-2); padding:16px 14px; text-align:center; display:flex; flex-direction:column; gap:7px; align-items:center; }
+  .pod .rk { font-family:var(--font-mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--fg-subtle); }
+  .pod .nm { font-family:var(--font-sans); font-weight:800; font-size:17px; color:var(--fg); line-height:1.15; }
+  .pod .seed { font-family:var(--font-mono); font-size:11px; color:var(--fg-muted); }
+  .pod .base { width:100%; border-radius:0 0 var(--r-md) var(--r-md); background:var(--surface-3); border:1px solid var(--border-strong); border-top:none; display:grid; place-items:center; font-family:var(--font-sans); font-weight:800; color:var(--fg-subtle); }
+  .pod.gold .card { background:linear-gradient(180deg,rgba(245,196,81,.18),rgba(245,196,81,.04)); border-color:rgba(245,196,81,.55); box-shadow:0 0 34px rgba(245,196,81,.18); }
+  .pod.gold .nm { color:var(--gold); }
+  .pod.gold .rk { color:var(--gold); }
+  .pod.gold .base { height:86px; font-size:34px; color:var(--gold); background:linear-gradient(180deg,rgba(245,196,81,.12),rgba(245,196,81,.03)); border-color:rgba(245,196,81,.4); }
+  .pod.silver .base { height:62px; font-size:26px; color:var(--silver); }
+  .pod.silver .card { border-color:rgba(199,208,222,.32); }
+  .pod.bronze .base { height:44px; font-size:22px; color:var(--bronze); }
+  .pod.bronze .card { border-color:rgba(214,138,82,.3); }
+  .pod .score { font-family:var(--font-mono); font-size:11.5px; color:var(--fg-muted); }
+
+  /* ══════ BRACKET ══════ */
+  .bracket-note { display:flex; align-items:center; gap:9px; padding:10px 14px; margin:26px 0 12px; border-radius:var(--r-lg); background:var(--surface-2); border:1px solid var(--border); font-size:12px; color:var(--fg-muted); }
+  .bracket-note svg { width:15px; height:15px; flex:none; stroke:var(--accent); fill:none; stroke-width:2; }
+  .bracket-note b { color:var(--fg); font-weight:600; }
+
+  .bracket-scroll { overflow-x:auto; overflow-y:visible; padding:6px 2px 16px; }
+  .bracket-scroll::-webkit-scrollbar { height:10px; }
+  .bracket-scroll::-webkit-scrollbar-thumb { background:var(--surface-3); border-radius:99px; border:2px solid var(--bg); }
+  .bracket { position:relative; display:flex; gap:66px; min-width:min-content; padding:4px 10px 4px 2px; }
+  .bkt-svg { position:absolute; left:0; top:0; pointer-events:none; z-index:1; overflow:visible; }
+
+  .round-col { display:flex; flex-direction:column; min-width:238px; position:relative; z-index:2; }
+  .round-head { flex:none; margin-bottom:16px; display:flex; align-items:baseline; gap:10px; }
+  .round-head .rn { font-family:var(--font-sans); font-weight:800; font-size:15px; letter-spacing:-.01em; }
+  .round-head .rc { font-family:var(--font-mono); font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-subtle); }
+  .round-head .bo { font-family:var(--font-mono); font-size:10px; font-weight:600; color:var(--brand); background:rgba(255,106,43,.1); border:1px solid rgba(255,106,43,.3); border-radius:999px; padding:2px 8px; margin-left:auto; }
+  .round-matches { flex:1 1 auto; display:flex; flex-direction:column; justify-content:space-around; }
+
+  .mcard { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--e1); cursor:pointer; transition:border-color .14s,box-shadow .14s,transform .08s; }
+  .mcard:hover { border-color:var(--border-strong); box-shadow:var(--e2); transform:translateY(-1px); }
+  .mcard.locked, .mcard.byecard { cursor:default; }
+  .mcard.locked:hover, .mcard.byecard:hover { transform:none; box-shadow:var(--e1); border-color:var(--border); }
+  .mcard.champcard { border-color:rgba(245,196,81,.55); box-shadow:0 0 26px rgba(245,196,81,.14),var(--e1); }
+  .mc-top { display:flex; align-items:center; justify-content:space-between; padding:6px 11px; border-bottom:1px solid var(--border); background:var(--surface-2); }
+  .mc-tag { font-family:var(--font-mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-subtle); }
+  .mc-tag.done { color:var(--success); }
+  .mc-bo { font-family:var(--font-mono); font-size:9.5px; font-weight:600; color:var(--brand); background:rgba(255,106,43,.1); border:1px solid rgba(255,106,43,.3); border-radius:999px; padding:2px 7px; }
+  .mc-hint { font-family:var(--font-sans); font-size:9.5px; font-weight:700; color:var(--brand); opacity:0; transition:opacity .14s; }
+  .mcard:hover .mc-hint { opacity:1; }
+
+  .slot { display:flex; align-items:center; gap:9px; padding:9px 11px 9px 13px; position:relative; }
+  .slot + .slot { border-top:1px solid var(--border); }
+  .slot .accent { position:absolute; left:0; top:0; bottom:0; width:3px; background:transparent; }
+  .slot.win .accent { background:var(--success); }
+  .slot.champ .accent { background:var(--gold); }
+  .slot .seed { display:inline-grid; place-items:center; width:20px; height:20px; border-radius:var(--r-sm); font-family:var(--font-mono); font-weight:700; font-size:10.5px; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); flex:none; }
+  .slot.win .seed { color:var(--success); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.1); }
+  .slot.champ .seed { color:#1a1206; background:linear-gradient(135deg,var(--gold),#E0A93A); border-color:transparent; }
+  .slot .nm { font-family:var(--font-sans); font-weight:700; font-size:13.5px; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .slot.lose .nm { color:var(--fg-muted); font-weight:600; }
+  .slot.tbd .nm, .slot.byeslot .nm { color:var(--fg-subtle); font-weight:600; font-family:var(--font-jp); }
+  .slot .crown { flex:none; font-size:12px; }
+  .slot .sc { margin-left:auto; font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-weight:700; font-size:15px; color:var(--fg-muted); flex:none; }
+  .slot.win .sc { color:var(--success); }
+  .slot.champ .sc { color:var(--gold); }
+  .slot.lose .sc { color:var(--fg-subtle); }
+  .slot .byetag { margin-left:auto; font-family:var(--font-mono); font-size:9px; letter-spacing:.1em; color:var(--fg-subtle); flex:none; }
+  .mc-foot { display:flex; align-items:center; gap:10px; padding:5px 12px; border-top:1px solid var(--border); background:rgba(27,34,48,.4); font-family:var(--font-mono); font-size:10px; color:var(--fg-subtle); }
+  .mc-foot .live { color:var(--live); display:inline-flex; align-items:center; gap:4px; }
+  .mc-foot .live .d { width:5px; height:5px; border-radius:50%; background:var(--live); box-shadow:0 0 6px var(--live); }
+
+  /* 3rd place block */
+  .third-wrap { flex:none; margin-top:20px; }
+  .third-frame { border:1.5px dashed var(--border-strong); border-radius:var(--r-xl); padding:12px; background:rgba(20,26,36,.4); }
+  .third-label { display:flex; align-items:center; gap:8px; font-family:var(--font-sans); font-weight:700; font-size:12px; color:var(--fg-muted); margin-bottom:11px; padding-left:2px; }
+  .third-label .medal { font-size:14px; }
+  .third-frame .mcard { cursor:pointer; }
+
+  /* ══════ generate panel (ungenerated) ══════ */
+  .gen-panel { margin-top:26px; background:var(--surface); border:1px dashed var(--border-strong); border-radius:var(--r-2xl); box-shadow:var(--e1); padding:46px 34px; text-align:center; }
+  .gen-panel .gp-ic { width:56px; height:56px; margin:0 auto 18px; border-radius:var(--r-xl); display:grid; place-items:center; background:rgba(255,106,43,.12); color:var(--brand); }
+  .gen-panel .gp-ic svg { width:28px; height:28px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .gen-panel h3 { font-family:var(--font-sans); font-weight:800; font-size:20px; margin:0 0 8px; }
+  .gen-panel p { color:var(--fg-muted); font-size:13.5px; margin:0 auto 22px; max-width:560px; line-height:1.65; }
+  .seed-preview { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:640px; margin:0 auto 26px; }
+  .seed-preview .sp { display:inline-flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:5px 13px 5px 6px; font-size:12.5px; font-family:var(--font-sans); font-weight:600; }
+  .seed-preview .sp .n { display:inline-grid; place-items:center; width:20px; height:20px; border-radius:var(--r-sm); font-family:var(--font-mono); font-size:10.5px; font-weight:700; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); }
+  .seed-preview .sp.bye { color:var(--fg-subtle); border-style:dashed; }
+
+  /* ══════ organizer toolbar ══════ */
+  .org-toolbar { margin-top:22px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2xl); box-shadow:var(--e1); padding:16px 18px; }
+  .ot-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .ot-title { font-family:var(--font-sans); font-weight:800; font-size:14.5px; display:flex; align-items:center; gap:9px; }
+  .ot-title .ic { width:26px; height:26px; border-radius:var(--r-sm); display:grid; place-items:center; background:rgba(255,106,43,.14); color:var(--brand); }
+  .ot-title .ic svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .ot-sub { font-size:11.5px; color:var(--fg-muted); margin-top:5px; max-width:560px; line-height:1.55; }
+  .ot-actions { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-top:15px; padding-top:14px; border-top:1px solid var(--border); }
+  .ot-bo { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .ot-bo .lb { font-size:11.5px; color:var(--fg-subtle); }
+  .bo-seg { display:flex; flex-direction:column; gap:4px; align-items:flex-start; }
+  .bo-seg .rl { font-family:var(--font-mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-subtle); }
+  .bo-pills { display:inline-flex; background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-md); padding:2px; gap:2px; }
+  .bo-pills button { font-family:var(--font-mono); font-size:11px; font-weight:600; color:var(--fg-muted); background:transparent; border:none; padding:5px 9px; border-radius:var(--r-sm); cursor:pointer; transition:background .14s,color .14s; }
+  .bo-pills button.on { background:var(--brand); color:var(--on-brand); }
+  .bo-pills button:hover:not(.on) { color:var(--fg); }
+  .ot-sep { width:1px; align-self:stretch; background:var(--border); }
+  .ot-right { margin-left:auto; display:flex; gap:9px; align-items:center; }
+
+  /* ══════ MODAL ══════ */
+  .scrim { position:fixed; inset:0; z-index:9500; background:rgba(6,9,14,.72); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:center; padding:56px 20px; overflow-y:auto; }
+  .modal { width:100%; max-width:520px; background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--r-2xl); box-shadow:var(--e3); overflow:hidden; animation:mIn .18s ease; }
+  @keyframes mIn { from { transform:translateY(10px) scale(.99); opacity:.6; } }
+  .m-head { padding:18px 20px 16px; border-bottom:1px solid var(--border); background:linear-gradient(180deg,var(--surface-2),transparent); position:relative; }
+  .m-kicker { font-family:var(--font-mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .m-ro-tag { font-family:var(--font-mono); font-size:9.5px; letter-spacing:.08em; color:var(--live); background:rgba(34,211,238,.12); border:1px solid rgba(34,211,238,.3); border-radius:999px; padding:2px 8px; }
+  .m-teams { display:flex; align-items:center; gap:12px; }
+  .m-team { flex:1; min-width:0; display:flex; align-items:center; gap:9px; }
+  .m-team.b { flex-direction:row-reverse; text-align:right; }
+  .m-team .seed { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:var(--r-sm); font-family:var(--font-mono); font-weight:700; font-size:11px; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); flex:none; }
+  .m-team .nm { font-family:var(--font-sans); font-weight:700; font-size:16px; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .m-vs { font-family:var(--font-sans); font-weight:800; font-size:12px; color:var(--fg-subtle); flex:none; }
+  .m-bo { position:absolute; top:18px; right:20px; font-family:var(--font-mono); font-size:10.5px; font-weight:600; color:var(--brand); background:rgba(255,106,43,.1); border:1px solid rgba(255,106,43,.3); border-radius:999px; padding:3px 10px; }
+  .m-body { padding:18px 20px 6px; }
+  .m-lock { display:flex; align-items:center; gap:10px; padding:12px 14px; margin-bottom:16px; border-radius:var(--r-md); background:rgba(34,211,238,.08); border:1px solid rgba(34,211,238,.28); font-size:12.5px; color:var(--fg-muted); }
+  .m-lock b { color:var(--fg); font-weight:600; }
+  .fgroup { margin-bottom:18px; }
+  .flabel { font-family:var(--font-sans); font-size:11.5px; font-weight:600; letter-spacing:.02em; text-transform:uppercase; color:var(--fg-muted); margin-bottom:9px; display:flex; align-items:center; gap:7px; }
+  .flabel .opt { font-family:var(--font-jp); font-weight:400; text-transform:none; letter-spacing:0; color:var(--fg-subtle); font-size:11px; }
+  .score-row { display:flex; align-items:center; justify-content:center; gap:18px; padding:6px 0 2px; }
+  .score-side { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .score-side .snm { font-family:var(--font-sans); font-weight:600; font-size:12px; color:var(--fg-muted); max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stepbox { display:flex; align-items:center; gap:8px; }
+  .stepbox button { width:32px; height:38px; border-radius:var(--r-md); border:1px solid var(--border-strong); background:var(--surface-3); color:var(--fg); font-size:17px; line-height:1; cursor:pointer; display:grid; place-items:center; transition:border-color .14s,background .14s; }
+  .stepbox button:hover:not(:disabled) { border-color:var(--brand); background:var(--surface-2); }
+  .stepbox button:disabled { opacity:.35; cursor:not-allowed; }
+  .stepbox .val { font-family:var(--font-mono); font-size:28px; font-weight:700; width:38px; text-align:center; color:var(--fg); }
+  .score-dash { font-family:var(--font-mono); font-size:24px; color:var(--fg-subtle); font-weight:400; align-self:center; margin-top:20px; }
+  .winhint { text-align:center; font-size:11.5px; color:var(--fg-subtle); margin-top:12px; }
+  .winhint b { color:var(--success); font-weight:600; }
+
+  .inp { width:100%; background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-md); color:var(--fg); font-family:var(--font-jp); font-size:13px; padding:9px 11px; }
+  .inp::placeholder { color:var(--fg-subtle); }
+  .inp:focus { outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(255,106,43,.15); }
+  .inp.mono { font-family:var(--font-mono); letter-spacing:.04em; }
+  .inp:disabled { background:var(--surface-2); border-style:dashed; color:var(--fg-muted); cursor:not-allowed; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .map-row { display:grid; grid-template-columns:118px 1fr; gap:10px; align-items:center; margin-bottom:8px; }
+  .map-row .mp-name { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--fg-muted); }
+  .map-row .mp-name .n { font-family:var(--font-mono); font-size:10px; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-sm); padding:2px 6px; }
+  .potg-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .selwrap { position:relative; }
+  select.mp-sel { appearance:none; width:100%; font-family:var(--font-jp); font-size:12.5px; color:var(--fg); background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-md); padding:9px 30px 9px 12px; cursor:pointer; }
+  select.mp-sel:focus { outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(255,106,43,.15); }
+  select.mp-sel:disabled { opacity:.55; cursor:not-allowed; }
+  .selwrap::after { content:"▾"; position:absolute; right:11px; top:50%; transform:translateY(-50%); color:var(--fg-subtle); font-size:11px; pointer-events:none; }
+
+  .m-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 20px; border-top:1px solid var(--border); background:var(--surface-2); }
+  .m-foot .right { display:flex; gap:9px; }
+
+  /* toast */
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(8px); z-index:10000; display:flex; align-items:center; gap:9px; background:var(--surface-2); border:1px solid var(--border-strong); color:var(--fg); font-size:13px; padding:11px 17px; border-radius:12px; box-shadow:var(--e3); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.ok { border-color:rgba(52,211,153,.5); }
+  #toast.err { border-color:var(--danger); }
+  #toast .ti { width:18px; height:18px; flex:none; }
+  #toast.ok .ti { color:var(--success); }
+  #toast.err .ti { color:var(--danger); }
+  #toast .ti svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+
+  @media (max-width:900px) {
+    .header-inner { padding:0 18px; }
+    .brand-nav nav { display:none; }
+    .page { padding:22px 16px 120px; }
+    .podium .pod { max-width:33vw; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<!-- [軽量版] React/Babel CDN の <script src> と data-preset は除去。JSX 本体は下の text/babel を参照 -->
+
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useLayoutEffect, useRef, useEffect, useCallback } = React;
+
+/* ═══════════ data ═══════════ */
+const OW_MAPS = ["King's Row","Ilios","Circuit Royal","Numbani","Busan","Dorado","Colosseo","Lijiang Tower","Route 66"];
+
+const TEAMS = {
+  night:  { id:"night",  name:"Nightfall GG", seed:1, tag:"NGG" },
+  radiant:{ id:"radiant",name:"Radiant",      seed:2, tag:"RDT" },
+  vertex: { id:"vertex", name:"Vertex",       seed:3, tag:"VTX" },
+  halcyon:{ id:"halcyon",name:"Halcyon",      seed:4, tag:"HAL" },
+  tempest:{ id:"tempest",name:"Tempest",      seed:5, tag:"TMP" },
+  frost:  { id:"frost",  name:"Frost Nine",   seed:6, tag:"FN9" },
+};
+const SEED_ORDER = ["night","radiant","vertex","halcyon","tempest","frost"];
+const MY_TEAM = "halcyon"; // participant-mode demo: あなたが代表を務めるチーム
+
+// round key → default BO
+const DEFAULT_BO = { qf:3, sf:3, final:5, third:3 };
+const ROUND_KEY = { qf1:"qf", qf2:"qf", qf3:"qf", qf4:"qf", sf1:"sf", sf2:"sf", final:"final", third:"third" };
+const ROUND_LABEL = { qf:"準々決勝", sf:"準決勝", final:"決勝", third:"3位決定戦" };
+
+// bracket topology (8-slot, top-2 seeds get BYE)
+function structure() {
+  return {
+    qf1: { id:"qf1", a:{ team:"night" }, b:{ bye:true } },
+    qf2: { id:"qf2", a:{ team:"halcyon" }, b:{ team:"tempest" } },
+    qf3: { id:"qf3", a:{ team:"vertex" }, b:{ team:"frost" } },
+    qf4: { id:"qf4", a:{ team:"radiant" }, b:{ bye:true } },
+    sf1: { id:"sf1", a:{ win:"qf1" }, b:{ win:"qf2" } },
+    sf2: { id:"sf2", a:{ win:"qf3" }, b:{ win:"qf4" } },
+    final:{ id:"final", a:{ win:"sf1" }, b:{ win:"sf2" } },
+    third:{ id:"third", a:{ lose:"sf1" }, b:{ lose:"sf2" } },
+  };
+}
+const RESULT = (sa, sb, dt, streamer, maps, potgTeam, potgPlayer) =>
+  ({ sa, sb, done:true, dt:dt||"", streamer:streamer||"", maps:maps||[], potgTeam:potgTeam||"", potgPlayer:potgPlayer||"" });
+
+// full decided demo (organizer view money-shot)
+function seededResults() {
+  const s = structure();
+  s.qf2 = { ...s.qf2, ...RESULT(2,1,"2026-07-08T19:00","MPCast",[{name:"Busan",code:"K7QF2A"},{name:"Dorado",code:"X3M9PL"},{name:"Numbani",code:"J8VR4C"}],"halcyon","Kestrel") };
+  s.qf3 = { ...s.qf3, ...RESULT(2,0,"2026-07-08T20:30","",[{name:"Ilios",code:"9WQ2ZK"},{name:"Colosseo",code:"P4L7NM"}],"vertex","Void") };
+  s.sf1 = { ...s.sf1, ...RESULT(2,1,"2026-07-09T19:00","nori#1121",[{name:"Circuit Royal",code:"B2N8KQ"},{name:"Busan",code:"M6X3PW"},{name:"King's Row",code:"T9L4RD"}],"night","Nova") };
+  s.sf2 = { ...s.sf2, ...RESULT(0,2,"2026-07-09T20:30","MPCast",[{name:"Route 66",code:"Q7W2ML"},{name:"Ilios",code:"Z4K8PN"}],"radiant","Peregrine") };
+  s.final= { ...s.final, ...RESULT(3,2,"2026-07-09T21:30","nori#1121",[{name:"King's Row",code:"F3M9QL"},{name:"Lijiang Tower",code:"N7P2KW"},{name:"Circuit Royal",code:"R8L4XD"},{name:"Busan",code:"C2K9PM"},{name:"Ilios",code:"V6W3NQ"}],"night","Kaji") };
+  s.third= { ...s.third, ...RESULT(2,1,"2026-07-09T21:00","",[{name:"Numbani",code:"H4Q8ML"},{name:"Dorado",code:"G7K2PW"},{name:"Colosseo",code:"D9L3NR"}],"halcyon","Marlow") };
+  return s;
+}
+
+/* ═══════════ resolve helpers ═══════════ */
+function winCap(bo){ return Math.ceil(bo/2); }
+function slotTeam(slot, M){
+  if(!slot) return null;
+  if(slot.bye) return null;
+  if(slot.team) return slot.team;
+  if(slot.win) return winnerId(slot.win, M);
+  if(slot.lose) return loserId(slot.lose, M);
+  return null;
+}
+function isBye(m){ return !!(m && (m.a.bye || m.b.bye)); }
+function winnerId(id, M){
+  const m = M[id]; if(!m) return null;
+  const A = slotTeam(m.a, M), B = slotTeam(m.b, M);
+  if(m.a.bye) return B;
+  if(m.b.bye) return A;
+  if(!m.done || A==null || B==null) return null;
+  return m.sa>m.sb ? A : (m.sb>m.sa ? B : null);
+}
+function loserId(id, M){
+  const m = M[id]; if(!m || !m.done) return null;
+  const A = slotTeam(m.a, M), B = slotTeam(m.b, M);
+  if(A==null || B==null) return null;
+  return m.sa>m.sb ? B : (m.sb>m.sa ? A : null);
+}
+function resolved(id, M){ // is match ready (both sides known, not bye)
+  const m = M[id]; if(!m || isBye(m)) return false;
+  return slotTeam(m.a,M)!=null && slotTeam(m.b,M)!=null;
+}
+function teamName(id){ return id ? TEAMS[id].name : null; }
+
+function fmtDT(s){
+  if(!s) return "";
+  const [d,t] = s.split("T"); const [,mo,da] = d.split("-");
+  return `${mo}/${da} ${t}`;
+}
+
+/* ═══════════ small pieces ═══════════ */
+function Slot({ teamId, score, state, showScore, isChamp }){
+  // state: 'win' | 'lose' | 'tbd' | 'bye' | 'neutral'
+  const cls = ["slot"];
+  if(state==="win") cls.push(isChamp ? "champ" : "win");
+  if(state==="lose") cls.push("lose");
+  if(state==="tbd") cls.push("tbd");
+  if(state==="bye") cls.push("byeslot");
+  const t = teamId ? TEAMS[teamId] : null;
+  return (
+    <div className={cls.join(" ")}>
+      <span className="accent"></span>
+      {t ? <span className="seed">{t.seed}</span> : <span className="seed">–</span>}
+      <span className="nm">{t ? t.name : (state==="bye" ? "BYE" : "未定")}</span>
+      {isChamp && <span className="crown">👑</span>}
+      {state==="bye"
+        ? <span className="byetag">不戦勝</span>
+        : (showScore ? <span className="sc">{score}</span> : null)}
+    </div>
+  );
+}
+
+function MatchCard({ id, M, bo, role, onOpen, isChampMatch }){
+  const m = M[id];
+  const A = slotTeam(m.a, M), B = slotTeam(m.b, M);
+  const bye = isBye(m);
+  const ready = resolved(id, M);
+  const win = winnerId(id, M);
+  const done = m.done;
+
+  // per-slot state
+  const stateFor = (teamId, sideBye) => {
+    if(sideBye) return "bye";
+    if(teamId==null) return "tbd";
+    if(bye) return win===teamId ? "win" : "neutral";
+    if(!done) return "neutral";
+    return win===teamId ? "win" : "lose";
+  };
+
+  const clickable = !bye && ready;
+  const cls = ["mcard"];
+  if(bye) cls.push("byecard");
+  else if(!ready) cls.push("locked");
+  if(isChampMatch && done) cls.push("champcard");
+
+  const tag = bye ? "不戦勝" : (done ? "終了" : (ready ? "対戦カード" : "勝者待ち"));
+
+  return (
+    <div className={cls.join(" ")} data-card={id}
+         onClick={clickable ? ()=>onOpen(id) : undefined}>
+      <div className="mc-top">
+        <span className={"mc-tag"+(done&&!bye?" done":"")}>{done&&!bye ? "✓ "+tag : tag}</span>
+        {clickable && role==="organizer" && !done && <span className="mc-hint">＋ 結果入力</span>}
+        <span className="mc-bo">BO{bo}</span>
+      </div>
+      <Slot teamId={A} score={m.sa} state={stateFor(A, m.a.bye)} showScore={done&&!bye}
+            isChamp={isChampMatch && done && win===A} />
+      <Slot teamId={B} score={m.sb} state={stateFor(B, m.b.bye)} showScore={done&&!bye}
+            isChamp={isChampMatch && done && win===B} />
+      {(m.dt || m.streamer) && !bye && (
+        <div className="mc-foot">
+          {m.dt && <span>{fmtDT(m.dt)}</span>}
+          {m.streamer && <span className="live"><span className="d"></span>{m.streamer}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Podium({ M }){
+  const champ = winnerId("final", M);
+  const runner = loserId("final", M);
+  const third = winnerId("third", M);
+  const fm = M.final, tm = M.third;
+  if(!champ) return null;
+  const Pod = ({ cls, medal, rank, teamId, score }) => {
+    const t = teamId ? TEAMS[teamId] : null;
+    return (
+      <div className={"pod "+cls}>
+        <span className="medal">{medal}</span>
+        <div className="card">
+          <span className="rk">{rank}</span>
+          <span className="nm">{t ? t.name : "未定"}</span>
+          {t && <span className="seed">SEED {t.seed}</span>}
+          {score && <span className="score">{score}</span>}
+        </div>
+        <div className="base">{medal}</div>
+      </div>
+    );
+  };
+  return (
+    <div className="podium-panel">
+      <div className="podium-head">
+        <h2 className="section-title"><span className="bar" style={{background:"var(--gold)"}}></span>最終結果 <span className="sub">Final Standings</span></h2>
+        <span className="chip decided">🏆 優勝 <span className="v">{teamName(champ)}</span></span>
+      </div>
+      <div className="podium">
+        <Pod cls="silver" medal="🥈" rank="準優勝" teamId={runner}
+             score={fm.done ? `${fm.sb}–${fm.sa} 決勝` : ""} />
+        <Pod cls="gold" medal="🏆" rank="優勝" teamId={champ}
+             score={fm.done ? `決勝 ${fm.sa}–${fm.sb}` : ""} />
+        <Pod cls="bronze" medal="🥉" rank="第3位" teamId={third}
+             score={tm.done ? `${tm.sa}–${tm.sb} 3決` : ""} />
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════ bracket + connectors ═══════════ */
+const CONNECTORS = [
+  ["qf1","sf1"], ["qf2","sf1"],
+  ["qf3","sf2"], ["qf4","sf2"],
+  ["sf1","final"], ["sf2","final"],
+];
+
+function Bracket({ M, bos, role, onOpen }){
+  const wrapRef = useRef(null);
+  const [paths, setPaths] = useState([]);
+  const [size, setSize] = useState({ w:0, h:0 });
+
+  const recompute = useCallback(()=>{
+    const wrap = wrapRef.current; if(!wrap) return;
+    const base = wrap.getBoundingClientRect();
+    const rectOf = (id)=>{
+      const el = wrap.querySelector(`[data-card="${id}"]`);
+      return el ? el.getBoundingClientRect() : null;
+    };
+    const out = [];
+    CONNECTORS.forEach(([childId, parentId])=>{
+      const c = rectOf(childId), p = rectOf(parentId);
+      if(!c || !p) return;
+      const cx = c.right - base.left, cy = c.top - base.top + c.height/2;
+      const px = p.left - base.left, py = p.top - base.top + p.height/2;
+      const midX = (cx + px)/2;
+      out.push({
+        d:`M ${cx} ${cy} C ${midX} ${cy} ${midX} ${py} ${px} ${py}`,
+        done: winnerId(childId, M) != null,
+      });
+    });
+    setPaths(out);
+    setSize({ w: wrap.scrollWidth, h: wrap.scrollHeight });
+  }, [M]);
+
+  useLayoutEffect(()=>{ recompute(); }, [recompute, bos, role]);
+  useEffect(()=>{
+    const t = setTimeout(recompute, 60);
+    window.addEventListener("resize", recompute);
+    document.fonts && document.fonts.ready.then(recompute);
+    return ()=>{ clearTimeout(t); window.removeEventListener("resize", recompute); };
+  }, [recompute]);
+
+  const col = (key, ids) => (
+    <div className="round-col" data-round={key}>
+      <div className="round-head">
+        <span className="rn">{ROUND_LABEL[key]}</span>
+        <span className="rc">{ids.length} {ids.length>1?"matches":"match"}</span>
+        <span className="bo">BO{bos[key]}</span>
+      </div>
+      <div className="round-matches">
+        {ids.map(id => (
+          <MatchCard key={id} id={id} M={M} bo={bos[ROUND_KEY[id]]} role={role} onOpen={onOpen} />
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bracket-scroll">
+      <div className="bracket" ref={wrapRef}>
+        <svg className="bkt-svg" width={size.w} height={size.h}>
+          {paths.map((p,i)=>(
+            <path key={i} d={p.d} fill="none" strokeWidth={p.done?2.4:2}
+                  stroke={p.done ? "rgba(255,106,43,.55)" : "#3A4657"}
+                  strokeLinecap="round" />
+          ))}
+        </svg>
+        {col("qf", ["qf1","qf2","qf3","qf4"])}
+        {col("sf", ["sf1","sf2"])}
+        <div className="round-col" data-round="final">
+          <div className="round-head">
+            <span className="rn">決勝</span>
+            <span className="rc">1 match</span>
+            <span className="bo">BO{bos.final}</span>
+          </div>
+          <div className="round-matches">
+            <MatchCard id="final" M={M} bo={bos.final} role={role} onOpen={onOpen} isChampMatch />
+          </div>
+          <div className="third-wrap">
+            <div className="third-frame">
+              <div className="third-label"><span className="medal">🥉</span>3位決定戦 <span style={{color:"var(--fg-subtle)",fontWeight:400,fontSize:"11px"}}>· 準決勝敗者</span></div>
+              <MatchCard id="third" M={M} bo={bos.third} role={role} onOpen={onOpen} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════ modal ═══════════ */
+function MatchModal({ id, M, bos, role, onClose, onSave, onClear, flash }){
+  const m = M[id];
+  const A = slotTeam(m.a, M), B = slotTeam(m.b, M);
+  const key = ROUND_KEY[id], bo = bos[key], cap = winCap(bo);
+  const canEdit = role==="organizer" || (role==="participant" && (A===MY_TEAM || B===MY_TEAM));
+  const canStream = role==="organizer";
+  const ro = !canEdit;
+
+  const [sa, setSa] = useState(m.sa||0);
+  const [sb, setSb] = useState(m.sb||0);
+  const [dt, setDt] = useState(m.dt||"");
+  const [streamer, setStreamer] = useState(m.streamer||"");
+  const [potgTeam, setPotgTeam] = useState(m.potgTeam||"");
+  const [potgPlayer, setPotgPlayer] = useState(m.potgPlayer||"");
+  const played = Math.max(1, sa+sb);
+  const [codes, setCodes] = useState(()=>{
+    const arr = (m.maps||[]).map(x=>x.code);
+    return arr;
+  });
+
+  const clamp = (v)=> Math.max(0, Math.min(cap, v));
+  const step = (side, d)=>{
+    if(ro) return;
+    if(side==="a") setSa(clamp(sa+d)); else setSb(clamp(sb+d));
+  };
+  const winnerSide = sa>sb ? "a" : (sb>sa ? "b" : null);
+  const reachedCap = sa===cap || sb===cap;
+
+  const save = ()=>{
+    if(sa===sb){ flash("引き分けは登録できません。勝者を決めてください","err"); return; }
+    if(!reachedCap){ flash(`BO${bo} は先取 ${cap} で決着します`,"err"); return; }
+    onSave(id, { sa, sb, done:true, dt, streamer, potgTeam, potgPlayer,
+      maps: Array.from({length:sa+sb}, (_,i)=>({ name:(m.maps&&m.maps[i]&&m.maps[i].name)||"", code:codes[i]||"" })) });
+  };
+
+  return (
+    <div className="scrim" onMouseDown={e=>{ if(e.target.classList.contains("scrim")) onClose(); }}>
+      <div className="modal">
+        <div className="m-head">
+          <div className="m-kicker">Match · {ROUND_LABEL[key]}{ro && <span className="m-ro-tag">閲覧のみ</span>}</div>
+          <span className="m-bo">BO{bo}</span>
+          <div className="m-teams">
+            <div className="m-team a"><span className="seed">{A?TEAMS[A].seed:"–"}</span><span className="nm">{teamName(A)||"未定"}</span></div>
+            <span className="m-vs">VS</span>
+            <div className="m-team b"><span className="seed">{B?TEAMS[B].seed:"–"}</span><span className="nm">{teamName(B)||"未定"}</span></div>
+          </div>
+        </div>
+        <div className="m-body">
+          <div className="fgroup">
+            <div className="flabel">スコア <span className="opt">マップ取得数（BO{bo}・先取{cap}）</span></div>
+            <div className="score-row">
+              <div className="score-side">
+                <span className="snm">{teamName(A)}</span>
+                <div className="stepbox">
+                  <button disabled={ro} onClick={()=>step("a",-1)}>−</button>
+                  <span className="val">{sa}</span>
+                  <button disabled={ro} onClick={()=>step("a",1)}>＋</button>
+                </div>
+              </div>
+              <span className="score-dash">–</span>
+              <div className="score-side">
+                <span className="snm">{teamName(B)}</span>
+                <div className="stepbox">
+                  <button disabled={ro} onClick={()=>step("b",-1)}>−</button>
+                  <span className="val">{sb}</span>
+                  <button disabled={ro} onClick={()=>step("b",1)}>＋</button>
+                </div>
+              </div>
+            </div>
+            {!ro && <div className="winhint">
+              {reachedCap && winnerSide
+                ? <span><b>{teamName(winnerSide==="a"?A:B)}</b> が勝ち上がり</span>
+                : <span>先取 {cap} で決着 · 勝者が次ラウンドへ進出</span>}
+            </div>}
+          </div>
+
+          <div className="fgroup">
+            <div className="flabel">POTG <span className="opt">プレイ・オブ・ザ・ゲーム</span></div>
+            <div className="potg-row">
+              <div className="selwrap">
+                <select className="mp-sel" disabled={ro} value={potgTeam} onChange={e=>setPotgTeam(e.target.value)}>
+                  <option value="">POTG チーム…</option>
+                  {A && <option value={A}>{teamName(A)}</option>}
+                  {B && <option value={B}>{teamName(B)}</option>}
+                </select>
+              </div>
+              <input className="inp" disabled={ro} value={potgPlayer} onChange={e=>setPotgPlayer(e.target.value)} placeholder="選手タグ（例：Kestrel）" />
+            </div>
+          </div>
+
+          <div className="fgroup">
+            <div className="flabel">マップ別リプレイコード <span className="opt">行われたマップ分</span></div>
+            {Array.from({length:played}).map((_,i)=>(
+              <div className="map-row" key={i}>
+                <div className="mp-name"><span className="n">MAP {i+1}</span><span>{(m.maps&&m.maps[i]&&m.maps[i].name)||"—"}</span></div>
+                <input className="inp mono" disabled={ro} value={codes[i]||""}
+                  onChange={e=>{ const c=[...codes]; c[i]=e.target.value; setCodes(c); }}
+                  placeholder="リプレイコード" />
+              </div>
+            ))}
+          </div>
+
+          <div className="fgroup">
+            <div className="flabel">日時</div>
+            <input className="inp mono" type="datetime-local" disabled={ro} value={dt} onChange={e=>setDt(e.target.value)} />
+          </div>
+
+          <div className="fgroup">
+            <div className="flabel">配信 <span className="opt">{canStream ? "任意" : "主催者のみ編集可"}</span></div>
+            <input className="inp" disabled={!canStream} value={streamer} onChange={e=>setStreamer(e.target.value)} placeholder="配信者名（例：nori#1121）" />
+          </div>
+        </div>
+        <div className="m-foot">
+          {!ro && m.done ? <button className="btn btn-danger btn-sm" onClick={()=>onClear(id)}>結果を取り消し</button> : <span></span>}
+          <div className="right">
+            {ro
+              ? <button className="btn btn-secondary btn-md" onClick={onClose}>閉じる</button>
+              : <>
+                  <button className="btn btn-ghost btn-md" onClick={onClose}>キャンセル</button>
+                  <button className="btn btn-primary btn-md" onClick={save}>保存</button>
+                </>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════ toast ═══════════ */
+function useToast(){
+  const [toast, setToast] = useState(null);
+  const timer = useRef(null);
+  const flash = useCallback((msg, type="ok")=>{
+    setToast({ msg, type });
+    clearTimeout(timer.current);
+    timer.current = setTimeout(()=>setToast(null), 2400);
+  }, []);
+  const node = (
+    <div id="toast" className={(toast?"show ":"")+(toast?toast.type:"")}>
+      <span className="ti">{toast && toast.type==="ok"
+        ? <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        : <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12" y2="16.5"/></svg>}
+      </span>
+      <span>{toast ? toast.msg : ""}</span>
+    </div>
+  );
+  return [node, flash];
+}
+
+/* ═══════════ app ═══════════ */
+function App(){
+  const [role, setRole] = useState("organizer");
+  const [matches, setMatches] = useState(seededResults);
+  const [bos, setBos] = useState(DEFAULT_BO);
+  const [generated, setGenerated] = useState(true);
+  const [openId, setOpenId] = useState(null);
+  const [toastNode, flash] = useToast();
+
+  const M = matches;
+  const decided = winnerId("final", M) != null && winnerId("third", M) != null;
+
+  const onOpen = (id)=>setOpenId(id);
+  const onClose = ()=>setOpenId(null);
+
+  const onSave = (id, patch)=>{
+    setMatches(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+    setOpenId(null);
+    flash("試合結果を保存しました","ok");
+  };
+  const onClear = (id)=>{
+    setMatches(prev => ({ ...prev, [id]: { ...prev[id], sa:0, sb:0, done:false, potgTeam:"", potgPlayer:"", maps:[] } }));
+    setOpenId(null);
+    flash("結果を取り消しました","ok");
+  };
+
+  const regenerate = ()=>{
+    setMatches(structure());
+    setBos(DEFAULT_BO);
+    setGenerated(true);
+    flash("決勝トーナメントを生成しました（6チーム・BYE 2）","ok");
+  };
+  const reset = ()=>{
+    if(!window.confirm("トーナメントを削除して未生成に戻しますか？入力済みの結果は失われます。")) return;
+    setGenerated(false);
+    setMatches(structure());
+    flash("トーナメントを削除しました","ok");
+  };
+  const setBO = (key, val)=>{
+    setBos(prev => ({ ...prev, [key]: val }));
+    flash(`${ROUND_LABEL[key]} を BO${val} に設定`,"ok");
+  };
+
+  const isOrg = role==="organizer";
+
+  return (
+    <>
+      <header className="site-header">
+        <div className="header-inner">
+          <div className="brand-nav">
+            <span className="logo"><span className="dot"></span>Matchpoint</span>
+            <nav>
+              <a href="#">イベント一覧</a>
+              <a href="#">イベント詳細</a>
+              <a href="#">チーム編成</a>
+              <a href="#">対戦表</a>
+              <a href="#" className="active">決勝T</a>
+            </nav>
+          </div>
+          <div className="header-right">
+            <span className="bell">🔔<span className="count mono">3</span></span>
+            <span className="header-user"><span className="av">NO</span><span className="nm">nori#1121</span></span>
+            <button className="btn btn-ghost btn-sm">ログアウト</button>
+          </div>
+        </div>
+      </header>
+
+      <main className="page">
+        <div className="crumbs">
+          <a href="#">イベント一覧</a><span className="sep">/</span>
+          <a href="#">第7回 Matchpoint Open</a><span className="sep">/</span>
+          <span className="here">決勝トーナメント</span>
+        </div>
+
+        <div className="page-head">
+          <div>
+            <p className="kicker">Bracket · {role==="organizer"?"Organizer":role==="participant"?"Participant":"Spectator"}</p>
+            <h1 className="page-title">決勝トーナメント<span className="ev">第7回 Matchpoint Open</span></h1>
+            <div className="head-meta">
+              <span className="chip">🔴 Overwatch 2</span>
+              <span className="chip"><span className="k">形式</span><span className="v">シングルエリミネーション</span></span>
+              <span className="chip"><span className="k">参加</span><span className="v mono">6</span>チーム</span>
+              <span className="chip"><span className="k">ラウンド</span><span className="v mono">3</span></span>
+              {decided
+                ? <span className="chip decided">🏆 優勝 <span className="v">{teamName(winnerId("final",M))}</span></span>
+                : <span className="chip"><span className="k">決着</span><span className="v">進行中</span></span>}
+            </div>
+            <div className="nav-links">
+              <button className="btn btn-secondary btn-sm">← 対戦表・順位へ</button>
+              <button className="btn btn-secondary btn-sm">観戦ビューで見る →</button>
+              <button className="btn btn-ghost btn-sm">イベントに戻る</button>
+            </div>
+          </div>
+          <div className="head-actions">
+            <div className="modeseg">
+              {["organizer","participant","spectator"].map(r=>(
+                <button key={r} className={role===r?"on":""} onClick={()=>{ setRole(r); setOpenId(null); }}>
+                  {r==="organizer"?"主催者":r==="participant"?"参加者":"観戦者"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {role==="participant" && (
+          <div className="role-banner rb-part">
+            <span className="dot"></span>
+            <span><b>参加者モード</b>　あなたのチーム <b>{teamName(MY_TEAM)}</b> が絡む試合のみ、代表として結果を入力できます。他カードは閲覧のみです。</span>
+          </div>
+        )}
+        {role==="spectator" && (
+          <div className="role-banner rb-spec">
+            <span className="dot"></span>
+            <span><b>観戦ビュー</b>　決勝トーナメントの勝ち上がりを閲覧しています。カードをタップすると試合の詳細（日時・配信・スコア）を確認できます。</span>
+          </div>
+        )}
+
+        {generated ? (
+          <>
+            <Podium M={M} />
+
+            <div className="bracket-note">
+              <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span>
+                {role==="spectator"
+                  ? <><b>カードをクリック</b>すると試合の詳細が開きます。第1回戦の BYE は上位2シードの不戦勝です。</>
+                  : role==="participant"
+                    ? <><b>自チームが絡むカード</b>をクリックすると結果を入力できます。勝者は自動で次ラウンドへ進みます。</>
+                    : <><b>カードをクリック</b>して結果を入力。勝者は自動で次ラウンドへ勝ち上がります。BYE は上位2シードの不戦勝です。</>}
+              </span>
+            </div>
+
+            <Bracket M={M} bos={bos} role={role} onOpen={onOpen} />
+
+            {isOrg && (
+              <div className="org-toolbar">
+                <div className="ot-top">
+                  <div>
+                    <div className="ot-title"><span className="ic"><svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v3a6 6 0 0 1-6 6H9"/></svg></span>トーナメントの生成・管理</div>
+                    <p className="ot-sub">予選順位をシードにシングルエリミネーションを生成します。各ラウンドの BO はここでまとめて設定できます。D&D での組み替え・BO 変更・再生成は主催者のみ。</p>
+                  </div>
+                  <div className="ot-right">
+                    <button className="btn btn-secondary btn-md" onClick={regenerate}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                      再生成
+                    </button>
+                    <button className="btn btn-danger btn-md" onClick={reset}>トーナメントを削除</button>
+                  </div>
+                </div>
+                <div className="ot-actions">
+                  <div className="ot-bo">
+                    <span className="lb">ラウンド別 BO</span>
+                    {["qf","sf","final","third"].map(k=>(
+                      <div className="bo-seg" key={k}>
+                        <span className="rl">{ROUND_LABEL[k]}</span>
+                        <div className="bo-pills">
+                          {[1,3,5,7].map(v=>(
+                            <button key={v} className={bos[k]===v?"on":""} onClick={()=>setBO(k,v)}>BO{v}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="gen-panel">
+            <div className="gp-ic"><svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v3a6 6 0 0 1-6 6H9"/></svg></div>
+            <h3>決勝トーナメントを生成</h3>
+            <p>予選を勝ち抜いた 6 チームを順位シードで組みます。8 スロットのシングルエリミネーションとなり、上位 2 シードには第1回戦の BYE（不戦勝）が付きます。</p>
+            <div className="seed-preview">
+              {SEED_ORDER.map(id=>(
+                <span className="sp" key={id}><span className="n">{TEAMS[id].seed}</span>{TEAMS[id].name}</span>
+              ))}
+              <span className="sp bye"><span className="n">–</span>BYE ×2（第1・2シード）</span>
+            </div>
+            <button className="btn btn-primary btn-lg" onClick={regenerate}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v3a6 6 0 0 1-6 6H9"/></svg>
+              トーナメントを生成する
+            </button>
+          </div>
+        )}
+      </main>
+
+      {openId && (
+        <MatchModal id={openId} M={M} bos={bos} role={role}
+          onClose={onClose} onSave={onSave} onClear={onClear} flash={flash} />
+      )}
+      {toastNode}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+
+</body></html>
