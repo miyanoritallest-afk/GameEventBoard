@@ -222,47 +222,119 @@ export default async function EventMatchesPage({
     },
   );
 
+  // ヒーロー用の派生値。
+  const gameName = (event.games as { name: string } | null)?.name ?? "-";
+  const roleLabel = isOrganizer
+    ? "Organizer"
+    : myRegistration !== null
+      ? "Participant"
+      : "Viewer";
+  // 決勝トーナメント進出数（各ブロック上位N）。0 は決勝Tなし＝通過ライン非表示。
+  const advanceCount = event.tournament_advance_count ?? 0;
+  // 全ブロックの消化進捗（結果ありの試合 / 全対戦カード）。
+  const totalMatches = groups.reduce((n, g) => n + g.matches.length, 0);
+  const doneMatches = groups.reduce(
+    (n, g) => n + g.matches.filter((m) => m.hasResult).length,
+    0,
+  );
+
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-[1200px] px-6 py-10">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">対戦表・順位表</h1>
-          <div className="flex items-center gap-4">
-            {/* ナビゲーションは観戦者にも出す（閲覧の全面公開・フェーズB）。 */}
-            <Link
-              href={`/events/${event.id}/groups`}
-              className="text-sm text-primary hover:underline"
-            >
-              ← ブロック分けへ
-            </Link>
-            {showTournamentLink && (
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* パンくず（イベント一覧 → イベント名 → 対戦表）。 */}
+        <nav className="text-sm text-muted-foreground">
+          <Link
+            href="/events"
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            イベント一覧
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <Link
+            href={`/events/${event.slug ?? event.id}`}
+            className="underline-offset-2 transition-colors hover:text-[color:var(--mp-brand)] hover:underline"
+          >
+            {event.title}
+          </Link>
+          <span className="mx-2 text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">対戦表・順位表</span>
+        </nav>
+
+        {/* ヒーロー：ラベル＋タイトル＋イベント名、ゲームチップ、消化進捗、導線。 */}
+        <header className="mt-5 rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e2)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-[color:var(--mp-brand)]">
+                <span className="h-px w-6 bg-[color:var(--mp-brand)]" />
+                STANDINGS
+                <span className="text-[color:var(--mp-fg-subtle)]">·</span>
+                <span className="text-[color:var(--mp-fg-subtle)]">{roleLabel}</span>
+              </p>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                対戦表・順位表
+              </h1>
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {event.title}
+              </p>
+            </div>
+
+            {/* 導線（観戦者にも出す・フェーズB）。 */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5 text-sm">
               <Link
-                href={`/events/${event.id}/tournament`}
-                className="text-sm text-primary hover:underline"
+                href={`/events/${event.id}/groups`}
+                className="text-[color:var(--mp-brand)] underline-offset-2 hover:underline"
               >
-                決勝トーナメントへ →
+                ← ブロック分けへ
               </Link>
-            )}
-            <Link
-              href={`/events/${event.id}/watch`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              観戦ビューへ
-            </Link>
-            <Link
-              href={`/events/${event.slug ?? event.id}`}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              イベントに戻る
-            </Link>
+              {showTournamentLink && (
+                <Link
+                  href={`/events/${event.id}/tournament`}
+                  className="text-[color:var(--mp-brand)] underline-offset-2 hover:underline"
+                >
+                  決勝トーナメントへ →
+                </Link>
+              )}
+              <Link
+                href={`/events/${event.id}/watch`}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                観戦ビューへ →
+              </Link>
+            </div>
           </div>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
+
+          {/* チップ: ゲーム / ブロック数 / 通過 / 消化。 */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[color:var(--mp-danger)]" />
+              {gameName}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+              ブロック{" "}
+              <span className="font-semibold text-foreground tabular-nums">
+                {groups.length}
+              </span>
+            </span>
+            {advanceCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+                通過{" "}
+                <span className="font-semibold text-foreground">各組 上位{advanceCount}</span>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[color:var(--mp-surface-2)] px-3 py-1 text-xs font-medium text-muted-foreground">
+              消化{" "}
+              <span className="font-semibold text-foreground tabular-nums">
+                {doneMatches} / {totalMatches}
+              </span>
+            </span>
+          </div>
+        </header>
 
         <MatchesBoard
           readOnly={!isOrganizer}
           rankingEnabled={event.ranking_enabled}
           usePotg={usePotg}
+          advanceCount={advanceCount}
           initialGroups={groups}
         />
       </div>
