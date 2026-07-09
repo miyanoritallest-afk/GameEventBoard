@@ -48,6 +48,7 @@ import {
 } from "@/lib/services/match-result";
 import { formatLocalInputForDisplay } from "@/lib/datetime-local";
 import { ScoreStepper } from "../_components/score-stepper";
+import { roundLabel } from "../_components/round-label";
 
 type Podium = {
   champion: string | null;
@@ -104,15 +105,6 @@ export type BoardBracketMatch = {
 };
 
 type PreviewSeed = { seed: number; teamId: string; teamName: string };
-
-/** ラウンド番号からラベルを作る（最終ラウンド=決勝, その前=準決勝…）。 */
-function roundLabel(round: number, totalRounds: number): string {
-  const fromLast = totalRounds - round; // 0=決勝, 1=準決勝, 2=準々決勝
-  if (fromLast === 0) return "決勝";
-  if (fromLast === 1) return "準決勝";
-  if (fromLast === 2) return "準々決勝";
-  return `${round}回戦`;
-}
 
 /** 試合の状態を求める（BYE / 勝者待ち / 対戦カード / 終了）。 */
 type MatchState = "bye" | "locked" | "ready" | "done";

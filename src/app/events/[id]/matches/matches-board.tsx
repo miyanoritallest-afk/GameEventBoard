@@ -18,6 +18,7 @@ import {
 } from "@/lib/services/match-result";
 import { formatLocalInputForDisplay } from "@/lib/datetime-local";
 import { ScoreStepper } from "../_components/score-stepper";
+import { teamColor } from "../_components/team-colors";
 
 /** ブロック所属チーム（プルダウン用）。 */
 export type BoardTeam = { id: string; name: string };
@@ -72,25 +73,6 @@ export type BoardGroup = {
   matches: BoardMatch[];
   standings: BoardStanding[];
 };
-
-/**
- * チームの識別色（Claude Design 案準拠）。ブロック内の並び順（index）で循環割当。
- * マトリクスのバッジ・行ヘッダー・順位表のスウォッチ・モーダルで共通利用する。
- */
-const TEAM_COLORS = [
-  "#FF6A2B",
-  "#22D3EE",
-  "#45C08A",
-  "#F5B93D",
-  "#5B93F0",
-  "#A78BFA",
-  "#F2685A",
-  "#E8637F",
-] as const;
-
-function teamColor(index: number): string {
-  return TEAM_COLORS[index % TEAM_COLORS.length];
-}
 
 /** ブロック内チームに表示用の番号(1始まり)と色を割り当てた表現。 */
 type TeamMeta = { id: string; name: string; no: number; color: string };
