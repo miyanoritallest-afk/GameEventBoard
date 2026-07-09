@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listGames } from "@/lib/repositories/games";
@@ -63,14 +64,41 @@ export default async function NewEventPage({
   }
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-2xl px-6 py-10">
-        <h1 className="text-2xl font-bold">イベントを作成</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {seriesId
-            ? "シリーズの新しい開催回を作成します。前回の設定を引き継いでいます（編集できます）。"
-            : "下書きとして保存されます。応募者のスコア申告ルールもここで設定します。"}
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-[720px] px-6 py-10">
+        {/* パンくず */}
+        <nav className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <Link href="/events" className="hover:text-foreground">
+            イベント一覧
+          </Link>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
+          <Link href="/events/mine" className="hover:text-foreground">
+            自分のイベント
+          </Link>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">新規作成</span>
+        </nav>
+
+        {/* ヒーロー */}
+        <p className="mt-6 flex items-center gap-[9px] font-mono text-[11px] uppercase tracking-[0.2em] text-[color:var(--mp-accent)] before:h-0.5 before:w-[22px] before:bg-[color:var(--mp-accent)] before:content-['']">
+          主催者ツール
         </p>
+        <h1 className="mt-2.5 text-3xl font-extrabold tracking-tight text-foreground">
+          イベントを作成
+        </h1>
+        <p className="mt-3 max-w-[600px] text-sm text-muted-foreground">
+          {seriesId ? (
+            "シリーズの新しい開催回を作成します。前回の設定を引き継いでいます（編集できます）。公開は保存後に行えます。"
+          ) : (
+            <>
+              <span className="font-semibold text-[color:var(--mp-warning)]">
+                下書き
+              </span>
+              として保存されます。応募者のスコア申告ルールや順位付けの方式も、ここでまとめて設定します。公開は保存後に行えます。
+            </>
+          )}
+        </p>
+
         <EventForm
           games={games}
           action={createEvent}

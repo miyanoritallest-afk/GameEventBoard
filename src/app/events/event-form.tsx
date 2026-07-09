@@ -92,6 +92,9 @@ type EventFormAction = (
  * - submitLabel / pendingLabel: ボタン表記。
  *
  * 日時は DateTimePicker（datetime-local 互換の hidden 値）を使う。
+ *
+ * デザイン: 刷新済み（.theme-matchpoint）に合わせ、各設定群を番号付きカードに分割。
+ * 入力要素の見た目は globals.css の `.mp-form` スコープで整える（ルートに付与）。
  */
 export function EventForm({
   games,
@@ -128,11 +131,11 @@ export function EventForm({
   // 子: チームスコアに上限を設けるか（cap が設定済みなら ON＝復元）。既定は上限なし。
   const [useScoreCap, setUseScoreCap] = useState(d.teamScoreCap != null);
   // ランク換算ガイド（例 "23 (D3)"）の表示用に入力値を state で持つ。
-  const [scoreCap, setScoreCap] = useState<number | "">(
-    d.teamScoreCap ?? "",
-  );
+  const [scoreCap, setScoreCap] = useState<number | "">(d.teamScoreCap ?? "");
   // 親トグル: 順位機能を使うか（OFF なら勝点・タイブレークを隠す）。
-  const [rankingEnabled, setRankingEnabled] = useState(d.rankingEnabled ?? false);
+  const [rankingEnabled, setRankingEnabled] = useState(
+    d.rankingEnabled ?? false,
+  );
   // イベント形式。形式に応じて本戦設定（総当たりBO・3位決定戦）を出し分ける（PR-2）。
   const [format, setFormat] = useState<EventFormat>(
     d.format ?? "round_robin_then_tournament",
@@ -141,119 +144,110 @@ export function EventForm({
   const showTournamentConfig = hasTournamentStage(format); // 3位決定戦は決勝Tを持つ形式のみ
 
   return (
-    <form action={formAction} className="mt-6 space-y-6">
+    <form action={formAction} className="mp-form mt-8 flex flex-col gap-5">
       {/* シリーズの新しい開催回として作成するとき、紐付け先を hidden で送る。 */}
       {seriesId && <input type="hidden" name="series_id" value={seriesId} />}
       {state.error && (
-        <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p className="rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {state.error}
         </p>
       )}
 
-      {/* 登録名（主催者としての公開表示名。既定は Discord 名） */}
-      <Field label="登録名（主催者として表示される名前）" error={fe.organizerDisplayName}>
-        <input
-          name="organizerDisplayName"
-          type="text"
-          maxLength={32}
-          defaultValue={d.organizerDisplayName ?? discordName}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          イベント詳細の「主催」に表示されます。既定は Discord 名です。
-        </p>
-      </Field>
-
-      {/* 基本情報 */}
-      <Field label="タイトル" required error={fe.title}>
-        <input
-          name="title"
-          type="text"
-          maxLength={80}
-          defaultValue={d.title ?? ""}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        />
-      </Field>
-
-      <Field label="ゲーム" required error={fe.gameId}>
-        <select
-          name="gameId"
-          defaultValue={d.gameId ?? games[0]?.id ?? ""}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+      {/* ══════ 01 基本情報 ══════ */}
+      <Card n="01" title="基本情報">
+        {/* 登録名（主催者としての公開表示名。既定は Discord 名） */}
+        <Field
+          label="登録名"
+          opt="主催者として表示される名前"
+          error={fe.organizerDisplayName}
+          hint="イベント詳細の「主催」に表示されます。既定は Discord 名です。"
         >
-          {games.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="説明（任意）" error={fe.description}>
-        <textarea
-          name="description"
-          rows={4}
-          maxLength={2000}
-          defaultValue={d.description ?? ""}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        />
-      </Field>
-
-      {/* 開催期間 */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="開催開始（JST）" required error={fe.startsAt}>
-          <DateTimePicker name="startsAt" defaultValue={d.startsAt ?? ""} />
-        </Field>
-        <Field label="開催終了（JST）" required error={fe.endsAt}>
-          <DateTimePicker name="endsAt" defaultValue={d.endsAt ?? ""} />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="募集締切（任意・JST）" error={fe.recruitDeadline}>
-          <DateTimePicker
-            name="recruitDeadline"
-            defaultValue={d.recruitDeadline ?? ""}
-          />
-        </Field>
-        <Field label="定員（チーム数・任意）" error={fe.capacity}>
           <input
-            name="capacity"
-            type="number"
-            min={1}
-            defaultValue={d.capacity ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            name="organizerDisplayName"
+            type="text"
+            maxLength={32}
+            defaultValue={d.organizerDisplayName ?? discordName}
           />
         </Field>
-      </div>
 
-      {/* スコアリング設定 */}
-      <fieldset className="rounded-xl border border-border bg-card p-4">
-        <legend className="px-1 text-sm font-semibold">スコアリング設定</legend>
+        <Field label="タイトル" required error={fe.title}>
+          <input
+            name="title"
+            type="text"
+            maxLength={80}
+            defaultValue={d.title ?? ""}
+            placeholder="第7回 Matchpoint Open — シーズン中盤 5v5"
+          />
+        </Field>
 
+        <Field label="ゲーム" required error={fe.gameId}>
+          <select name="gameId" defaultValue={d.gameId ?? games[0]?.id ?? ""}>
+            {games.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="説明" opt="任意" error={fe.description}>
+          <textarea
+            name="description"
+            rows={4}
+            maxLength={2000}
+            defaultValue={d.description ?? ""}
+            placeholder="大会の概要・参加条件・合流方法などを記載します。"
+          />
+        </Field>
+
+        {/* 開催期間 */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="開催開始" opt="JST" required error={fe.startsAt}>
+            <DateTimePicker name="startsAt" defaultValue={d.startsAt ?? ""} />
+          </Field>
+          <Field label="開催終了" opt="JST" required error={fe.endsAt}>
+            <DateTimePicker name="endsAt" defaultValue={d.endsAt ?? ""} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="募集締切" opt="任意・JST" error={fe.recruitDeadline}>
+            <DateTimePicker
+              name="recruitDeadline"
+              defaultValue={d.recruitDeadline ?? ""}
+            />
+          </Field>
+          <Field label="定員" opt="チーム数・任意" error={fe.capacity}>
+            <input
+              name="capacity"
+              type="number"
+              min={1}
+              defaultValue={d.capacity ?? ""}
+              placeholder="16"
+            />
+          </Field>
+        </div>
+      </Card>
+
+      {/* ══════ 02 スコアリング設定 ══════ */}
+      <Card n="02" title="スコアリング設定">
         {/* 親トグル: 個人スコアを計算するか。OFF なら配下を隠す（スコアなしイベント）。 */}
-        <label className="mt-2 flex items-center gap-2 text-sm">
-          <input
-            name="requireScore"
-            type="checkbox"
-            checked={requireScore}
-            onChange={(e) => setRequireScore(e.target.checked)}
-            className="size-4"
-          />
-          個人スコアを計算する（ランク申告から算出）
-        </label>
+        <Toggle
+          name="requireScore"
+          checked={requireScore}
+          onChange={setRequireScore}
+          title="個人スコアを計算する"
+          desc="ランク申告から各メンバーのスコアを算出します。"
+        />
 
         {requireScore && (
-          <div className="mt-4 space-y-4 border-l-2 border-border pl-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                name="roleSwapAllowed"
-                type="checkbox"
-                defaultChecked={d.roleSwapAllowed ?? false}
-                className="size-4"
-              />
-              ロールスワップを許可する（全ロールのランクを参照）
-            </label>
+          <Nest>
+            <Toggle
+              name="roleSwapAllowed"
+              defaultChecked={d.roleSwapAllowed ?? false}
+              title="ロールスワップを許可する"
+              desc="全ロールのランクを参照して算出します。"
+            />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="申告シーズン数" error={fe.declaredSeasons}>
@@ -263,17 +257,12 @@ export function EventForm({
                   min={1}
                   max={10}
                   defaultValue={d.declaredSeasons ?? 3}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </Field>
-              <Field
-                label="未認定ロールの扱い"
-                error={fe.uncertifiedHandling}
-              >
+              <Field label="未認定ロールの扱い" error={fe.uncertifiedHandling}>
                 <select
                   name="uncertifiedHandling"
                   defaultValue={d.uncertifiedHandling ?? "exclude"}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 >
                   {UNCERTIFIED_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -285,19 +274,16 @@ export function EventForm({
             </div>
 
             {/* 孫トグル: 到達ボーナスを使うか。ON のときだけ加点欄を表示。 */}
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={useBonus}
-                onChange={(e) => setUseBonus(e.target.checked)}
-                className="size-4"
-              />
-              到達ボーナスを使う（最高到達ランクで加点）
-            </label>
+            <Toggle
+              checked={useBonus}
+              onChange={setUseBonus}
+              title="到達ボーナスを使う"
+              desc="最高到達ランクに応じて加点します。"
+            />
 
             {useBonus && (
               <div className="grid grid-cols-3 gap-4">
-                <Field label="ボーナス: マスター" error={fe.bonusMaster}>
+                <Field label="マスター" error={fe.bonusMaster}>
                   <input
                     name="bonusMaster"
                     type="number"
@@ -305,10 +291,9 @@ export function EventForm({
                     max={10}
                     step="0.5"
                     defaultValue={d.bonusMaster ?? 0}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   />
                 </Field>
-                <Field label="ボーナス: GM" error={fe.bonusGm}>
+                <Field label="GM" error={fe.bonusGm}>
                   <input
                     name="bonusGm"
                     type="number"
@@ -316,10 +301,9 @@ export function EventForm({
                     max={10}
                     step="0.5"
                     defaultValue={d.bonusGm ?? 0}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   />
                 </Field>
-                <Field label="ボーナス: チャンピオン" error={fe.bonusChampion}>
+                <Field label="チャンピオン" error={fe.bonusChampion}>
                   <input
                     name="bonusChampion"
                     type="number"
@@ -327,22 +311,18 @@ export function EventForm({
                     max={10}
                     step="0.5"
                     defaultValue={d.bonusChampion ?? 0}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   />
                 </Field>
               </div>
             )}
 
             {/* 孫トグル: チームスコア上限を設けるか（B-1）。OFF＝上限なし。 */}
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={useScoreCap}
-                onChange={(e) => setUseScoreCap(e.target.checked)}
-                className="size-4"
-              />
-              チームスコアに上限を設ける（出場メンバー平均スコアの上限）
-            </label>
+            <Toggle
+              checked={useScoreCap}
+              onChange={setUseScoreCap}
+              title="チームスコアに上限を設ける"
+              desc="出場メンバーの平均スコアの上限です。"
+            />
 
             {/* OFF のときは空文字を送って null 保存（上限なし）にする。 */}
             {!useScoreCap && (
@@ -362,9 +342,8 @@ export function EventForm({
                       e.target.value === "" ? "" : Number(e.target.value),
                     )
                   }
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
                   {scoreCap === ""
                     ? "1〜40 で入力（チームの出場メンバー平均スコアの上限）。"
                     : `ランク換算の目安: ${scoreCap} (${scoreToRankAbbrev(
@@ -373,45 +352,22 @@ export function EventForm({
                 </p>
               </Field>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
                 ※ 上限なし（チーム編成時にスコアの上限チェックを行いません）。
               </p>
             )}
-          </div>
+          </Nest>
         )}
-      </fieldset>
+      </Card>
 
-      {/* Discord 連携（④ 全体告知）。公開時に告知チャンネルへ自動投稿する Webhook URL。 */}
-      <fieldset className="rounded-xl border border-border bg-card p-4">
-        <legend className="px-1 text-sm font-semibold">Discord 連携</legend>
-        <Field label="告知チャンネルの Webhook URL（任意）" error={fe.discordWebhookUrl}>
-          <input
-            name="discordWebhookUrl"
-            type="url"
-            defaultValue={d.discordWebhookUrl ?? ""}
-            placeholder="https://discord.com/api/webhooks/..."
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            設定すると、このイベントを公開したとき Discord の告知チャンネルへ自動で投稿します。
-            チャンネルの「連携サービス → ウェブフック」で発行した URL を貼り付けてください。
-            空欄なら投稿しません。
-          </p>
-        </Field>
-      </fieldset>
-
-      {/* 本戦設定（予選BO・本戦-3d） */}
-      <fieldset className="rounded-xl border border-border bg-card p-4">
-        <legend className="px-1 text-sm font-semibold">本戦設定</legend>
-
-        {/* イベント形式（2026-06-30 壁打ち）。総当たり/トーナメント/両方を選ぶ。
-            形式に応じた画面分岐（予選/決勝T の出し分け）は後続 PR。 */}
+      {/* ══════ 03 本戦設定（予選BO・本戦-3d） ══════ */}
+      <Card n="03" title="本戦設定">
+        {/* イベント形式（2026-06-30 壁打ち）。総当たり/トーナメント/両方を選ぶ。 */}
         <Field label="イベント形式" error={fe.format}>
           <select
             name="format"
             value={format}
             onChange={(e) => setFormat(e.target.value as EventFormat)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           >
             <option value="round_robin_then_tournament">
               総当たり → 決勝トーナメント
@@ -419,26 +375,25 @@ export function EventForm({
             <option value="round_robin">総当たりのみ</option>
             <option value="tournament">トーナメントのみ</option>
           </select>
-          <p className="mt-1 text-xs text-muted-foreground">
-            大会の進め方を選びます。「総当たり → 決勝トーナメント」は予選で順位を決めてから上位チームでトーナメント、「総当たりのみ」はリーグ戦で完結、「トーナメントのみ」は予選なしで一発勝負です。
+          <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
+            大会の進め方を選びます。「総当たり →
+            決勝トーナメント」は予選で順位を決めてから上位チームでトーナメント、「総当たりのみ」はリーグ戦で完結、「トーナメントのみ」は予選なしで一発勝負です。
           </p>
         </Field>
 
         {/* 総当たりBO は予選（総当たり）を持つ形式でのみ。トーナメントのみでは出さない。 */}
         {showGroupConfig && (
-          <div className="mt-4">
-            <Field label="BO（1試合のマップ数）" error={fe.groupBestOf}>
+          <div>
+            <Field label="BO" opt="1試合のマップ数" error={fe.groupBestOf}>
               <input
                 name="groupBestOf"
                 type="number"
                 min={1}
                 max={7}
                 defaultValue={d.groupBestOf ?? 3}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。
-                対戦表を生成すると全試合に反映されます。偶数は引分けあり。
+              <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
+                総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。対戦表を生成すると全試合に反映されます。偶数は引分けあり。
               </p>
             </Field>
           </div>
@@ -446,43 +401,34 @@ export function EventForm({
 
         {/* 3位決定戦の有無（本戦-5c）。決勝Tを持つ形式でのみ出す（総当たりのみでは不要）。 */}
         {showTournamentConfig && (
-          <>
-            <label className="mt-4 flex items-center gap-2 text-sm">
-              <input
-                name="tournamentThirdPlace"
-                type="checkbox"
-                defaultChecked={d.tournamentThirdPlace ?? false}
-                className="size-4"
-              />
-              {hasGroupStage(format)
-                ? "決勝トーナメントで3位決定戦を行う"
-                : "トーナメントで3位決定戦を行う"}
-            </label>
-            <p className="mt-1 pl-6 text-xs text-muted-foreground">
-              準決勝で敗れた2チームが3位を懸けて対戦します（4チーム以上のトーナメントで有効）。
-            </p>
-          </>
+          <div>
+            <Toggle
+              name="tournamentThirdPlace"
+              defaultChecked={d.tournamentThirdPlace ?? false}
+              title={
+                hasGroupStage(format)
+                  ? "決勝トーナメントで3位決定戦を行う"
+                  : "トーナメントで3位決定戦を行う"
+              }
+              desc="準決勝で敗れた2チームが3位を懸けて対戦します（4チーム以上のトーナメントで有効）。"
+            />
+          </div>
         )}
-      </fieldset>
+      </Card>
 
-      {/* 順位設定（本戦-3b） */}
-      <fieldset className="rounded-xl border border-border bg-card p-4">
-        <legend className="px-1 text-sm font-semibold">順位設定</legend>
-
+      {/* ══════ 04 順位設定（本戦-3b） ══════ */}
+      <Card n="04" title="順位設定">
         {/* 親トグル: 順位機能を使うか。OFF なら配下を隠す（順位を争わないイベント）。 */}
-        <label className="mt-2 flex items-center gap-2 text-sm">
-          <input
-            name="rankingEnabled"
-            type="checkbox"
-            checked={rankingEnabled}
-            onChange={(e) => setRankingEnabled(e.target.checked)}
-            className="size-4"
-          />
-          順位を集計する（勝点・タイブレークで順位を決める）
-        </label>
+        <Toggle
+          name="rankingEnabled"
+          checked={rankingEnabled}
+          onChange={setRankingEnabled}
+          title="順位を集計する"
+          desc="勝点・タイブレークで順位を決めます。"
+        />
 
         {rankingEnabled && (
-          <div className="mt-4 space-y-4 border-l-2 border-border pl-4">
+          <Nest>
             <div className="grid grid-cols-3 gap-4">
               <Field label="勝ち点" error={fe.pointsWin}>
                 <input
@@ -491,7 +437,6 @@ export function EventForm({
                   min={0}
                   max={99}
                   defaultValue={d.pointsWin ?? 3}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </Field>
               <Field label="引分点" error={fe.pointsDraw}>
@@ -501,7 +446,6 @@ export function EventForm({
                   min={0}
                   max={99}
                   defaultValue={d.pointsDraw ?? 1}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </Field>
               <Field label="負け点" error={fe.pointsLoss}>
@@ -511,14 +455,15 @@ export function EventForm({
                   min={0}
                   max={99}
                   defaultValue={d.pointsLoss ?? 0}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </Field>
             </div>
 
             <div>
-              <p className="mb-1 text-sm font-medium">同着のタイブレーク</p>
-              <p className="mb-2 text-xs text-muted-foreground">
+              <p className="mb-1 text-[13px] font-semibold text-foreground">
+                同着のタイブレーク
+              </p>
+              <p className="mb-3 text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
                 勝点が同じチームの順位を決める基準。「使う」側の上から順に優先されます。
               </p>
               <TiebreakerPicker
@@ -527,18 +472,141 @@ export function EventForm({
                 error={fe.tiebreakers}
               />
             </div>
-          </div>
+          </Nest>
         )}
-      </fieldset>
+      </Card>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {pending ? pendingLabel : submitLabel}
-      </button>
+      {/* ══════ 05 Discord 連携（④ 全体告知） ══════ */}
+      {/* イベントのルールとは無関係の +α 機能なので最下部に置く。 */}
+      <Card n="05" title="Discord 連携" sub="任意・+α">
+        <Field
+          label="告知チャンネルの Webhook URL"
+          opt="任意"
+          error={fe.discordWebhookUrl}
+          hint="設定すると、このイベントを公開したとき Discord の告知チャンネルへ自動で投稿します。チャンネルの「連携サービス → ウェブフック」で発行した URL を貼り付けてください。空欄なら投稿しません。"
+        >
+          <input
+            name="discordWebhookUrl"
+            type="url"
+            defaultValue={d.discordWebhookUrl ?? ""}
+            placeholder="https://discord.com/api/webhooks/..."
+          />
+        </Field>
+      </Card>
+
+      <div className="mt-1">
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-full rounded-lg bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-[0_0_0_1px_rgba(255,106,43,0.35),0_8px_22px_rgba(255,106,43,0.22)] transition hover:bg-[color:var(--mp-brand-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {pending ? pendingLabel : submitLabel}
+        </button>
+      </div>
     </form>
+  );
+}
+
+/** 設定群を1つのカードに（番号付き見出し）。sub は右寄せの補足チップ文言。 */
+function Card({
+  n,
+  title,
+  sub,
+  children,
+}: {
+  n: string;
+  title: string;
+  sub?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e1)]">
+      <div className="mb-5 flex items-baseline gap-3">
+        <span className="font-mono text-xs font-semibold tracking-[0.14em] text-[color:var(--mp-brand)]">
+          {n}
+        </span>
+        <h2 className="text-base font-extrabold tracking-tight text-foreground">
+          {title}
+        </h2>
+        {sub && (
+          <span className="ml-auto text-xs text-[color:var(--mp-fg-muted)]">
+            {sub}
+          </span>
+        )}
+      </div>
+      {/* 直下の各ブロック（Field / grid / Nest）を一定間隔で縦積みする。 */}
+      <div className="flex flex-col gap-[18px]">{children}</div>
+    </section>
+  );
+}
+
+/** 親→子→孫のトグル配下（左ボーダー＋インデント）。 */
+function Nest({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-4 flex flex-col gap-4 border-l-2 border-[color:var(--mp-border-strong)] pl-[18px]">
+      {children}
+    </div>
+  );
+}
+
+/**
+ * カスタムのチェックボックス行（タイトル＋説明）。
+ * - checked/onChange を渡せば制御コンポーネント（表示出し分けに使う親トグル）。
+ * - 渡さなければ defaultChecked の非制御（送信値のみ必要なトグル）。
+ * name を渡したものだけがフォーム送信される（現行の name 付与を踏襲）。
+ */
+function Toggle({
+  name,
+  title,
+  desc,
+  checked,
+  onChange,
+  defaultChecked,
+}: {
+  name?: string;
+  title: string;
+  desc: string;
+  checked?: boolean;
+  onChange?: (next: boolean) => void;
+  defaultChecked?: boolean;
+}) {
+  const controlled = checked !== undefined;
+  return (
+    <label className="flex cursor-pointer select-none items-start gap-[11px]">
+      <input
+        type="checkbox"
+        name={name}
+        {...(controlled
+          ? { checked, onChange: (e) => onChange?.(e.target.checked) }
+          : { defaultChecked })}
+        className="peer sr-only"
+      />
+      <span
+        aria-hidden
+        className="mt-px flex size-5 flex-none items-center justify-center rounded-md border border-[color:var(--mp-border-strong)] bg-[color:var(--mp-surface-3)] transition peer-checked:border-[color:var(--mp-brand)] peer-checked:bg-[color:var(--mp-brand)] peer-focus-visible:shadow-[0_0_0_3px_rgba(255,106,43,0.22)] peer-checked:[&>svg]:scale-100 peer-checked:[&>svg]:opacity-100"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="size-[13px] scale-50 stroke-[color:var(--mp-on-brand)] opacity-0 transition"
+          style={{
+            strokeWidth: 3.4,
+            fill: "none",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          }}
+        >
+          <polyline points="4 12 10 18 20 6" />
+        </svg>
+      </span>
+      <span className="flex flex-col gap-0.5">
+        <span className="text-[13.5px] font-semibold text-foreground">
+          {title}
+        </span>
+        <span className="text-[11.5px] text-[color:var(--mp-fg-muted)]">
+          {desc}
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -589,13 +657,9 @@ function TiebreakerPicker({
   }
 
   return (
-    <DndContext
-      id="tiebreaker-dnd"
-      sensors={sensors}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext id="tiebreaker-dnd" sensors={sensors} onDragEnd={handleDragEnd}>
       <input type="hidden" name={name} value={used.join(",")} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-2">
         <TiebreakerZone
           zoneId="used-zone"
           title="使う（上ほど優先）"
@@ -628,15 +692,19 @@ function TiebreakerZone({
   const { setNodeRef, isOver } = useDroppable({ id: zoneId });
   return (
     <div>
-      <p className="mb-1 text-xs font-medium text-muted-foreground">{title}</p>
+      <p className="mb-[7px] text-[11.5px] font-semibold text-[color:var(--mp-fg-muted)]">
+        {title}
+      </p>
       <div
         ref={setNodeRef}
-        className={`min-h-[5rem] space-y-2 rounded-md border p-2 ${
-          isOver ? "border-primary bg-primary/5" : "border-dashed border-border"
+        className={`flex min-h-[6rem] flex-col gap-[9px] rounded-lg border-[1.5px] p-[10px] transition ${
+          isOver
+            ? "border-solid border-[color:var(--mp-brand)] bg-[color:var(--mp-brand)]/[0.06]"
+            : "border-dashed border-[color:var(--mp-border-strong)]"
         }`}
       >
         {items.length === 0 ? (
-          <p className="px-1 py-3 text-center text-xs text-muted-foreground">
+          <p className="m-auto px-1 py-3 text-center text-[11.5px] text-[color:var(--mp-fg-subtle)]">
             ここにドラッグ
           </p>
         ) : (
@@ -644,7 +712,8 @@ function TiebreakerZone({
             <TiebreakerCard
               key={key}
               itemKey={key}
-              label={`${ordered ? `${i + 1}. ` : ""}${TIEBREAKER_LABEL[key]}`}
+              label={TIEBREAKER_LABEL[key]}
+              rank={ordered ? i + 1 : undefined}
               dropId={ordered ? `used:${key}` : undefined}
             />
           ))
@@ -658,14 +727,20 @@ function TiebreakerZone({
 function TiebreakerCard({
   itemKey,
   label,
+  rank,
   dropId,
 }: {
   itemKey: TiebreakerKey;
   label: string;
+  rank?: number;
   dropId?: string;
 }) {
-  const { attributes, listeners, setNodeRef: setDragRef, isDragging } =
-    useDraggable({ id: itemKey });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    isDragging,
+  } = useDraggable({ id: itemKey });
   const { setNodeRef: setDropRef } = useDroppable({
     id: dropId ?? `nodrop:${itemKey}`,
     disabled: !dropId,
@@ -679,34 +754,69 @@ function TiebreakerCard({
       }}
       {...listeners}
       {...attributes}
-      className={`cursor-grab rounded-md border border-border bg-muted/40 px-3 py-2 text-sm ${
+      className={`flex cursor-grab items-center gap-[9px] rounded-md border border-border bg-[color:var(--mp-surface-2)] px-[11px] py-[9px] text-[13px] text-foreground shadow-[var(--mp-e1)] transition hover:border-[color:var(--mp-border-strong)] active:cursor-grabbing ${
         isDragging ? "opacity-40" : ""
       }`}
     >
-      {label}
+      <span aria-hidden className="flex flex-none text-[color:var(--mp-fg-subtle)]">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="9" cy="6" r="1.6" />
+          <circle cx="15" cy="6" r="1.6" />
+          <circle cx="9" cy="12" r="1.6" />
+          <circle cx="15" cy="12" r="1.6" />
+          <circle cx="9" cy="18" r="1.6" />
+          <circle cx="15" cy="18" r="1.6" />
+        </svg>
+      </span>
+      {rank !== undefined && (
+        <span className="flex-none font-mono text-[11px] font-semibold text-[color:var(--mp-brand)]">
+          {rank}.
+        </span>
+      )}
+      <span>{label}</span>
     </div>
   );
 }
 
+/** 1入力欄（ラベル＋任意/必須マーク＋子＋エラー/ヒント）。 */
 function Field({
   label,
   required,
+  opt,
   error,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  /** 任意・補足のラベル（"任意" / "JST" 等）。 */
+  opt?: string;
   error?: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
+  // 縦の間隔は親（Card body / Nest / grid の gap）が持つ。Field 自身は余白を持たない。
+  // （以前は [&+&]:mt-* で隣接余白を持たせていたが grid の列2以降に漏れて段ズレした）
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium">
+      <label className="mb-[7px] block text-[13px] font-semibold text-foreground">
         {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+        {opt && (
+          <span className="ml-1.5 text-[11.5px] font-normal text-[color:var(--mp-fg-subtle)]">
+            {opt}
+          </span>
+        )}
+        {required && (
+          <span className="ml-[3px] text-[color:var(--mp-brand)]">*</span>
+        )}
       </label>
       {children}
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {hint && (
+        <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

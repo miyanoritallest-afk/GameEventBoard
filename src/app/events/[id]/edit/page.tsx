@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findEventById } from "@/lib/repositories/events";
@@ -86,12 +87,35 @@ export default async function EditEventPage({
   };
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-2xl px-6 py-10">
-        <h1 className="text-2xl font-bold">イベントを編集</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-[720px] px-6 py-10">
+        {/* パンくず */}
+        <nav className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <Link href="/events" className="hover:text-foreground">
+            イベント一覧
+          </Link>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
+          <Link
+            href={`/events/${event.id}`}
+            className="max-w-[16rem] truncate hover:text-foreground"
+          >
+            {event.title}
+          </Link>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">編集</span>
+        </nav>
+
+        {/* ヒーロー */}
+        <p className="mt-6 flex items-center gap-[9px] font-mono text-[11px] uppercase tracking-[0.2em] text-[color:var(--mp-accent)] before:h-0.5 before:w-[22px] before:bg-[color:var(--mp-accent)] before:content-['']">
+          主催者ツール
+        </p>
+        <h1 className="mt-2.5 text-3xl font-extrabold tracking-tight text-foreground">
+          イベントを編集
+        </h1>
+        <p className="mt-3 max-w-[600px] text-sm text-muted-foreground">
           内容を変更して保存します。公開URL（slug）は変わりません。
         </p>
+
         <EditEventForm
           eventId={event.id}
           games={games}

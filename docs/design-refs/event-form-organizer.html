@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — イベントを作成</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] @font-face 除去 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --success:#34D399; --warning:#F5B93D; --live:#22D3EE; --danger:#F65C4E;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 32px rgba(0,0,0,.5);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.6;
+    font-feature-settings:"palt" 1;
+    background:
+      radial-gradient(1100px 520px at 86% -8%, rgba(255,106,43,.09), transparent 58%),
+      radial-gradient(820px 460px at 4% 2%, rgba(34,211,238,.06), transparent 54%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── Site header ── */
+  .site-header { border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(20,26,36,.72),rgba(11,14,20,.72)); backdrop-filter:blur(8px); position:sticky; top:0; z-index:40; }
+  .header-inner { max-width:1180px; margin:0 auto; padding:0 34px; height:60px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand-nav { display:flex; align-items:center; gap:34px; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+  .brand-nav nav { display:flex; gap:22px; font-size:13.5px; color:var(--fg-muted); }
+  .brand-nav nav a.active { color:var(--fg); font-weight:500; }
+  .brand-nav nav a:hover { color:var(--fg); }
+  .header-right { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+  .bell { position:relative; width:36px; height:36px; display:grid; place-items:center; border-radius:var(--r-md); cursor:pointer; }
+  .bell:hover { background:var(--surface-2); }
+  .bell .count { position:absolute; top:-1px; right:-1px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger); color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 2px var(--bg); }
+  .header-user { display:inline-flex; align-items:center; gap:9px; }
+  .header-user .av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#5865F2,#3B45B5); display:grid; place-items:center; font-family:var(--font-sans); font-size:11px; font-weight:700; color:#fff; }
+  .header-user .nm { color:var(--fg); font-weight:500; }
+
+  /* ── Page shell ── */
+  .page { max-width:720px; margin:0 auto; padding:26px 34px 120px; }
+  .crumb { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg-muted); margin-bottom:26px; }
+  .crumb a { color:var(--fg-muted); }
+  .crumb a:hover { color:var(--fg); }
+  .crumb .sep { color:var(--fg-subtle); }
+  .crumb .cur { color:var(--fg); }
+
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; display:flex; align-items:center; gap:9px; }
+  .kicker::before { content:""; width:22px; height:2px; background:var(--accent); }
+  h1.page-title { font-family:var(--font-sans); font-weight:800; font-size:30px; line-height:1.14; letter-spacing:-.02em; margin:0; }
+  .page-lede { color:var(--fg-muted); font-size:14px; margin:12px 0 0; max-width:600px; }
+  .page-lede .draft { color:var(--warning); font-weight:600; }
+
+  /* ── Form ── */
+  form { margin-top:30px; display:flex; flex-direction:column; gap:20px; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2xl); box-shadow:var(--e1); padding:24px 24px 26px; }
+  .card-head { display:flex; align-items:baseline; gap:12px; margin-bottom:20px; }
+  .card-head .n { font-family:var(--font-mono); font-size:12px; font-weight:600; letter-spacing:.14em; color:var(--brand); }
+  .card-head h2 { font-family:var(--font-sans); font-weight:800; font-size:16px; letter-spacing:-.01em; margin:0; }
+  .card-head .sub { font-size:12px; color:var(--fg-muted); margin-left:auto; }
+
+  .field { display:block; }
+  .field + .field { margin-top:18px; }
+  .field > label { display:block; font-size:13px; font-weight:600; color:var(--fg); margin-bottom:7px; }
+  .field .req { color:var(--brand); margin-left:3px; }
+  .field .opt { color:var(--fg-subtle); font-weight:400; font-size:11.5px; margin-left:6px; }
+  .hint { font-size:11.5px; color:var(--fg-muted); margin:7px 0 0; line-height:1.6; }
+
+  input[type=text], input[type=url], input[type=number], select, textarea, .dt-trigger {
+    width:100%; font-family:var(--font-jp); font-size:13.5px; color:var(--fg);
+    background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-md);
+    padding:9px 12px; line-height:1.4; transition:border-color .15s, box-shadow .15s, background .15s;
+  }
+  input[type=number] { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+  textarea { resize:vertical; min-height:96px; line-height:1.7; }
+  input::placeholder, textarea::placeholder { color:var(--fg-subtle); }
+  input:focus, select:focus, textarea:focus, .dt-trigger:focus-visible {
+    outline:none; border-color:var(--brand);
+    box-shadow:0 0 0 3px rgba(255,106,43,.18); background:var(--surface-2);
+  }
+  select {
+    appearance:none; cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2397A2B6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 11px center; padding-right:34px;
+  }
+
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  @media (max-width:560px){ .grid-2, .grid-3 { grid-template-columns:1fr; } }
+
+  /* datetime trigger */
+  .dt-trigger { display:flex; align-items:center; gap:9px; text-align:left; cursor:pointer; font-size:13.5px; }
+  .dt-trigger .cal { flex:none; color:var(--fg-muted); }
+  .dt-trigger .dt-label { color:var(--fg); font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+  .dt-trigger.empty .dt-label { color:var(--fg-subtle); font-family:var(--font-jp); }
+  .dt-trigger:hover { border-color:var(--border-strong); background:var(--surface-2); }
+
+  /* toggle rows */
+  .toggle { display:flex; align-items:flex-start; gap:11px; cursor:pointer; user-select:none; }
+  .toggle input { position:absolute; opacity:0; width:0; height:0; }
+  .toggle .box { flex:none; width:20px; height:20px; border-radius:6px; background:var(--surface-3); border:1px solid var(--border-strong); display:grid; place-items:center; margin-top:1px; transition:background .15s, border-color .15s; }
+  .toggle .box svg { width:13px; height:13px; stroke:var(--on-brand); stroke-width:3.4; fill:none; stroke-linecap:round; stroke-linejoin:round; opacity:0; transform:scale(.6); transition:opacity .12s, transform .12s; }
+  .toggle input:checked + .box { background:var(--brand); border-color:var(--brand); }
+  .toggle input:checked + .box svg { opacity:1; transform:scale(1); }
+  .toggle input:focus-visible + .box { box-shadow:0 0 0 3px rgba(255,106,43,.22); }
+  .toggle .tl { display:flex; flex-direction:column; gap:2px; }
+  .toggle .tl .t { font-size:13.5px; font-weight:600; color:var(--fg); }
+  .toggle .tl .d { font-size:11.5px; color:var(--fg-muted); }
+
+  /* nested (child/grandchild) region */
+  .nest { margin-top:16px; padding-left:18px; border-left:2px solid var(--border-strong); display:flex; flex-direction:column; gap:16px; }
+  .nest.hidden { display:none; }
+  .nest .toggle + .nest { margin-top:0; }
+
+  /* tiebreaker DnD */
+  .tb-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:560px){ .tb-grid { grid-template-columns:1fr; } }
+  .tb-zone-label { font-size:11.5px; font-weight:600; color:var(--fg-muted); margin:0 0 7px; }
+  .tb-zone { min-height:96px; display:flex; flex-direction:column; gap:9px; padding:10px; border:1.5px dashed var(--border-strong); border-radius:var(--r-lg); transition:border-color .15s, background .15s; }
+  .tb-zone.over { border-color:var(--brand); background:rgba(255,106,43,.06); border-style:solid; }
+  .tb-empty { margin:auto; padding:12px 4px; font-size:11.5px; color:var(--fg-subtle); text-align:center; }
+  .tb-card { display:flex; align-items:center; gap:9px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-md); padding:9px 11px; font-size:13px; color:var(--fg); cursor:grab; box-shadow:var(--e1); transition:border-color .15s, transform .05s; }
+  .tb-card:hover { border-color:var(--border-strong); }
+  .tb-card:active { cursor:grabbing; }
+  .tb-card.dragging { opacity:.4; }
+  .tb-card .grip { color:var(--fg-subtle); flex:none; display:flex; }
+  .tb-card .rank { font-family:var(--font-mono); font-size:11px; font-weight:600; color:var(--brand); flex:none; }
+
+  /* submit */
+  .submit-wrap { margin-top:4px; }
+  .btn-submit { width:100%; font-family:var(--font-sans); font-weight:700; font-size:14.5px; color:var(--on-brand); background:var(--brand); border:none; border-radius:var(--r-lg); padding:14px; cursor:pointer; transition:background .15s, transform .05s; box-shadow:0 0 0 1px rgba(255,106,43,.35), 0 8px 22px rgba(255,106,43,.22); }
+  .btn-submit:hover { background:var(--brand-hover); }
+  .btn-submit:active { transform:translateY(1px); }
+  .submit-note { text-align:center; font-size:11.5px; color:var(--fg-subtle); margin:12px 0 0; }
+
+  /* ── datetime popover ── */
+  .dt-pop { position:absolute; z-index:60; width:288px; background:var(--surface-2); border:1px solid var(--border-strong); border-radius:var(--r-xl); box-shadow:var(--e3); padding:14px; display:none; }
+  .dt-pop.open { display:block; }
+  .cal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-head .mlabel { font-family:var(--font-sans); font-weight:700; font-size:13.5px; }
+  .cal-nav { width:30px; height:30px; border-radius:var(--r-md); background:transparent; border:1px solid var(--border); color:var(--fg-muted); cursor:pointer; display:grid; place-items:center; }
+  .cal-nav:hover { background:var(--surface-3); color:var(--fg); }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+  .cal-dow { text-align:center; font-family:var(--font-mono); font-size:10px; color:var(--fg-subtle); padding:4px 0; }
+  .cal-day { aspect-ratio:1; border:none; background:transparent; color:var(--fg); font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:12.5px; border-radius:var(--r-sm); cursor:pointer; display:grid; place-items:center; }
+  .cal-day:hover { background:var(--surface-3); }
+  .cal-day.other { color:var(--fg-subtle); opacity:.45; }
+  .cal-day.today { box-shadow:inset 0 0 0 1px var(--border-strong); }
+  .cal-day.sel { background:var(--brand); color:var(--on-brand); font-weight:700; }
+  .cal-day.sel:hover { background:var(--brand-hover); }
+  .time-row { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+  .time-row select { width:auto; padding:6px 26px 6px 10px; font-size:13px; }
+  .time-row .colon { color:var(--fg-muted); font-weight:700; }
+  .pop-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; }
+  .pop-btn { font-family:var(--font-sans); font-weight:600; font-size:12.5px; border-radius:var(--r-md); padding:7px 13px; cursor:pointer; border:1px solid transparent; transition:background .15s, border-color .15s; }
+  .pop-btn.ghost { background:transparent; color:var(--fg-muted); border-color:var(--border); }
+  .pop-btn.ghost:hover { background:var(--surface-3); color:var(--fg); }
+  .pop-btn.primary { background:var(--brand); color:var(--on-brand); }
+  .pop-btn.primary:hover { background:var(--brand-hover); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand-nav">
+      <span class="logo"><span class="dot"></span>Matchpoint</span>
+      <nav>
+        <a href="#">イベント一覧</a>
+        <a href="#" class="active">イベント作成</a>
+        <a href="#">マイページ</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <span class="bell">🔔<span class="count mono">3</span></span>
+      <span class="header-user"><span class="av">no</span><span class="nm">nori#1121</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="page" data-screen-label="イベント作成">
+
+  <nav class="crumb">
+    <a href="#">イベント一覧</a>
+    <span class="sep">/</span>
+    <a href="#">自分のイベント</a>
+    <span class="sep">/</span>
+    <span class="cur">新規作成</span>
+  </nav>
+
+  <p class="kicker">主催者ツール</p>
+  <h1 class="page-title">イベントを作成</h1>
+  <p class="page-lede"><span class="draft">下書き</span>として保存されます。応募者のスコア申告ルールや順位付けの方式も、ここでまとめて設定します。公開は保存後に行えます。</p>
+
+  <form id="event-form" autocomplete="off">
+
+    <!-- ══════ 01 基本情報 ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">01</span><h2>基本情報</h2></div>
+
+      <div class="field">
+        <label for="organizerDisplayName">登録名<span class="opt">主催者として表示される名前</span></label>
+        <input id="organizerDisplayName" name="organizerDisplayName" type="text" maxlength="32" value="nori#1121">
+        <p class="hint">イベント詳細の「主催」に表示されます。既定は Discord 名です。</p>
+      </div>
+
+      <div class="field">
+        <label for="title">タイトル<span class="req">*</span></label>
+        <input id="title" name="title" type="text" maxlength="80" placeholder="第7回 Matchpoint Open — シーズン中盤 5v5">
+      </div>
+
+      <div class="field">
+        <label for="gameId">ゲーム<span class="req">*</span></label>
+        <select id="gameId" name="gameId">
+          <option value="ow2">Overwatch 2</option>
+          <option value="valorant">VALORANT</option>
+          <option value="apex">Apex Legends</option>
+          <option value="lol">League of Legends</option>
+          <option value="sf6">Street Fighter 6</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="description">説明<span class="opt">任意</span></label>
+        <textarea id="description" name="description" rows="4" maxlength="2000" placeholder="大会の概要・参加条件・合流方法などを記載します。"></textarea>
+      </div>
+
+      <div class="grid-2" style="margin-top:18px">
+        <div class="field">
+          <label>開催開始<span class="opt">JST</span><span class="req">*</span></label>
+          <button type="button" class="dt-trigger empty" data-dt="startsAt">
+            <svg class="cal" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+            <span class="dt-label">日時を選択</span>
+          </button>
+          <input type="hidden" name="startsAt" value="">
+        </div>
+        <div class="field">
+          <label>開催終了<span class="opt">JST</span><span class="req">*</span></label>
+          <button type="button" class="dt-trigger empty" data-dt="endsAt">
+            <svg class="cal" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+            <span class="dt-label">日時を選択</span>
+          </button>
+          <input type="hidden" name="endsAt" value="">
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:16px">
+        <div class="field">
+          <label>募集締切<span class="opt">任意・JST</span></label>
+          <button type="button" class="dt-trigger empty" data-dt="recruitDeadline">
+            <svg class="cal" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+            <span class="dt-label">日時を選択</span>
+          </button>
+          <input type="hidden" name="recruitDeadline" value="">
+        </div>
+        <div class="field">
+          <label for="capacity">定員<span class="opt">チーム数・任意</span></label>
+          <input id="capacity" name="capacity" type="number" min="1" placeholder="16">
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ 02 スコアリング設定 ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">02</span><h2>スコアリング設定</h2></div>
+
+      <label class="toggle">
+        <input type="checkbox" name="requireScore" id="requireScore" checked="" data-toggle="scoreNest">
+        <span class="box"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg></span>
+        <span class="tl"><span class="t">個人スコアを計算する</span><span class="d">ランク申告から各メンバーのスコアを算出します。</span></span>
+      </label>
+
+      <div class="nest" id="scoreNest">
+        <label class="toggle">
+          <input type="checkbox" name="roleSwapAllowed" id="roleSwapAllowed">
+          <span class="box"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg></span>
+          <span class="tl"><span class="t">ロールスワップを許可する</span><span class="d">全ロールのランクを参照して算出します。</span></span>
+        </label>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="declaredSeasons">申告シーズン数</label>
+            <input id="declaredSeasons" name="declaredSeasons" type="number" min="1" max="10" value="3">
+          </div>
+          <div class="field">
+            <label for="uncertifiedHandling">未認定ロールの扱い</label>
+            <select id="uncertifiedHandling" name="uncertifiedHandling">
+              <option value="exclude" selected="">計算に含めない（除外）</option>
+              <option value="fill_by_season">同ロールの他シーズン平均で補完</option>
+              <option value="fill_by_role">同シーズンの他ロール平均で補完</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="toggle">
+          <input type="checkbox" id="useBonus" data-toggle="bonusNest">
+          <span class="box"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg></span>
+          <span class="tl"><span class="t">到達ボーナスを使う</span><span class="d">最高到達ランクに応じて加点します。</span></span>
+        </label>
+        <div class="nest hidden" id="bonusNest">
+          <div class="grid-3">
+            <div class="field"><label for="bonusMaster">マスター</label><input id="bonusMaster" name="bonusMaster" type="number" min="0" max="10" step="0.5" value="0"></div>
+            <div class="field"><label for="bonusGm">GM</label><input id="bonusGm" name="bonusGm" type="number" min="0" max="10" step="0.5" value="0"></div>
+            <div class="field"><label for="bonusChampion">チャンピオン</label><input id="bonusChampion" name="bonusChampion" type="number" min="0" max="10" step="0.5" value="0"></div>
+          </div>
+        </div>
+
+        <label class="toggle">
+          <input type="checkbox" id="useScoreCap" data-toggle="capNest">
+          <span class="box"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg></span>
+          <span class="tl"><span class="t">チームスコアに上限を設ける</span><span class="d">出場メンバーの平均スコアの上限です。</span></span>
+        </label>
+        <input type="hidden" name="teamScoreCap" id="teamScoreCapHidden" value="">
+        <div class="nest hidden" id="capNest">
+          <div class="field">
+            <label for="teamScoreCap">チームスコア上限</label>
+            <input id="teamScoreCap" type="number" min="1" max="40">
+            <p class="hint" id="capHint">1〜40 で入力（チームの出場メンバー平均スコアの上限）。</p>
+          </div>
+        </div>
+        <p class="hint" id="capOffNote">※ 上限なし（チーム編成時にスコアの上限チェックを行いません）。</p>
+      </div>
+    </section>
+
+    <!-- ══════ 03 本戦設定 ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">03</span><h2>本戦設定</h2></div>
+
+      <div class="field">
+        <label for="format">イベント形式</label>
+        <select id="format" name="format">
+          <option value="round_robin_then_tournament" selected="">総当たり → 決勝トーナメント</option>
+          <option value="round_robin">総当たりのみ</option>
+          <option value="tournament">トーナメントのみ</option>
+        </select>
+        <p class="hint">大会の進め方を選びます。「総当たり → 決勝トーナメント」は予選で順位を決めてから上位チームでトーナメント、「総当たりのみ」はリーグ戦で完結、「トーナメントのみ」は予選なしで一発勝負です。</p>
+      </div>
+
+      <div class="field" id="groupConfig" style="margin-top:18px">
+        <label for="groupBestOf">BO<span class="opt">1試合のマップ数</span></label>
+        <input id="groupBestOf" name="groupBestOf" type="number" min="1" max="7" value="3">
+        <p class="hint">総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。対戦表を生成すると全試合に反映されます。偶数は引分けあり。</p>
+      </div>
+
+      <div id="tournamentConfig" style="margin-top:18px">
+        <label class="toggle">
+          <input type="checkbox" name="tournamentThirdPlace" id="tournamentThirdPlace">
+          <span class="box"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg></span>
+          <span class="tl"><span class="t" id="thirdPlaceLabel">決勝トーナメントで3位決定戦を行う</span><span class="d">準決勝で敗れた2チームが3位を懸けて対戦します（4チーム以上のトーナメントで有効）。</span></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- ══════ 04 順位設定 ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">04</span><h2>順位設定</h2></div>
+
+      <label class="toggle">
+        <input type="checkbox" name="rankingEnabled" id="rankingEnabled" data-toggle="rankNest">
+        <span class="box"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"></polyline></svg></span>
+        <span class="tl"><span class="t">順位を集計する</span><span class="d">勝点・タイブレークで順位を決めます。</span></span>
+      </label>
+
+      <div class="nest hidden" id="rankNest">
+        <div class="grid-3">
+          <div class="field"><label for="pointsWin">勝ち点</label><input id="pointsWin" name="pointsWin" type="number" min="0" max="99" value="3"></div>
+          <div class="field"><label for="pointsDraw">引分点</label><input id="pointsDraw" name="pointsDraw" type="number" min="0" max="99" value="1"></div>
+          <div class="field"><label for="pointsLoss">負け点</label><input id="pointsLoss" name="pointsLoss" type="number" min="0" max="99" value="0"></div>
+        </div>
+
+        <div>
+          <p style="font-size:13px;font-weight:600;color:var(--fg);margin:0 0 4px">同着のタイブレーク</p>
+          <p class="hint" style="margin:0 0 12px">勝点が同じチームの順位を決める基準。「使う」側の上から順に優先されます。</p>
+          <input type="hidden" name="tiebreakers" id="tiebreakers" value="">
+          <div class="tb-grid">
+            <div>
+              <p class="tb-zone-label">使う（上ほど優先）</p>
+              <div class="tb-zone" id="tb-used" data-zone="used"></div>
+            </div>
+            <div>
+              <p class="tb-zone-label">使わない</p>
+              <div class="tb-zone" id="tb-unused" data-zone="unused"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ 05 Discord 連携 ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">05</span><h2>Discord 連携</h2><span class="sub">任意・+α</span></div>
+      <div class="field">
+        <label for="discordWebhookUrl">告知チャンネルの Webhook URL<span class="opt">任意</span></label>
+        <input id="discordWebhookUrl" name="discordWebhookUrl" type="url" placeholder="https://discord.com/api/webhooks/...">
+        <p class="hint">設定すると、このイベントを公開したとき Discord の告知チャンネルへ自動で投稿します。チャンネルの「連携サービス → ウェブフック」で発行した URL を貼り付けてください。空欄なら投稿しません。</p>
+      </div>
+    </section>
+
+    <div class="submit-wrap">
+      <button type="submit" class="btn-submit">この内容で作成する（下書き）</button>
+      <p class="submit-note">作成後にプレビューを確認してから公開できます。</p>
+    </div>
+  </form>
+</main>
+
+<script>
+(function(){
+  /* ── weekday reset for parent-off notes ── */
+  function bindToggle(input, targetId, onChange){
+    const target = document.getElementById(targetId);
+    function apply(){
+      if(target) target.classList.toggle('hidden', !input.checked);
+      if(onChange) onChange(input.checked);
+    }
+    input.addEventListener('change', apply);
+    apply();
+  }
+
+  document.querySelectorAll('[data-toggle]').forEach(function(input){
+    bindToggle(input, input.getAttribute('data-toggle'));
+  });
+
+  /* score-cap off note vs field visibility */
+  var useScoreCap = document.getElementById('useScoreCap');
+  var capOffNote = document.getElementById('capOffNote');
+  function syncCapNote(){ capOffNote.style.display = useScoreCap.checked ? 'none' : ''; }
+  useScoreCap.addEventListener('change', syncCapNote); syncCapNote();
+
+  /* score cap rank guide */
+  var TIERS = [["ブロンズ","B"],["シルバー","S"],["ゴールド","G"],["プラチナ","P"],["ダイヤ","D"],["マスター","M"],["グランドマスター","GM"],["チャンピオン","C"]];
+  function scoreToRankAbbrev(score){
+    var s = Math.max(1, Math.min(40, Math.round(score)));
+    var ord = Math.floor((s-1)/5);
+    var division = 5 - ((s-1)%5);
+    return TIERS[ord][1] + division;
+  }
+  var capInput = document.getElementById('teamScoreCap');
+  var capHidden = document.getElementById('teamScoreCapHidden');
+  var capHint = document.getElementById('capHint');
+  capInput.addEventListener('input', function(){
+    var v = capInput.value;
+    capHidden.value = v;
+    if(v === ''){ capHint.textContent = '1〜40 で入力（チームの出場メンバー平均スコアの上限）。'; }
+    else { capHint.textContent = 'ランク換算の目安: ' + v + ' (' + scoreToRankAbbrev(Number(v)) + ')'; }
+  });
+  useScoreCap.addEventListener('change', function(){ if(!useScoreCap.checked){ capHidden.value=''; } else { capHidden.value = capInput.value; } });
+
+  /* ── format branching ── */
+  var format = document.getElementById('format');
+  var groupConfig = document.getElementById('groupConfig');
+  var tournamentConfig = document.getElementById('tournamentConfig');
+  var thirdPlaceLabel = document.getElementById('thirdPlaceLabel');
+  function syncFormat(){
+    var f = format.value;
+    var hasGroup = (f === 'round_robin' || f === 'round_robin_then_tournament');
+    var hasTournament = (f === 'tournament' || f === 'round_robin_then_tournament');
+    groupConfig.style.display = hasGroup ? '' : 'none';
+    tournamentConfig.style.display = hasTournament ? '' : 'none';
+    thirdPlaceLabel.textContent = hasGroup ? '決勝トーナメントで3位決定戦を行う' : 'トーナメントで3位決定戦を行う';
+  }
+  format.addEventListener('change', syncFormat); syncFormat();
+
+  /* ── tiebreaker D&D ── */
+  var TB_LABEL = { head_to_head:'直接対決', map_diff:'得失マップ差', potg:'POTG取得数' };
+  var TB_ALL = ['head_to_head','map_diff','potg'];
+  var used = [];               // ordered
+  var usedZone = document.getElementById('tb-used');
+  var unusedZone = document.getElementById('tb-unused');
+  var tbHidden = document.getElementById('tiebreakers');
+  var dragKey = null;
+
+  function makeCard(key, ordered, rank){
+    var el = document.createElement('div');
+    el.className = 'tb-card';
+    el.draggable = true;
+    el.dataset.key = key;
+    var grip = '<span class="grip"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>';
+    var rankHtml = ordered ? '<span class="rank">'+rank+'.</span>' : '';
+    el.innerHTML = grip + rankHtml + '<span>'+TB_LABEL[key]+'</span>';
+    el.addEventListener('dragstart', function(e){ dragKey = key; el.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', key); });
+    el.addEventListener('dragend', function(){ dragKey=null; el.classList.remove('dragging'); });
+    return el;
+  }
+
+  function render(){
+    usedZone.innerHTML = ''; unusedZone.innerHTML = '';
+    if(used.length === 0){ var e1=document.createElement('p'); e1.className='tb-empty'; e1.textContent='ここにドラッグ'; usedZone.appendChild(e1); }
+    else used.forEach(function(k,i){ usedZone.appendChild(makeCard(k, true, i+1)); });
+    var unused = TB_ALL.filter(function(k){ return used.indexOf(k) < 0; });
+    if(unused.length === 0){ var e2=document.createElement('p'); e2.className='tb-empty'; e2.textContent='ここにドラッグ'; unusedZone.appendChild(e2); }
+    else unused.forEach(function(k){ unusedZone.appendChild(makeCard(k, false)); });
+    tbHidden.value = used.join(',');
+  }
+
+  function insertBefore(key, beforeKey){
+    used = used.filter(function(k){ return k !== key; });
+    if(beforeKey == null){ used.push(key); }
+    else { var idx = used.indexOf(beforeKey); if(idx<0) used.push(key); else used.splice(idx,0,key); }
+  }
+
+  function setupZone(zone, isUsed){
+    zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('over'); e.dataTransfer.dropEffect='move'; });
+    zone.addEventListener('dragleave', function(e){ if(!zone.contains(e.relatedTarget)) zone.classList.remove('over'); });
+    zone.addEventListener('drop', function(e){
+      e.preventDefault(); zone.classList.remove('over');
+      if(!dragKey) return;
+      if(isUsed){
+        // find card we dropped onto for ordering
+        var target = e.target.closest('.tb-card');
+        var beforeKey = (target && target.dataset.key !== dragKey) ? target.dataset.key : null;
+        insertBefore(dragKey, beforeKey);
+      } else {
+        used = used.filter(function(k){ return k !== dragKey; });
+      }
+      render();
+    });
+  }
+  setupZone(usedZone, true);
+  setupZone(unusedZone, false);
+  render();
+
+  /* ── datetime picker ── */
+  var MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  var DOW = ['日','月','火','水','木','金','土'];
+  var HOURS = []; for(var h=0; h<24; h++) HOURS.push(String(h).padStart(2,'0'));
+  var MINS = ['00','15','30','45'];
+  var pop = null;
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function fmtDisplay(val){
+    if(!val) return '';
+    var m = val.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if(!m) return val;
+    return m[1]+'/'+m[2]+'/'+m[3]+' '+m[4]+':'+m[5];
+  }
+
+  function closePop(){ if(pop){ pop.remove(); pop=null; document.removeEventListener('mousedown', outside, true); } }
+  function outside(e){ if(pop && !pop.contains(e.target) && !e.target.closest('.dt-trigger')) closePop(); }
+
+  function openPicker(trigger){
+    if(pop && pop._trigger === trigger){ closePop(); return; }
+    closePop();
+    var name = trigger.getAttribute('data-dt');
+    var hidden = document.querySelector('input[name="'+name+'"]');
+    var cur = hidden.value;
+    var draft = { date:null, hour:'20', min:'00' };
+    if(cur){ var mm = cur.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/); if(mm){ draft.date = new Date(+mm[1], +mm[2]-1, +mm[3]); draft.hour = mm[4]; draft.min = MINS.reduce(function(a,b){ return Math.abs(+b-+mm[5])<Math.abs(+a-+mm[5])?b:a; },'00'); } }
+    var viewDate = draft.date ? new Date(draft.date) : new Date();
+    viewDate.setDate(1);
+
+    pop = document.createElement('div');
+    pop.className = 'dt-pop open';
+    pop._trigger = trigger;
+    document.body.appendChild(pop);
+
+    function renderCal(){
+      var y = viewDate.getFullYear(), mo = viewDate.getMonth();
+      var first = new Date(y, mo, 1);
+      var startDow = first.getDay();
+      var daysInMonth = new Date(y, mo+1, 0).getDate();
+      var today = new Date();
+      var html = '<div class="cal-head">';
+      html += '<button type="button" class="cal-nav" data-nav="-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>';
+      html += '<span class="mlabel">'+y+'年 '+MONTHS[mo]+'</span>';
+      html += '<button type="button" class="cal-nav" data-nav="1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>';
+      html += '</div><div class="cal-grid">';
+      DOW.forEach(function(d){ html += '<span class="cal-dow">'+d+'</span>'; });
+      for(var i=0;i<startDow;i++){ var pd = new Date(y,mo,1-(startDow-i)); html += '<button type="button" class="cal-day other" data-d="'+pd.getFullYear()+'-'+pad(pd.getMonth()+1)+'-'+pad(pd.getDate())+'">'+pd.getDate()+'</button>'; }
+      for(var day=1; day<=daysInMonth; day++){
+        var cls = 'cal-day';
+        if(today.getFullYear()===y && today.getMonth()===mo && today.getDate()===day) cls += ' today';
+        if(draft.date && draft.date.getFullYear()===y && draft.date.getMonth()===mo && draft.date.getDate()===day) cls += ' sel';
+        html += '<button type="button" class="'+cls+'" data-d="'+y+'-'+pad(mo+1)+'-'+pad(day)+'">'+day+'</button>';
+      }
+      var cells = startDow + daysInMonth; var trail = (7 - (cells%7))%7;
+      for(var t=1;t<=trail;t++){ var nd = new Date(y,mo+1,t); html += '<button type="button" class="cal-day other" data-d="'+nd.getFullYear()+'-'+pad(nd.getMonth()+1)+'-'+pad(nd.getDate())+'">'+nd.getDate()+'</button>'; }
+      html += '</div>';
+      // time row
+      html += '<div class="time-row"><select data-time="hour">';
+      HOURS.forEach(function(hh){ html += '<option value="'+hh+'"'+(hh===draft.hour?' selected':'')+'>'+hh+'</option>'; });
+      html += '</select><span class="colon">:</span><select data-time="min">';
+      MINS.forEach(function(mm){ html += '<option value="'+mm+'"'+(mm===draft.min?' selected':'')+'>'+mm+'</option>'; });
+      html += '</select></div>';
+      html += '<div class="pop-actions"><button type="button" class="pop-btn ghost" data-act="clear">クリア</button><span style="display:flex;gap:8px"><button type="button" class="pop-btn ghost" data-act="cancel">キャンセル</button><button type="button" class="pop-btn primary" data-act="confirm">確定</button></span></div>';
+      pop.innerHTML = html;
+      bind();
+    }
+
+    function bind(){
+      pop.querySelectorAll('[data-nav]').forEach(function(b){ b.onclick=function(){ viewDate.setMonth(viewDate.getMonth()+Number(b.dataset.nav)); renderCal(); }; });
+      pop.querySelectorAll('.cal-day').forEach(function(b){ b.onclick=function(){ var p=b.dataset.d.split('-'); draft.date=new Date(+p[0],+p[1]-1,+p[2]); renderCal(); }; });
+      pop.querySelector('[data-time="hour"]').onchange=function(e){ draft.hour=e.target.value; };
+      pop.querySelector('[data-time="min"]').onchange=function(e){ draft.min=e.target.value; };
+      pop.querySelector('[data-act="clear"]').onclick=function(){ hidden.value=''; syncTrigger(); closePop(); };
+      pop.querySelector('[data-act="cancel"]').onclick=function(){ closePop(); };
+      pop.querySelector('[data-act="confirm"]').onclick=function(){
+        if(!draft.date){ hidden.value=''; } else {
+          hidden.value = draft.date.getFullYear()+'-'+pad(draft.date.getMonth()+1)+'-'+pad(draft.date.getDate())+'T'+draft.hour+':'+draft.min;
+        }
+        syncTrigger(); closePop();
+      };
+    }
+    function syncTrigger(){
+      var label = trigger.querySelector('.dt-label');
+      if(hidden.value){ label.textContent = fmtDisplay(hidden.value); trigger.classList.remove('empty'); }
+      else { label.textContent = '日時を選択'; trigger.classList.add('empty'); }
+    }
+
+    renderCal();
+    // position
+    var r = trigger.getBoundingClientRect();
+    var top = r.bottom + window.scrollY + 6;
+    var left = r.left + window.scrollX;
+    if(left + 288 > window.scrollX + document.documentElement.clientWidth - 12) left = window.scrollX + document.documentElement.clientWidth - 288 - 12;
+    pop.style.top = top + 'px'; pop.style.left = left + 'px';
+    setTimeout(function(){ document.addEventListener('mousedown', outside, true); }, 0);
+  }
+
+  document.querySelectorAll('.dt-trigger').forEach(function(t){ t.addEventListener('click', function(){ openPicker(t); }); });
+
+  document.getElementById('event-form').addEventListener('submit', function(e){ e.preventDefault(); });
+})();
+</script>
+
+
+</body></html>

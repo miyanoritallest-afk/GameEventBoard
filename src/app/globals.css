@@ -216,3 +216,58 @@
   --mp-silver: #c7d0de;
   --mp-bronze: #d68a52;
 }
+
+/*
+ * イベント作成/編集フォーム（.mp-form）の入力要素スタイル。
+ * デザイン刷新（イベントフォーム）で導入。刷新済みトーンに合わせて surface-3 背景・
+ * ブランドの focus リングを与える。フォーム配下に限定し他画面へ影響させない。
+ * @layer の外の素ルールにするのは、Tailwind v4 の tree-shake でこのセレクタ配下の
+ * var(--mp-*) が消えないようにするため（MP トークンの落とし穴・ロール色と同じ理由）。
+ */
+.mp-form input[type="text"],
+.mp-form input[type="url"],
+.mp-form input[type="number"],
+.mp-form select,
+.mp-form textarea {
+  width: 100%;
+  color: var(--mp-fg);
+  background: var(--mp-surface-3);
+  border: 1px solid var(--mp-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
+}
+.mp-form input[type="number"] {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-feature-settings: "tnum" 1;
+}
+.mp-form textarea {
+  resize: vertical;
+  min-height: 96px;
+  line-height: 1.7;
+}
+.mp-form input::placeholder,
+.mp-form textarea::placeholder {
+  color: var(--mp-fg-subtle);
+}
+.mp-form input:focus,
+.mp-form select:focus,
+.mp-form textarea:focus {
+  outline: none;
+  border-color: var(--mp-brand);
+  box-shadow: 0 0 0 3px rgba(255, 106, 43, 0.18);
+  background: var(--mp-surface-2);
+}
+.mp-form select {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2397A2B6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  padding-right: 34px;
+}
