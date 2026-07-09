@@ -62,7 +62,7 @@ export const swapBracketTeamsSchema = z.object({
 
 /**
  * ラウンド別 BO 一括編集（PR-4）。指定ラウンド（＋3位決定戦フラグ）の全試合の best_of を更新する。
- * トーナメントは引分を構造的に出さないため BO は奇数のみ受理（1〜15）。
+ * トーナメントは引分を構造的に出さないため BO は奇数のみ受理（1〜7）。
  * round / thirdPlace はどの編集グループかを表す。event_id・matchId はサーバー側で解決する。
  */
 export const updateRoundBestOfSchema = z.object({
@@ -77,7 +77,7 @@ export const updateRoundBestOfSchema = z.object({
     .number({ message: "BOを入力してください" })
     .int("BOは整数で入力してください")
     .min(1, "BOは1以上で入力してください")
-    .max(15, "BOは15以下で入力してください")
+    .max(7, "BOは7以下で入力してください")
     .refine((n) => n % 2 === 1, "トーナメントのBOは奇数のみ設定できます"),
 });
 

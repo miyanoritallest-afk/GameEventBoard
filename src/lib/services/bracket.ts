@@ -409,7 +409,8 @@ export function recomputeBracket(
 /**
  * トーナメント用に BO を奇数へ補正する（引分を構造的に出さない＝壁打ち確定）。
  * 偶数や 1 未満は直近の妥当な奇数へ寄せる（2→3, 4→5 のように切り上げ。0/1→1）。
- * 上限 15 は CHECK と整合。
+ * 上限 clamp の 15 は DB CHECK（best_of between 1 and 15）と整合させた最終防衛。
+ * アプリ層の入力上限は Zod で BO7 に絞っているため、通常この clamp には到達しない。
  */
 export function toOddBestOf(bestOf: number): number {
   let n = Math.floor(bestOf);

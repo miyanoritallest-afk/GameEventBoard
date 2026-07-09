@@ -7,6 +7,27 @@
 
 ---
 
+## 2026-07-09 — BO の上限を BO7 に統一（e-sports 実務の最大に合わせる）
+
+BO（1試合のマップ数）の上限が BO15 まで設定できていたが、e-sports 業界の実務上の最大は BO7 のため、上限を BO7 に引き下げた。予選BO・トーナメントBO の両方が対象。
+
+### 変更
+- **UI**: `event-form.tsx` の予選BO入力 `max={15}→7`／`tournament-board.tsx` の `ODD_BO_OPTIONS` を `[1,3,5,7,9,11,13,15]→[1,3,5,7]`。
+- **Zod（アプリ層の正）**: `events/schema.ts` の `groupBestOf` と `tournament/schema.ts` の `updateRoundBestOfSchema.bestOf` を `max(15)→max(7)`。
+- **テスト**: `schema.test.ts` に「BO7 は成功／BO8 は失敗」の境界テストを追加（367 tests）。
+- 関連コメントの「1〜15」を「1〜7」に統一。
+
+### 決めたこと（なぜ）
+- **DB の CHECK 制約（`best_of`/`group_best_of` between 1 and 15）は 15 のまま据え置き**、アプリ層（Zod）だけ 7 に絞る方針。理由: アプリ層で完全にガードされ 7 超えデータは入らず、DB CHECK は「最終防衛ライン」として広めに残すのが安全。BO上限を狭めるだけのためにマイグレーション（Supabase SQL Editor 手動適用）を1本増やすのは運用コストに見合わない（壁打ち確定）。
+- `toOddBestOf` の内部 clamp（`n > 15 → 15`）も DB CHECK と整合するため据え置き。入力は Zod で 7 に絞られるため通常この clamp には到達しない旨をコメントに明記。
+- 既存データは全て BO3（events 12件・matches 35件、REST で確認）で BO8+ は存在しないため、上限引き下げで既存データが編集不能になる問題はなし。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 367 passed）。
+- 実機（Playwright）: tournament のラウンド別BOが BO1/3/5/7 の4択のみになったことを確認。
+
+---
+
 ## 2026-07-09 — 決勝トーナメント（第9画面）のコードレビュー指摘6件を修正
 
 第9画面（PR#97）に `/code-review high` を回し、検出6件を全修正した。うち2件は今回入れてしまった実リグレッション。UI・整形のみで判定・保存ロジックは引き続き未変更。

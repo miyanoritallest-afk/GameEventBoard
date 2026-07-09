@@ -379,9 +379,17 @@ describe("createDraftEventSchema — 予選BO（本戦-3d）", () => {
     if (result.success) expect(result.data.groupBestOf).toBe(5);
   });
 
-  it("groupBestOf が範囲外（16）は失敗する", () => {
+  it("groupBestOf は上限 7（e-sports 実務の最大 BO7）まで受理する", () => {
     const result = createDraftEventSchema.safeParse(
-      baseInput({ groupBestOf: "16" }),
+      baseInput({ groupBestOf: "7" }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.groupBestOf).toBe(7);
+  });
+
+  it("groupBestOf が上限超え（8）は失敗する", () => {
+    const result = createDraftEventSchema.safeParse(
+      baseInput({ groupBestOf: "8" }),
     );
     expect(result.success).toBe(false);
   });

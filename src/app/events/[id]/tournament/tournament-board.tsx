@@ -1062,8 +1062,8 @@ function OrganizerToolbar({
   );
 }
 
-/** トーナメントで設定できる BO（奇数のみ・引分なし・groupBestOf は最大15）。 */
-const ODD_BO_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15];
+/** トーナメントで設定できる BO（奇数のみ・引分なし）。上限は e-sports 実務の最大 BO7。 */
+const ODD_BO_OPTIONS = [1, 3, 5, 7];
 
 /** ラウンド別 BO 編集の1行（ラベル＋BOピル＋locked注記）。 */
 function RoundBoRow({

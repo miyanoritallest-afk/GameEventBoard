@@ -152,14 +152,15 @@ export const createDraftEventSchema = z
       z.coerce.number().int().min(0).max(99),
     ),
     // 予選BO（本戦-3d）。総当たり生成時に全試合の best_of へ一括セットする。
-    // best_of=N は最大Nマップ（奇数=過半数先取で引分なし、偶数=引分あり）。1〜15。
+    // best_of=N は最大Nマップ（奇数=過半数先取で引分なし、偶数=引分あり）。1〜7。
+    // 上限は e-sports の実務上の最大（BO7）に合わせる。
     groupBestOf: z.preprocess(
       (v) => (v == null || v === "" ? 3 : v),
       z.coerce
         .number()
         .int()
         .min(1, "BOは1以上で入力してください")
-        .max(15, "BOは15以下で入力してください"),
+        .max(7, "BOは7以下で入力してください"),
     ),
     // 3位決定戦を行うか（本戦-5c）。チェックボックス＝on/未送信。
     tournamentThirdPlace: z.coerce.boolean().default(false),
