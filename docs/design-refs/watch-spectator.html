@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — 観戦ビュー</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] Geist / Geist Mono / Noto Sans JP の @font-face（外部フォント・data URIなし）はリポジトリ保管のため除去。実装では既存 --font 変数にフォールバック。 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --success:#34D399; --warning:#F5B93D; --live:#22D3EE; --danger:#F65C4E;
+    --gold:#F5C451; --silver:#C7D0DE; --bronze:#D68A52;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 32px rgba(0,0,0,.5);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.6;
+    font-feature-settings:"palt" 1;
+    background:
+      radial-gradient(1100px 520px at 86% -8%, rgba(255,106,43,.09), transparent 58%),
+      radial-gradient(820px 460px at 4% 2%, rgba(34,211,238,.07), transparent 54%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── Site header ── */
+  .site-header { border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(20,26,36,.72),rgba(11,14,20,.72)); backdrop-filter:blur(8px); position:sticky; top:0; z-index:40; }
+  .header-inner { max-width:1240px; margin:0 auto; padding:0 34px; height:60px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand-nav { display:flex; align-items:center; gap:34px; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+  .brand-nav nav { display:flex; gap:22px; font-size:13.5px; color:var(--fg-muted); }
+  .brand-nav nav a.active { color:var(--fg); font-weight:500; }
+  .brand-nav nav a:hover { color:var(--fg); }
+  .header-right { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+  .bell { position:relative; width:36px; height:36px; display:grid; place-items:center; border-radius:var(--r-md); cursor:pointer; }
+  .bell:hover { background:var(--surface-2); }
+  .bell .count { position:absolute; top:-1px; right:-1px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger); color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 2px var(--bg); }
+  .header-user { display:inline-flex; align-items:center; gap:9px; padding:5px 6px 5px 5px; border-radius:999px; }
+  .header-user .av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#5865F2,#3B45B5); display:grid; place-items:center; font-family:var(--font-sans); font-size:11px; font-weight:700; color:#fff; }
+  .header-user .nm { color:var(--fg); font-weight:500; }
+
+  /* ── Buttons ── */
+  .btn { font-family:var(--font-sans); font-weight:600; border-radius:var(--r-md); border:1px solid transparent; cursor:pointer; transition:background .15s,border-color .15s,transform .05s,box-shadow .15s; display:inline-flex; align-items:center; justify-content:center; gap:7px; line-height:1; white-space:nowrap; text-decoration:none; }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:var(--brand); color:var(--on-brand); box-shadow:0 0 0 1px rgba(255,106,43,.35),0 6px 18px rgba(255,106,43,.2); }
+  .btn-primary:hover { background:var(--brand-hover); }
+  .btn-secondary { background:var(--surface-3); color:var(--fg); border-color:var(--border-strong); }
+  .btn-secondary:hover { background:var(--surface-2); border-color:var(--fg-subtle); }
+  .btn-ghost { background:transparent; color:var(--fg-muted); border-color:var(--border); }
+  .btn-ghost:hover { background:var(--surface); color:var(--fg); }
+  .btn-md { font-size:13px; padding:9px 15px; }
+  .btn-sm { font-size:12px; padding:6px 11px; }
+
+  /* ── Page shell ── */
+  .page { max-width:1240px; margin:0 auto; padding:26px 34px 130px; }
+  .crumbs { display:flex; align-items:center; gap:9px; font-size:12px; color:var(--fg-subtle); margin-bottom:18px; font-family:var(--font-sans); }
+  .crumbs a { color:var(--fg-muted); font-weight:500; }
+  .crumbs a:hover { color:var(--fg); }
+  .crumbs .sep { color:var(--border-strong); }
+  .crumbs .here { color:var(--fg); font-weight:600; }
+
+  /* ── HERO ── */
+  .hero { position:relative; overflow:hidden; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2xl); box-shadow:var(--e2); padding:26px 30px 28px; }
+  .hero::before { content:""; position:absolute; inset:0; background:radial-gradient(680px 240px at 90% -30%, rgba(34,211,238,.12), transparent 65%); pointer-events:none; }
+  .hero-top { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; position:relative; }
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; display:flex; align-items:center; gap:10px; }
+  .kicker::before { content:""; width:22px; height:2px; background:var(--accent); }
+  .kicker .live-dot { width:7px; height:7px; border-radius:50%; background:var(--live); box-shadow:0 0 9px var(--live); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  h1.hero-title { font-family:var(--font-sans); font-weight:800; font-size:30px; line-height:1.14; letter-spacing:-.02em; margin:0; }
+  .hero-ev { color:var(--fg-muted); font-weight:500; font-size:14px; margin-top:8px; }
+  .hero-ev .em { filter:saturate(1.2); }
+
+  /* stage switcher */
+  .stageseg { display:inline-flex; background:var(--surface-3); border:1px solid var(--border); border-radius:999px; padding:3px; gap:2px; flex-wrap:wrap; }
+  .stageseg button { font-family:var(--font-sans); font-size:12px; font-weight:600; color:var(--fg-muted); background:transparent; border:none; padding:6px 13px; border-radius:999px; cursor:pointer; transition:background .14s,color .14s; }
+  .stageseg button.on { background:var(--surface); color:var(--fg); box-shadow:var(--e1); }
+  .stageseg button:hover:not(.on) { color:var(--fg); }
+  .stage-hint { font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; color:var(--fg-subtle); text-align:right; margin-top:8px; text-transform:uppercase; }
+
+  /* progress chips */
+  .prog-row { display:flex; flex-wrap:wrap; gap:9px; margin-top:22px; position:relative; }
+  .pchip { display:inline-flex; align-items:center; gap:9px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-lg); padding:9px 14px; }
+  .pchip .pk { font-family:var(--font-jp); font-size:11px; color:var(--fg-subtle); }
+  .pchip .pv { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:16px; font-weight:700; color:var(--fg); line-height:1; }
+  .pchip .pv .u { font-size:11px; color:var(--fg-muted); font-weight:500; margin-left:2px; }
+  .pchip .mini-bar { width:54px; height:5px; border-radius:99px; background:var(--surface-3); overflow:hidden; }
+  .pchip .mini-bar i { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),#5ce2f2); }
+  .pchip.live-chip { border-color:rgba(34,211,238,.32); background:rgba(34,211,238,.08); }
+  .pchip.live-chip .pv { color:var(--live); display:inline-flex; align-items:center; gap:7px; }
+  .pchip.live-chip .pv .d { width:7px; height:7px; border-radius:50%; background:var(--live); box-shadow:0 0 8px var(--live); animation:pulse 1.6s ease-in-out infinite; }
+  .pchip.champ-chip { border-color:rgba(245,196,81,.4); background:linear-gradient(90deg,rgba(245,196,81,.14),rgba(245,196,81,.03)); box-shadow:0 0 24px -6px rgba(245,196,81,.4); }
+  .pchip.champ-chip .pv { color:var(--gold); }
+  .pchip.champ-chip .pk { color:rgba(245,196,81,.75); }
+
+  .spec-banner { display:flex; align-items:center; gap:12px; margin-top:18px; padding:11px 16px; border-radius:var(--r-xl); background:linear-gradient(90deg,rgba(34,211,238,.1),transparent); border:1px solid rgba(34,211,238,.28); font-size:12.5px; color:var(--fg-muted); }
+  .spec-banner .dot { width:7px; height:7px; border-radius:50%; flex:none; background:var(--live); box-shadow:0 0 10px var(--live); }
+  .spec-banner b { color:var(--fg); font-weight:600; }
+
+  /* ── SECTION ── */
+  .section { margin-top:44px; animation:sec-in .4s ease both; }
+  @keyframes sec-in { from { opacity:0; transform:translateY(10px); } }
+  @media (prefers-reduced-motion:reduce){ .section { animation:none; } }
+  .sec-head { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; flex-wrap:wrap; margin-bottom:18px; }
+  .sec-title { font-family:var(--font-sans); font-weight:800; font-size:19px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px; margin:0; }
+  .sec-title .bar { width:3px; height:19px; border-radius:2px; background:var(--brand); }
+  .sec-title .n { font-family:var(--font-mono); font-size:11px; color:var(--fg-subtle); letter-spacing:.1em; }
+  .sec-sub { font-size:12.5px; color:var(--fg-subtle); margin-top:5px; font-weight:400; line-height:1.5; }
+  .sec-link { font-family:var(--font-sans); font-size:12.5px; font-weight:600; color:var(--accent); display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:var(--r-md); border:1px solid rgba(34,211,238,.28); background:rgba(34,211,238,.07); transition:background .14s,border-color .14s; white-space:nowrap; }
+  .sec-link:hover { background:rgba(34,211,238,.14); border-color:rgba(34,211,238,.5); color:var(--accent); }
+  .sec-link svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* ══════ TEAMS ══════ */
+  .teams-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(268px,1fr)); gap:14px; }
+  .tcard { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xl); box-shadow:var(--e1); padding:14px 15px 13px; position:relative; overflow:hidden; transition:border-color .14s,box-shadow .14s,transform .1s; }
+  .tcard:hover { border-color:var(--border-strong); box-shadow:var(--e2); transform:translateY(-1px); }
+  .tcard .swbar { position:absolute; left:0; top:0; bottom:0; width:4px; }
+  .tcard .tc-head { display:flex; align-items:center; gap:10px; }
+  .tcard .tc-nm { font-family:var(--font-sans); font-weight:800; font-size:15.5px; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
+  .tcard .tc-blk { font-family:var(--font-mono); font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; color:#0B0E14; flex:none; }
+  .tcard .tc-seed { font-family:var(--font-mono); font-size:10.5px; font-weight:700; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-sm); padding:2px 7px; flex:none; }
+  .tc-roster { display:flex; flex-wrap:wrap; gap:5px; margin-top:12px; }
+  .tc-mem { font-family:var(--font-sans); font-size:11.5px; font-weight:500; color:var(--fg-muted); background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:3px 9px; display:inline-flex; align-items:center; gap:4px; }
+  .tc-mem.cap { color:var(--fg); border-color:var(--border-strong); }
+  .tc-mem .star { color:var(--warning); font-size:10px; }
+  .tc-foot { margin-top:11px; padding-top:10px; border-top:1px solid var(--border); display:flex; align-items:center; gap:6px; font-size:11px; color:var(--fg-subtle); }
+  .tc-foot .lbl { font-family:var(--font-mono); font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
+  .tc-foot .reg { color:var(--fg-muted); font-weight:600; font-family:var(--font-mono); }
+
+  /* ══════ BLOCKS ══════ */
+  .blocks-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+  .bcard { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xl); box-shadow:var(--e1); overflow:hidden; }
+  .bcard-head { padding:14px 16px 13px; border-bottom:1px solid var(--border); background:linear-gradient(180deg,var(--surface-2),transparent); display:flex; align-items:center; gap:11px; }
+  .bcard-badge { width:30px; height:30px; flex:none; border-radius:var(--r-md); display:grid; place-items:center; font-family:var(--font-sans); font-weight:800; font-size:15px; color:#0B0E14; }
+  .bcard-nm { font-family:var(--font-sans); font-weight:800; font-size:16px; }
+  .bcard-cnt { font-family:var(--font-mono); font-size:11px; color:var(--fg-subtle); margin-left:auto; }
+  .bcard-body { padding:11px 13px 13px; display:flex; flex-direction:column; gap:6px; }
+  .brow { display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:var(--r-md); transition:background .12s; }
+  .brow:hover { background:var(--surface-2); }
+  .brow .bsw { width:8px; height:20px; border-radius:2px; flex:none; }
+  .brow .bno { font-family:var(--font-mono); font-size:10px; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); border-radius:999px; width:19px; height:19px; display:grid; place-items:center; flex:none; }
+  .brow .bnm { font-family:var(--font-sans); font-weight:600; font-size:13px; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ══════ STANDINGS ══════ */
+  .stand-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:18px; }
+  .spanel { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xl); box-shadow:var(--e1); overflow:hidden; }
+  .spanel-head { padding:13px 16px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .spanel-head .sh-nm { font-family:var(--font-sans); font-weight:800; font-size:14.5px; display:flex; align-items:center; gap:9px; }
+  .spanel-head .sh-nm .sh-badge { width:22px; height:22px; border-radius:var(--r-sm); display:grid; place-items:center; font-family:var(--font-sans); font-weight:800; font-size:11px; color:#0B0E14; }
+  .spanel-head .sh-meta { font-family:var(--font-mono); font-size:10.5px; color:var(--fg-subtle); }
+  table.stand { width:100%; border-collapse:collapse; font-family:var(--font-sans); }
+  table.stand thead th { font-family:var(--font-mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-subtle); font-weight:500; padding:9px 6px; border-bottom:1px solid var(--border); background:var(--surface-2); text-align:center; }
+  table.stand thead th.th-tm { text-align:left; padding-left:14px; }
+  .stand td { padding:0; border-bottom:1px solid var(--border); }
+  .stand tr:last-child td { border-bottom:none; }
+  .st-c { padding:10px 6px; text-align:center; }
+  .st-rk { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:var(--r-sm); font-family:var(--font-mono); font-weight:700; font-size:12px; color:var(--fg-muted); background:var(--surface-3); border:1px solid var(--border); }
+  tr.qual .st-rk { color:var(--success); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.1); }
+  tr.first .st-rk { color:#1a1206; background:linear-gradient(135deg,var(--gold),#E0A93A); border-color:transparent; box-shadow:0 0 12px rgba(245,196,81,.35); }
+  tr.first { background:linear-gradient(90deg,rgba(245,196,81,.07),transparent 62%); }
+  tr.qual { background:linear-gradient(90deg,rgba(52,211,153,.05),transparent 62%); }
+  tr.st-row:hover { background:var(--surface-2); }
+  .st-tm-c { text-align:left; padding:9px 8px 9px 14px; }
+  .st-tm { display:flex; align-items:center; gap:10px; }
+  .st-tm .sw { width:9px; height:20px; border-radius:3px; flex:none; }
+  .st-tm .nm { font-family:var(--font-sans); font-weight:700; font-size:13.5px; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wdl { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:12.5px; font-weight:600; }
+  .wdl .w { color:var(--success); } .wdl .d2 { color:var(--fg-muted); } .wdl .l { color:var(--danger); } .wdl .sep { color:var(--fg-subtle); font-weight:400; }
+  .st-pts { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:16px; font-weight:700; color:var(--fg); }
+  tr.first .st-pts { color:var(--gold); }
+  .st-gd { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:12.5px; font-weight:600; }
+  .st-gd.pos { color:var(--success); } .st-gd.neg { color:var(--danger); } .st-gd.zero { color:var(--fg-subtle); }
+  .qline td { padding:0; border:none; }
+  .qline .qi { display:flex; align-items:center; gap:9px; padding:5px 14px; font-family:var(--font-mono); font-size:9.5px; letter-spacing:.1em; color:var(--success); background:repeating-linear-gradient(90deg,transparent,transparent 6px,rgba(52,211,153,.12) 6px,rgba(52,211,153,.12) 12px); }
+  .qline .qi .lbl { background:var(--surface); padding:1px 8px; border:1px solid rgba(52,211,153,.35); border-radius:999px; }
+  .spanel-foot { padding:9px 14px; border-top:1px solid var(--border); font-size:10.5px; color:var(--fg-subtle); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .spanel-foot .sep2 { color:var(--border-strong); }
+  .spanel-foot .qtxt { color:var(--success); }
+
+  /* ══════ RESULTS ══════ */
+  .results-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xl); box-shadow:var(--e1); overflow:hidden; }
+  .rrow { display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--border); transition:background .12s; }
+  .rrow:last-child { border-bottom:none; }
+  .rrow:hover { background:var(--surface-2); }
+  .rrow .r-dt { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:12px; color:var(--fg-subtle); width:82px; flex:none; }
+  .rrow .r-blk { font-family:var(--font-mono); font-size:9.5px; font-weight:600; padding:2px 8px; border-radius:999px; color:#0B0E14; flex:none; }
+  .rrow .r-match { flex:1; min-width:0; display:flex; align-items:center; gap:10px; justify-content:center; }
+  .rrow .r-tm { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
+  .rrow .r-tm.a { justify-content:flex-end; text-align:right; }
+  .rrow .r-tm.b { justify-content:flex-start; flex-direction:row-reverse; text-align:left; }
+  .rrow .r-tm .sw { width:8px; height:18px; border-radius:2px; flex:none; }
+  .rrow .r-tm .nm { font-family:var(--font-sans); font-weight:700; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rrow .r-tm.win .nm { color:var(--fg); }
+  .rrow .r-tm.lose .nm { color:var(--fg-subtle); font-weight:600; }
+  .rrow .r-tm .crown { font-size:11px; flex:none; }
+  .r-score { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-weight:700; font-size:17px; flex:none; padding:0 4px; }
+  .r-score .sa, .r-score .sb { min-width:16px; text-align:center; color:var(--fg-subtle); }
+  .r-score .sa.w, .r-score .sb.w { color:var(--success); }
+  .r-score .vs { font-size:11px; color:var(--fg-subtle); font-weight:400; }
+  .rrow .r-stream { width:120px; flex:none; display:flex; align-items:center; gap:6px; justify-content:flex-end; font-family:var(--font-mono); font-size:11px; color:var(--fg-subtle); }
+  .rrow .r-stream .tv { color:var(--live); font-size:12px; }
+  .rrow .r-stream.empty { opacity:0; }
+  @media (max-width:720px){ .rrow .r-stream, .rrow .r-dt { display:none; } }
+
+  /* ══════ FINALS (bracket digest, no connectors) ══════ */
+  .finals-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2xl); box-shadow:var(--e1); padding:18px 20px 22px; position:relative; overflow:hidden; }
+  .finals-panel.decided::before { content:""; position:absolute; inset:0; background:radial-gradient(520px 200px at 82% -40%, rgba(245,196,81,.1), transparent 70%); pointer-events:none; }
+  .bracket-scroll { overflow-x:auto; padding:4px 2px 8px; }
+  .bracket-scroll::-webkit-scrollbar { height:9px; }
+  .bracket-scroll::-webkit-scrollbar-thumb { background:var(--surface-3); border-radius:99px; border:2px solid var(--surface); }
+  .bracket { display:flex; gap:26px; min-width:min-content; position:relative; }
+  .round-col { display:flex; flex-direction:column; min-width:230px; }
+  .round-head { display:flex; align-items:baseline; gap:9px; margin-bottom:14px; }
+  .round-head .rn { font-family:var(--font-sans); font-weight:800; font-size:14px; letter-spacing:-.01em; }
+  .round-head .rc { font-family:var(--font-mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-subtle); }
+  .round-head .bo { font-family:var(--font-mono); font-size:9.5px; font-weight:600; color:var(--brand); background:rgba(255,106,43,.1); border:1px solid rgba(255,106,43,.3); border-radius:999px; padding:2px 8px; margin-left:auto; }
+  .round-matches { flex:1; display:flex; flex-direction:column; justify-content:space-around; gap:14px; }
+
+  .mcard { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--e1); }
+  .mcard.byecard { opacity:.9; }
+  .mcard.champcard { border-color:rgba(245,196,81,.55); box-shadow:0 0 26px rgba(245,196,81,.14),var(--e1); }
+  .mc-top { display:flex; align-items:center; justify-content:space-between; padding:5px 11px; border-bottom:1px solid var(--border); background:rgba(20,26,36,.6); }
+  .mc-tag { font-family:var(--font-mono); font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-subtle); }
+  .mc-tag.done { color:var(--success); }
+  .mc-bo { font-family:var(--font-mono); font-size:9px; font-weight:600; color:var(--brand); background:rgba(255,106,43,.1); border:1px solid rgba(255,106,43,.3); border-radius:999px; padding:1px 7px; }
+  .slot { display:flex; align-items:center; gap:9px; padding:9px 11px 9px 13px; position:relative; }
+  .slot + .slot { border-top:1px solid var(--border); }
+  .slot .accent { position:absolute; left:0; top:0; bottom:0; width:3px; background:transparent; }
+  .slot.win .accent { background:var(--success); }
+  .slot.champ .accent { background:var(--gold); }
+  .slot .seed { display:inline-grid; place-items:center; width:20px; height:20px; border-radius:var(--r-sm); font-family:var(--font-mono); font-weight:700; font-size:10px; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); flex:none; }
+  .slot.win .seed { color:var(--success); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.1); }
+  .slot.champ .seed { color:#1a1206; background:linear-gradient(135deg,var(--gold),#E0A93A); border-color:transparent; }
+  .slot .nm { font-family:var(--font-sans); font-weight:700; font-size:13px; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .slot.lose .nm { color:var(--fg-muted); font-weight:600; }
+  .slot.tbd .nm, .slot.byeslot .nm { color:var(--fg-subtle); font-weight:600; }
+  .slot .crown { flex:none; font-size:12px; }
+  .slot .sc { margin-left:auto; font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-weight:700; font-size:15px; color:var(--fg-muted); flex:none; }
+  .slot.win .sc { color:var(--success); }
+  .slot.champ .sc { color:var(--gold); }
+  .slot.lose .sc { color:var(--fg-subtle); }
+  .slot .byetag { margin-left:auto; font-family:var(--font-mono); font-size:9px; letter-spacing:.1em; color:var(--fg-subtle); flex:none; }
+  .mc-foot { display:flex; align-items:center; gap:10px; padding:5px 12px; border-top:1px solid var(--border); background:rgba(11,14,20,.4); font-family:var(--font-mono); font-size:10px; color:var(--fg-subtle); }
+  .mc-foot .tv { color:var(--live); display:inline-flex; align-items:center; gap:4px; }
+  .third-frame { margin-top:16px; border:1.5px dashed var(--border-strong); border-radius:var(--r-lg); padding:11px 12px 12px; }
+  .third-label { display:flex; align-items:center; gap:8px; font-family:var(--font-sans); font-weight:700; font-size:11.5px; color:var(--fg-muted); margin-bottom:10px; }
+
+  .champ-banner { display:flex; align-items:center; gap:14px; margin-bottom:20px; padding:14px 18px; border-radius:var(--r-xl); background:linear-gradient(90deg,rgba(245,196,81,.16),rgba(245,196,81,.03)); border:1px solid rgba(245,196,81,.42); position:relative; }
+  .champ-banner .tro { font-size:30px; line-height:1; filter:drop-shadow(0 3px 8px rgba(0,0,0,.5)); }
+  .champ-banner .cb-txt .lb { font-family:var(--font-mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:rgba(245,196,81,.8); }
+  .champ-banner .cb-txt .nm { font-family:var(--font-sans); font-weight:800; font-size:20px; color:var(--gold); line-height:1.2; margin-top:2px; }
+  .champ-banner .cb-score { margin-left:auto; font-family:var(--font-mono); font-size:12px; color:var(--fg-muted); }
+
+  .empty-note { display:flex; align-items:center; gap:10px; padding:14px 18px; border-radius:var(--r-xl); border:1px dashed var(--border-strong); background:rgba(20,26,36,.4); font-size:12.5px; color:var(--fg-subtle); }
+  .empty-note .d { width:7px; height:7px; border-radius:50%; background:var(--fg-subtle); flex:none; }
+
+  @media (max-width:820px){
+    .header-inner, .page { padding-left:18px; padding-right:18px; }
+    .brand-nav nav { display:none; }
+    h1.hero-title { font-size:24px; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<!-- [軽量版] React/Babel CDN の <script src> は除去。JSX 本体は下の text/babel を参照 -->
+
+
+<script type="text/babel" data-presets="react">
+const { useState } = React;
+
+/* ═══════════ data (spectator aggregate) ═══════════ */
+const PALETTE = ['#FF6A2B','#22D3EE','#45C08A','#F5B93D','#5B93F0','#A78BFA','#F2685A','#E8637F'];
+
+// registered names only (privacy: no Discord / BattleTag)
+const TEAMS = {
+  night:   { name:'Nightfall GG', seed:1, block:'A', color:'#FF6A2B', reg:['Void','acro','kite','sora','nao'] },
+  radiant: { name:'Radiant',      seed:2, block:'B', color:'#22D3EE', reg:['Nova','blaze','ava','sol','mar'] },
+  vertex:  { name:'Vertex',       seed:3, block:'A', color:'#45C08A', reg:['Rin','glass','tsume','ober','hail'] },
+  halcyon: { name:'Halcyon',      seed:4, block:'B', color:'#F5B93D', reg:['Marlow','hena','quill','bishop','sable'] },
+  tempest: { name:'Tempest',      seed:5, block:'A', color:'#5B93F0', reg:['WALL','frag','zip','coco','embr'] },
+  frost:   { name:'Frost Nine',   seed:6, block:'B', color:'#A78BFA', reg:['Frost','ice','pale','wint','chil'] },
+  umbra:   { name:'Umbra',        block:'A', color:'#F2685A', reg:['GRIT','nyx','lull','pane','vio'] },
+  solaris: { name:'Solaris',      block:'A', color:'#E8637F', reg:['AXEL','vega','quse','hime','taku'] },
+  onyx:    { name:'Onyx',         block:'A', color:'#FF6A2B', reg:['shade','kuri','mio','gus','ren'] },
+  aegis:   { name:'Aegis Blue',   block:'A', color:'#22D3EE', reg:['BRICK','yuzu','pon','mel','aoi'] },
+  cobalt:  { name:'Cobalt',       block:'A', color:'#45C08A', reg:['duo','salt','nim','ffa','ky'] },
+  ember:   { name:'Ember',        block:'B', color:'#F5B93D', reg:['emb','ash','cin','sear','coal'] },
+  nova:    { name:'Nova Prime',   block:'B', color:'#5B93F0', reg:['prime','star','lux','gala','cos'] },
+  zephyr:  { name:'Zephyr',       block:'B', color:'#A78BFA', reg:['zeph','gust','airo','breez','calm'] },
+};
+const TEAM_ORDER = ['night','radiant','vertex','halcyon','tempest','frost','umbra','solaris','onyx','aegis','cobalt','ember','nova','zephyr'];
+const nm = id => TEAMS[id].name;
+
+const BLOCKS = [
+  { name:'A組', letter:'A', color:PALETTE[0], teams:['night','vertex','tempest','umbra','solaris','onyx','aegis','cobalt'] },
+  { name:'B組', letter:'B', color:PALETTE[1], teams:['radiant','halcyon','frost','ember','nova','zephyr'] },
+];
+
+// hardcoded standings digest (rank order). qual = top 3 advance
+const STANDINGS = {
+  A: [
+    { id:'night',   w:6,d:0,l:1, pts:18, gd:9 },
+    { id:'vertex',  w:5,d:1,l:1, pts:16, gd:6 },
+    { id:'tempest', w:4,d:1,l:2, pts:13, gd:3 },
+    { id:'umbra',   w:3,d:2,l:2, pts:11, gd:1 },
+    { id:'solaris', w:3,d:1,l:3, pts:10, gd:-1 },
+    { id:'onyx',    w:2,d:1,l:4, pts:7,  gd:-4 },
+    { id:'aegis',   w:1,d:2,l:4, pts:5,  gd:-6 },
+    { id:'cobalt',  w:0,d:2,l:5, pts:2,  gd:-8 },
+  ],
+  B: [
+    { id:'radiant', w:5,d:0,l:0, pts:15, gd:8 },
+    { id:'halcyon', w:3,d:1,l:1, pts:10, gd:3 },
+    { id:'frost',   w:2,d:2,l:1, pts:8,  gd:1 },
+    { id:'ember',   w:2,d:0,l:3, pts:6,  gd:-2 },
+    { id:'nova',    w:1,d:1,l:3, pts:4,  gd:-4 },
+    { id:'zephyr',  w:0,d:1,l:4, pts:1,  gd:-6 },
+  ],
+};
+const QUALIFY = 3;
+
+// recent 5 qualifier results
+const RESULTS = [
+  { dt:'07/09 20:15', blk:'A', a:'tempest', b:'aegis',   sa:2, sb:0, stream:'' },
+  { dt:'07/09 19:00', blk:'B', a:'halcyon', b:'nova',    sa:2, sb:0, stream:'MPCast' },
+  { dt:'07/08 21:45', blk:'A', a:'vertex',  b:'umbra',   sa:2, sb:1, stream:'' },
+  { dt:'07/08 21:00', blk:'B', a:'radiant', b:'ember',   sa:2, sb:1, stream:'MPCast' },
+  { dt:'07/08 20:30', blk:'A', a:'night',   b:'onyx',    sa:2, sb:0, stream:'nori#1121' },
+];
+
+// finals bracket digest (winner = higher score). done gated by stage.
+const BRACKET = {
+  qf: { bo:3, label:'準々決勝', matches:[
+    { id:'qf1', a:'night', bye:true },
+    { id:'qf2', a:'halcyon', b:'tempest', sa:2, sb:1, stream:'MPCast' },
+    { id:'qf3', a:'vertex', b:'frost', sa:2, sb:0, stream:'' },
+    { id:'qf4', a:'radiant', bye:true },
+  ]},
+  sf: { bo:3, label:'準決勝', matches:[
+    { id:'sf1', a:'night', b:'halcyon', sa:2, sb:1, stream:'nori#1121' },
+    { id:'sf2', a:'vertex', b:'radiant', sa:0, sb:2, stream:'MPCast' },
+  ]},
+  final: { bo:5, label:'決勝', matches:[
+    { id:'final', a:'night', b:'radiant', sa:3, sb:2, stream:'nori#1121' },
+  ]},
+  third: { bo:3, label:'3位決定戦', matches:[
+    { id:'third', a:'halcyon', b:'vertex', sa:2, sb:1, stream:'' },
+  ]},
+};
+
+/* ═══════════ stages ═══════════ */
+const STAGES = [
+  { id:'signup',     label:'応募締切後',   hint:'Sections: 2' },
+  { id:'qualifying', label:'予選進行',     hint:'Sections: 4' },
+  { id:'finals',     label:'決勝進行',     hint:'Sections: 5' },
+  { id:'done',       label:'大会終了',     hint:'Sections: 5 · 🏆' },
+];
+const STAGE_IX = Object.fromEntries(STAGES.map((s,i)=>[s.id,i]));
+
+/* ═══════════ pieces ═══════════ */
+function SectionHead({ n, title, sub, linkLabel, linkHref }){
+  return (
+    <div className="sec-head">
+      <div>
+        <h2 className="sec-title"><span className="bar"></span>{title}<span className="n">{n}</span></h2>
+        {sub && <p className="sec-sub">{sub}</p>}
+      </div>
+      {linkLabel && (
+        <a className="sec-link" href={linkHref||'#'}>
+          {linkLabel}
+          <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+        </a>
+      )}
+    </div>
+  );
+}
+
+function TvTag({ name, cls }){
+  if(!name) return <span className={cls}></span>;
+  return <span className={cls}><span className="tv">📺</span>{name}</span>;
+}
+
+/* ── teams ── */
+function TeamsSection(){
+  return (
+    <section className="section" data-screen-label="参加チーム">
+      <SectionHead n="01" title="参加チーム"
+        sub="承認された全チームと登録メンバー（★＝チーム代表）。表示は登録名のみ。"
+        linkLabel="チーム編成を見る" />
+      <div className="teams-grid">
+        {TEAM_ORDER.map(id=>{
+          const t = TEAMS[id];
+          const blk = BLOCKS.find(b=>b.letter===t.block);
+          return (
+            <div className="tcard" key={id}>
+              <span className="swbar" style={{background:t.color}}></span>
+              <div className="tc-head">
+                <span className="tc-nm">{t.name}</span>
+                {t.seed && <span className="tc-seed">#{t.seed}</span>}
+                <span className="tc-blk" style={{background:blk.color}}>{t.block}組</span>
+              </div>
+              <div className="tc-roster">
+                {t.reg.map((p,i)=>(
+                  <span className={"tc-mem"+(i===0?' cap':'')} key={i}>
+                    {i===0 && <span className="star">★</span>}{p}
+                  </span>
+                ))}
+              </div>
+              <div className="tc-foot">
+                <span className="lbl">Regular</span><span className="reg">{t.reg.length}名</span>
+                <span style={{color:'var(--border-strong)'}}>·</span>
+                <span className="lbl">5v5</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ── blocks ── */
+function BlocksSection(){
+  return (
+    <section className="section" data-screen-label="ブロック">
+      <SectionHead n="02" title="ブロック分け"
+        sub="予選は各ブロック総当たり。各ブロック上位3チームが決勝トーナメントへ進出。"
+        linkLabel="ブロック分けを見る" />
+      <div className="blocks-grid">
+        {BLOCKS.map((b,bi)=>(
+          <div className="bcard" key={bi}>
+            <div className="bcard-head">
+              <span className="bcard-badge" style={{background:b.color}}>{b.letter}</span>
+              <span className="bcard-nm">{b.name}</span>
+              <span className="bcard-cnt">{b.teams.length} チーム</span>
+            </div>
+            <div className="bcard-body">
+              {b.teams.map((id,i)=>{
+                const t=TEAMS[id];
+                return (
+                  <div className="brow" key={id}>
+                    <span className="bsw" style={{background:t.color}}></span>
+                    <span className="bno">{i+1}</span>
+                    <span className="bnm">{t.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── standings ── */
+function StandingsPanel({ letter }){
+  const b = BLOCKS.find(x=>x.letter===letter);
+  const rows = STANDINGS[letter];
+  return (
+    <div className="spanel">
+      <div className="spanel-head">
+        <span className="sh-nm"><span className="sh-badge" style={{background:b.color}}>{letter}</span>{b.name} 順位</span>
+        <span className="sh-meta">{rows.length} チーム</span>
+      </div>
+      <table className="stand">
+        <thead>
+          <tr>
+            <th style={{width:'46px'}}>順位</th>
+            <th className="th-tm">チーム</th>
+            <th>勝分敗</th>
+            <th>勝点</th>
+            <th>得失</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r,i)=>{
+            const rank=i+1;
+            const cls = rank===1?'first':(rank<=QUALIFY?'qual':'');
+            const gdCls = r.gd>0?'pos':(r.gd<0?'neg':'zero');
+            const t=TEAMS[r.id];
+            return (
+              <React.Fragment key={r.id}>
+                <tr className={"st-row "+cls}>
+                  <td className="st-c"><span className="st-rk">{rank}</span></td>
+                  <td className="st-tm-c"><div className="st-tm"><span className="sw" style={{background:t.color}}></span><span className="nm">{t.name}</span></div></td>
+                  <td className="st-c"><span className="wdl"><span className="w">{r.w}</span><span className="sep">-</span><span className="d2">{r.d}</span><span className="sep">-</span><span className="l">{r.l}</span></span></td>
+                  <td className="st-c"><span className="st-pts">{r.pts}</span></td>
+                  <td className="st-c"><span className={"st-gd "+gdCls}>{r.gd>0?'+':''}{r.gd}</span></td>
+                </tr>
+                {rank===QUALIFY && (
+                  <tr className="qline"><td colSpan="5"><div className="qi"><span className="lbl">▲ 予選通過ライン</span><span>上位 {QUALIFY} が決勝Tへ</span></div></td></tr>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="spanel-foot">
+        <span>勝点 勝3 / 分1</span>
+        <span className="sep2">·</span>
+        <span>得失＝マップ差</span>
+        <span className="sep2">·</span>
+        <span className="qtxt">上位3進出</span>
+      </div>
+    </div>
+  );
+}
+function StandingsSection({ progress }){
+  return (
+    <section className="section" data-screen-label="予選順位">
+      <SectionHead n="03" title="予選順位"
+        sub={`ブロック別の順位ダイジェスト。1位はゴールド、通過ライン（上位3）を強調。消化 ${progress.done}/${progress.total} 試合。`}
+        linkLabel="対戦表・順位を見る" />
+      <div className="stand-grid">
+        <StandingsPanel letter="A" />
+        <StandingsPanel letter="B" />
+      </div>
+    </section>
+  );
+}
+
+/* ── results ── */
+function ResultsSection(){
+  return (
+    <section className="section" data-screen-label="試合結果">
+      <SectionHead n="04" title="試合結果"
+        sub="予選の直近5試合。勝者を強調表示。配信された試合には 📺 を表示。"
+        linkLabel="すべての結果を見る" />
+      <div className="results-panel">
+        {RESULTS.map((m,i)=>{
+          const aWin = m.sa>m.sb, bWin=m.sb>m.sa;
+          const blk = BLOCKS.find(b=>b.letter===m.blk);
+          return (
+            <div className="rrow" key={i}>
+              <span className="r-dt mono">{m.dt}</span>
+              <span className="r-blk" style={{background:blk.color}}>{m.blk}</span>
+              <div className="r-match">
+                <div className={"r-tm a "+(aWin?'win':'lose')}>
+                  <span className="nm">{nm(m.a)}</span>
+                  {aWin && <span className="crown">👑</span>}
+                  <span className="sw" style={{background:TEAMS[m.a].color}}></span>
+                </div>
+                <span className="r-score"><span className={"sa"+(aWin?' w':'')}>{m.sa}</span><span className="vs">–</span><span className={"sb"+(bWin?' w':'')}>{m.sb}</span></span>
+                <div className={"r-tm b "+(bWin?'win':'lose')}>
+                  <span className="nm">{nm(m.b)}</span>
+                  {bWin && <span className="crown">👑</span>}
+                  <span className="sw" style={{background:TEAMS[m.b].color}}></span>
+                </div>
+              </div>
+              <TvTag name={m.stream} cls={"r-stream"+(m.stream?'':' empty')} />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ── finals ── */
+function BSlot({ teamId, side, other, bye, done, isFinal }){
+  if(bye){
+    return (
+      <div className="slot byeslot">
+        <span className="accent"></span>
+        <span className="seed">{TEAMS[teamId].seed}</span>
+        <span className="nm">{TEAMS[teamId].name}</span>
+        <span className="byetag">不戦勝</span>
+      </div>
+    );
+  }
+  if(!teamId){
+    return (
+      <div className="slot tbd"><span className="accent"></span><span className="seed">–</span><span className="nm">未定</span></div>
+    );
+  }
+  const t = TEAMS[teamId];
+  const win = done && side>other;
+  const lose = done && side<other;
+  const champ = win && isFinal;
+  const cls = ['slot']; if(win) cls.push(champ?'champ':'win'); if(lose) cls.push('lose'); if(!done) cls.push('tbd');
+  return (
+    <div className={cls.join(' ')}>
+      <span className="accent"></span>
+      <span className="seed">{t.seed}</span>
+      <span className="nm">{t.name}</span>
+      {champ && <span className="crown">👑</span>}
+      {done ? <span className="sc">{side}</span> : null}
+    </div>
+  );
+}
+function BMatch({ m, bo, done, isFinal }){
+  if(m.bye){
+    return (
+      <div className="mcard byecard">
+        <div className="mc-top"><span className="mc-tag">不戦勝</span><span className="mc-bo">BO{bo}</span></div>
+        <BSlot teamId={m.a} bye />
+      </div>
+    );
+  }
+  const champ = done && isFinal;
+  const cls = ['mcard']; if(champ) cls.push('champcard');
+  return (
+    <div className={cls.join(' ')}>
+      <div className="mc-top">
+        <span className={"mc-tag"+(done?' done':'')}>{done?'✓ 終了':'進行前'}</span>
+        <span className="mc-bo">BO{bo}</span>
+      </div>
+      <BSlot teamId={m.a} side={m.sa} other={m.sb} done={done} isFinal={isFinal} />
+      <BSlot teamId={m.b} side={m.sb} other={m.sa} done={done} isFinal={isFinal} />
+      {(done && m.stream) && (
+        <div className="mc-foot"><span className="tv">📺 {m.stream}</span></div>
+      )}
+    </div>
+  );
+}
+function FinalsSection({ decided }){
+  // decided: whether final + third are complete. qf/sf always complete once finals started.
+  const done = { qf:true, sf:true, final:decided, third:decided };
+  const champId = decided ? (BRACKET.final.matches[0].sa>BRACKET.final.matches[0].sb ? BRACKET.final.matches[0].a : BRACKET.final.matches[0].b) : null;
+  const fm = BRACKET.final.matches[0];
+  return (
+    <section className="section" data-screen-label="決勝トーナメント">
+      <SectionHead n="05" title="決勝トーナメント"
+        sub="各ブロック上位3の6チームによるシングルエリミネーション。勝者を強調、配信は 📺。"
+        linkLabel="ブラケットを見る" />
+      <div className={"finals-panel"+(decided?' decided':'')}>
+        {decided && champId && (
+          <div className="champ-banner">
+            <span className="tro">🏆</span>
+            <div className="cb-txt"><div className="lb">Champion · 優勝</div><div className="nm">{TEAMS[champId].name}</div></div>
+            <span className="cb-score mono">決勝 {fm.sa}–{fm.sb} · SEED {TEAMS[champId].seed}</span>
+          </div>
+        )}
+        <div className="bracket-scroll">
+          <div className="bracket">
+            {['qf','sf','final'].map(key=>{
+              const rd = BRACKET[key];
+              return (
+                <div className="round-col" key={key}>
+                  <div className="round-head">
+                    <span className="rn">{rd.label}</span>
+                    <span className="rc">{rd.matches.length} {rd.matches.length>1?'matches':'match'}</span>
+                    <span className="bo">BO{rd.bo}</span>
+                  </div>
+                  <div className="round-matches">
+                    {rd.matches.map(m=>(
+                      <BMatch key={m.id} m={m} bo={rd.bo} done={done[key==='final'?'final':key]} isFinal={key==='final'} />
+                    ))}
+                    {key==='final' && (
+                      <div className="third-frame">
+                        <div className="third-label"><span>🥉</span>3位決定戦 · 準決勝敗者</div>
+                        <BMatch m={BRACKET.third.matches[0]} bo={BRACKET.third.bo} done={done.third} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════ app ═══════════ */
+function App(){
+  const [stage, setStage] = useState('finals');
+  const ix = STAGE_IX[stage];
+  const has = id => ix >= STAGE_IX[id];
+  const decided = stage==='done';
+
+  // progress numbers
+  const totalMatches = 16;
+  const qualDone = stage==='signup' ? 0 : (stage==='qualifying' ? 12 : 16);
+  const teamCount = TEAM_ORDER.length;
+
+  // hero chips
+  const champId = decided ? BRACKET.final.matches[0].a : null;
+
+  return (
+    <>
+      <header className="site-header">
+        <div className="header-inner">
+          <div className="brand-nav">
+            <span className="logo"><span className="dot"></span>Matchpoint</span>
+            <nav>
+              <a href="#">イベント一覧</a>
+              <a href="#">イベント詳細</a>
+              <a href="#">チーム編成</a>
+              <a href="#">対戦表</a>
+              <a href="#" className="active">観戦</a>
+            </nav>
+          </div>
+          <div className="header-right">
+            <span className="bell">🔔<span className="count mono">3</span></span>
+            <span className="header-user"><span className="av">GU</span><span className="nm">guest</span></span>
+            <button className="btn btn-ghost btn-sm">ログイン</button>
+          </div>
+        </div>
+      </header>
+
+      <main className="page">
+        <div className="crumbs">
+          <a href="#">イベント一覧</a><span className="sep">/</span>
+          <a href="#">第7回 Matchpoint Open</a><span className="sep">/</span>
+          <span className="here">観戦ビュー</span>
+        </div>
+
+        {/* ── HERO ── */}
+        <div className="hero">
+          <div className="hero-top">
+            <div>
+              <p className="kicker"><span className="live-dot"></span>Watch · 観戦</p>
+              <h1 className="hero-title">第7回 Matchpoint Open</h1>
+              <div className="hero-ev"><span className="em">🔴</span> Overwatch 2 · シーズン中盤 5v5 · 予選総当たり → 決勝トーナメント</div>
+            </div>
+            <div>
+              <div className="stageseg">
+                {STAGES.map(s=>(
+                  <button key={s.id} className={stage===s.id?'on':''} onClick={()=>setStage(s.id)}>{s.label}</button>
+                ))}
+              </div>
+              <div className="stage-hint">Demo · 進行段階の切替</div>
+            </div>
+          </div>
+
+          <div className="prog-row">
+            <div className="pchip"><span className="pk">参加</span><span className="pv">{teamCount}<span className="u">チーム</span></span></div>
+            <div className="pchip"><span className="pk">ブロック</span><span className="pv">{BLOCKS.length}<span className="u">組</span></span></div>
+            {has('qualifying') && (
+              <div className="pchip">
+                <span className="pk">予選消化</span>
+                <span className="pv">{qualDone}<span className="u">/{totalMatches}</span></span>
+                <span className="mini-bar"><i style={{width:(qualDone/totalMatches*100)+'%'}}></i></span>
+              </div>
+            )}
+            {stage==='finals' && (
+              <div className="pchip live-chip"><span className="pk">決勝T</span><span className="pv"><span className="d"></span>進行中</span></div>
+            )}
+            {decided && (
+              <div className="pchip champ-chip"><span className="pk">🏆 優勝</span><span className="pv">{TEAMS[champId].name}</span></div>
+            )}
+            {stage==='signup' && (
+              <div className="pchip"><span className="pk">状態</span><span className="pv" style={{fontSize:'13px'}}>組分け確定</span></div>
+            )}
+          </div>
+
+          <div className="spec-banner">
+            <span className="dot"></span>
+            <span><b>観戦ビュー</b>　大会の全体像を上から順に通覧できます（閲覧専用）。各セクションの「見る →」から詳細ページへ。進行に応じてセクションが増えていきます。</span>
+          </div>
+        </div>
+
+        {/* ── SECTIONS (grow with progression) ── */}
+        <TeamsSection />
+        <BlocksSection />
+        {has('qualifying') ? (
+          <>
+            <StandingsSection progress={{done:qualDone, total:totalMatches}} />
+            <ResultsSection />
+          </>
+        ) : (
+          <section className="section">
+            <div className="empty-note"><span className="d"></span>予選が始まると、ここに順位表と試合結果のダイジェストが表示されます。</div>
+          </section>
+        )}
+        {has('finals') ? (
+          <FinalsSection decided={decided} />
+        ) : (
+          <section className="section">
+            <div className="empty-note"><span className="d"></span>決勝トーナメントが始まると、ここにブラケットが表示されます。</div>
+          </section>
+        )}
+      </main>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+
+</body></html>
