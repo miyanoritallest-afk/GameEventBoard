@@ -132,9 +132,11 @@ export function MatchesBoard({
   // 表示中のブロック（タブ）。
   const [activeBlock, setActiveBlock] = useState(0);
   // 開いている試合モーダル（セルクリックで開く）。null は閉。
+  // match 本体ではなく id で保持し、描画時に最新の initialGroups から引き直す
+  // （保存後や他者の更新で内容が変わっても、開いたままのモーダルが最新を反映するため）。
   const [modal, setModal] = useState<{
     groupId: string;
-    match: BoardMatch;
+    matchId: string;
   } | null>(null);
 
   function flashSaved() {
@@ -148,18 +150,34 @@ export function MatchesBoard({
     return () => clearTimeout(t);
   }, [saved, savedTick]);
 
-  function run(action: () => Promise<{ error?: string }>) {
+  function run(
+    action: () => Promise<{ error?: string }>,
+    onSuccess?: () => void,
+  ) {
     setError(null);
     startTransition(async () => {
       const r = await action();
       if (r.error) setError(r.error);
-      else flashSaved();
+      else {
+        flashSaved();
+        onSuccess?.();
+      }
     });
   }
 
   // activeBlock が範囲外になったら先頭へ戻す（ブロック削除時などの保険）。
   const safeBlock = Math.min(activeBlock, Math.max(0, initialGroups.length - 1));
   const group = initialGroups[safeBlock] ?? null;
+
+  // 開いているモーダルの試合を最新データから引き直す（スナップショットではなく id で保持しているため）。
+  // 対戦カードが削除されるなどで消えて見つからない場合は modalMatch が null になり、
+  // 下の描画ガード（modal && modalMatch）でモーダルは表示されなくなる。残った modal state は
+  // 何も描画しないため無害で、次にセルを開いた時点で上書きされる。
+  const modalMatch = modal
+    ? (initialGroups
+        .find((g) => g.id === modal.groupId)
+        ?.matches.find((m) => m.id === modal.matchId) ?? null)
+    : null;
 
   if (initialGroups.length === 0) {
     return (
@@ -235,7 +253,7 @@ export function MatchesBoard({
           usePotg={usePotg}
           advanceCount={advanceCount}
           isPending={isPending}
-          onOpenMatch={(match) => setModal({ groupId: group.id, match })}
+          onOpenMatch={(match) => setModal({ groupId: group.id, matchId: match.id })}
           onGenerate={() => {
             if (
               group.matches.length > 0 &&
@@ -258,36 +276,37 @@ export function MatchesBoard({
         />
       )}
 
-      {/* 試合モーダル（セルクリックで開く）。 */}
-      {modal && (
+      {/* 試合モーダル（セルクリックで開く）。match は最新データ（modalMatch）を渡す。 */}
+      {modal && modalMatch && (
         <MatchModal
-          match={modal.match}
+          match={modalMatch}
           readOnly={readOnly}
           usePotg={usePotg}
           isPending={isPending}
           onClose={() => setModal(null)}
           onReport={(a, b, pa, pb, rc) => {
-            run(() =>
-              reportResult({
-                matchId: modal.match.id,
-                teamAScore: a,
-                teamBScore: b,
-                potgA: pa,
-                potgB: pb,
-                replayCodes: rc,
-              }),
+            // 成功時のみ閉じる。サーバー検証で弾かれたら開いたままにして入力を保持する。
+            run(
+              () =>
+                reportResult({
+                  matchId: modalMatch.id,
+                  teamAScore: a,
+                  teamBScore: b,
+                  potgA: pa,
+                  potgB: pb,
+                  replayCodes: rc,
+                }),
+              () => setModal(null),
             );
-            setModal(null);
           }}
           onClear={() => {
-            run(() => clearResult(modal.match.id));
-            setModal(null);
+            run(() => clearResult(modalMatch.id), () => setModal(null));
           }}
           onSchedule={(local) => {
-            run(() => updateSchedule({ matchId: modal.match.id, scheduledAtLocal: local }));
+            run(() => updateSchedule({ matchId: modalMatch.id, scheduledAtLocal: local }));
           }}
           onStream={(url, name) => {
-            run(() => updateStream({ matchId: modal.match.id, streamUrl: url, streamerName: name }));
+            run(() => updateStream({ matchId: modalMatch.id, streamUrl: url, streamerName: name }));
           }}
         />
       )}
@@ -710,7 +729,11 @@ function MatrixCell({
     );
   }
 
-  const clickable = match.hasResult || (!readOnly && match.canReport);
+  // 結果を入力できるか（主催者・代表かつ閲覧モードでない）。＋の出し分けに使う。
+  const canReport = !readOnly && match.canReport;
+  // 日時・配信の付随情報があるか。閲覧者でもモーダルで確認できるようにする（閲覧公開・フェーズB）。
+  const hasInfo = match.scheduledAtLocal !== "" || match.streamUrl !== null;
+  const clickable = match.hasResult || canReport || hasInfo;
 
   // 結果未入力。
   if (!match.hasResult) {
@@ -726,7 +749,7 @@ function MatrixCell({
               : "cursor-default"
           }`}
         >
-          {clickable ? (
+          {canReport ? (
             <>
               <span className="text-[13px] group-hover:hidden">–</span>
               <span className="hidden text-[18px] font-bold text-[color:var(--mp-brand)] group-hover:inline">
@@ -741,18 +764,17 @@ function MatrixCell({
     );
   }
 
-  // 結果あり。行チーム視点でスコアと勝敗色を出す。
+  // 結果あり。行チーム視点でスコアを出す。
   const home = match.teamAId === rowTeam.id;
   const rs = home ? match.teamAScore : match.teamBScore;
   const cs = home ? match.teamBScore : match.teamAScore;
+  // 勝敗色はサーバー算出済みの winnerTeamId を正とする（勝者判定ロジックを UI で再実装しない）。
   const outcome =
-    rs === null || cs === null
+    match.winnerTeamId === null
       ? "draw"
-      : rs > cs
+      : match.winnerTeamId === rowTeam.id
         ? "win"
-        : rs < cs
-          ? "loss"
-          : "draw";
+        : "loss";
   const cls =
     outcome === "win"
       ? "border-[color:var(--mp-success)]/40 bg-[color:var(--mp-success)]/15 text-[color:var(--mp-success)]"
