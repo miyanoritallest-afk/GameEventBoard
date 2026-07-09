@@ -7,6 +7,33 @@
 
 ---
 
+## 2026-07-10 — デザイン刷新 フォーム系: イベント作成/編集フォーム
+
+イベント作成（`/events/new`）・編集（`/events/[id]/edit`）の共通フォーム（`event-form.tsx`）を Claude Design 案（`.theme-matchpoint`）で刷新。作成と編集は同じ `EventForm` を共有するので**セットで1PR**。**判定・保存ロジック（Server Action・Zod スキーマ・トグル表示制御・タイブレーク D&D・hidden input 送信契約）は一切触らず、UI とデータ整形のみ**差し替え。案HTMLは `docs/design-refs/event-form-organizer.html`（軽量版・並べ替え済み）に保管。
+
+### 情報設計の壁打ち（3論点を確定）
+- **全体レイアウト = 1カラム・セクション強化**（現状の縦積みを維持しつつ各設定群をカード化）。2カラム＋サマリーレールは項目数的にレール側が瘦せるため不採用。
+- **セクション = 全て番号付きカード**（01 基本情報 / 02 スコアリング / 03 本戦 / 04 順位 / 05 Discord）。フォームは常に全カード表示（トグルで中身が畳まれるだけ）なので番号は 01〜05 固定でよい（観戦ビューのような連番調整は不要）。
+- **Discord 連携を最下部（05）へ移動**（ユーザー要望）。イベントのルールとは無関係の +α 機能なので、ルール系（基本/スコア/本戦/順位）の後ろに置く。案の 03 から末尾へ振り直し、`sub="任意・+α"` を付与。
+
+### やったこと
+- **event-form.tsx**: ルート `form` に `.mp-form` を付与。設定群を `Card`（番号付き kicker 見出し）に分割。チェックボックスを `Toggle`（sr-only input＋`peer-checked` でブランド色＋チェックマーク）に共通化。親→子→孫は `Nest`（左ボーダー＋インデント）。`Field` は `opt`（任意/JST 等）・`hint` を受けられるよう拡張。タイブレーク D&D カードにグリップ＋順位バッジを追加。**送信 name・controlled/uncontrolled の区別・teamScoreCap 単一フィールド・hidden(tiebreakers/series_id) は現行を厳密踏襲**。
+- **new/page.tsx・edit/page.tsx**: `.dark`→`.theme-matchpoint`、`max-w-2xl`→`max-w-[720px]`。パンくず＋kicker「主催者ツール」＋タイトル＋lede のヒーローに刷新。
+- **globals.css**: 入力要素の見た目（surface-3 背景・ブランド focus リング・select 矢印）を `.mp-form` スコープ（`@layer` 外の素ルール＝tree-shake 回避）で追加。フォーム配下限定で他画面に影響なし。
+
+### コードレビュー（/code-review high）→ 確定1件を修正
+- **grid 段ズレ（新規バグ）**: `Field` 直下に `[&+&]:mt-[18px]` を付けていたため、`grid-cols-2/3` の列2以降が18px下にズレて表示（ボーナス3列・勝分敗3列・申告/未認定・日時2列すべて）。→ Field から隣接余白を外し、縦間隔は親（`Card` body の `flex-col gap-[18px]` / `Nest` の gap / grid の gap）に一元化。実機で段ズレ解消を確認。
+- 低優先の指摘（sr-only checkbox が `.mp-form ...:focus` にマッチ／input type 列挙の脆さ）は現状無害のため見送り。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 367 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright・主催者視点）**: 作成＝5カード・番号・トグル・形式分岐（トーナメントのみで BO 非表示・3位決定戦ラベル切替）・順位 D&D を確認。編集＝実データ（のり検証1）で日時 UTC→JST 復元・トグル復元（スコア/ボーナス/上限/順位）・タイブレーク順序復元を確認。**書き込みは試さず**原状復帰不要。
+
+### 次にやること
+- 残り未刷新画面（優先度 中）: `/events/[id]/apply`（応募）、`/events/[id]/registrations`、`/events/[id]/schedule`、`/events/mine`、`/notifications`。次は apply か registrations あたり。引き継ぎメモ（`docs/デザイン刷新-引き継ぎメモ.md`）の優先度リストを更新する。
+
+---
+
 ## 2026-07-10 — デザイン刷新 第10画面（最終）: 観戦ビュー（集約ダッシュボード化）
 
 観戦ビューページ（`/events/[id]/watch`）を Claude Design 案（`.theme-matchpoint`）で全面リデザイン。**デザイン刷新の最終画面**。他の刷新済み画面（ブロック/対戦表/トーナメント）の"ダイジェスト"を1ページに集約する観戦者向けダッシュボード。**判定・集計ロジック（standings 計算・BYE判定・勝者・進捗）は既存を流用**、UI とデータ整形のみ差し替え。案HTMLは `docs/design-refs/watch-spectator.html`（軽量版）に保管。
