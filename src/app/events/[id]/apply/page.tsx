@@ -54,16 +54,33 @@ export default async function ApplyPage({
     event.bonus_master > 0 || event.bonus_gm > 0 || event.bonus_champion > 0;
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-2xl px-6 py-10">
-        <Link
-          href={detailHref}
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          ← イベントに戻る
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold">{event.title} に応募</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-[720px] px-6 py-10">
+        {/* パンくず */}
+        <nav className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
+          <Link href="/events" className="hover:text-foreground">
+            イベント一覧
+          </Link>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
+          <Link
+            href={detailHref}
+            className="max-w-[16rem] truncate hover:text-foreground"
+          >
+            {event.title}
+          </Link>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">応募</span>
+        </nav>
+
+        {/* ヒーロー */}
+        <p className="mt-6 flex items-center gap-[9px] font-mono text-[11px] uppercase tracking-[0.2em] text-[color:var(--mp-accent)] before:h-0.5 before:w-[22px] before:bg-[color:var(--mp-accent)] before:content-['']">
+          参加者エントリー
+        </p>
+        <h1 className="mt-2.5 text-3xl font-extrabold tracking-tight text-foreground">
+          <span className="text-[color:var(--mp-brand)]">{event.title}</span>{" "}
+          に応募
+        </h1>
+        <p className="mt-3 max-w-[600px] text-sm text-muted-foreground">
           希望ロールとランクを申告します。スコアは自動算出され、主催者の承認後に参加が確定します。
         </p>
 
