@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — イベントに応募</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] @font-face 除去 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --success:#34D399; --warning:#F5B93D; --live:#22D3EE; --danger:#F65C4E;
+    --mp-tank:#4C9BE8; --mp-dps:#F2596B; --mp-support:#3FD08A;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 32px rgba(0,0,0,.5);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.6;
+    font-feature-settings:"palt" 1;
+    background:
+      radial-gradient(1100px 520px at 86% -8%, rgba(255,106,43,.09), transparent 58%),
+      radial-gradient(820px 460px at 4% 2%, rgba(34,211,238,.06), transparent 54%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── Site header ── */
+  .site-header { border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(20,26,36,.72),rgba(11,14,20,.72)); backdrop-filter:blur(8px); position:sticky; top:0; z-index:40; }
+  .header-inner { max-width:1180px; margin:0 auto; padding:0 34px; height:60px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand-nav { display:flex; align-items:center; gap:34px; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+  .brand-nav nav { display:flex; gap:22px; font-size:13.5px; color:var(--fg-muted); }
+  .brand-nav nav a.active { color:var(--fg); font-weight:500; }
+  .brand-nav nav a:hover { color:var(--fg); }
+  .header-right { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+  .bell { position:relative; width:36px; height:36px; display:grid; place-items:center; border-radius:var(--r-md); cursor:pointer; }
+  .bell:hover { background:var(--surface-2); }
+  .bell .count { position:absolute; top:-1px; right:-1px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger); color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 2px var(--bg); }
+  .header-user { display:inline-flex; align-items:center; gap:9px; }
+  .header-user .av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#5865F2,#3B45B5); display:grid; place-items:center; font-family:var(--font-sans); font-size:11px; font-weight:700; color:#fff; }
+  .header-user .nm { color:var(--fg); font-weight:500; }
+
+  /* ── Page shell ── */
+  .page { max-width:720px; margin:0 auto; padding:26px 34px 120px; }
+  .crumb { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg-muted); margin-bottom:26px; flex-wrap:wrap; }
+  .crumb a { color:var(--fg-muted); }
+  .crumb a:hover { color:var(--fg); }
+  .crumb .sep { color:var(--fg-subtle); }
+  .crumb .cur { color:var(--fg); }
+
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; display:flex; align-items:center; gap:9px; }
+  .kicker::before { content:""; width:22px; height:2px; background:var(--accent); }
+  h1.page-title { font-family:var(--font-sans); font-weight:800; font-size:30px; line-height:1.14; letter-spacing:-.02em; margin:0; }
+  h1.page-title .ev { color:var(--brand); }
+  .page-lede { color:var(--fg-muted); font-size:14px; margin:12px 0 0; max-width:600px; }
+
+  /* event meta strip */
+  .ev-meta { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:18px; font-size:12.5px; color:var(--fg-muted); }
+  .ev-meta .m { display:inline-flex; align-items:center; gap:7px; }
+  .ev-meta .m svg { color:var(--fg-subtle); flex:none; }
+  .ev-meta .m .mono { color:var(--fg); }
+
+  /* ── Form ── */
+  form { margin-top:30px; display:flex; flex-direction:column; gap:20px; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2xl); box-shadow:var(--e1); padding:24px 24px 26px; }
+  .card-head { display:flex; align-items:baseline; gap:12px; margin-bottom:20px; }
+  .card-head .n { font-family:var(--font-mono); font-size:12px; font-weight:600; letter-spacing:.14em; color:var(--brand); }
+  .card-head h2 { font-family:var(--font-sans); font-weight:800; font-size:16px; letter-spacing:-.01em; margin:0; }
+  .card-head .sub { font-size:12px; color:var(--fg-muted); margin-left:auto; }
+
+  .field { display:block; }
+  .field + .field { margin-top:18px; }
+  .field > label { display:block; font-size:13px; font-weight:600; color:var(--fg); margin-bottom:7px; }
+  .field .req { color:var(--brand); margin-left:3px; }
+  .field .opt { color:var(--fg-subtle); font-weight:400; font-size:11.5px; margin-left:6px; }
+  .hint { font-size:11.5px; color:var(--fg-muted); margin:7px 0 0; line-height:1.6; }
+
+  input[type=text], select {
+    width:100%; font-family:var(--font-jp); font-size:13.5px; color:var(--fg);
+    background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-md);
+    padding:9px 12px; line-height:1.4; transition:border-color .15s, box-shadow .15s, background .15s;
+  }
+  input::placeholder { color:var(--fg-subtle); }
+  input:focus, select:focus {
+    outline:none; border-color:var(--brand);
+    box-shadow:0 0 0 3px rgba(255,106,43,.18); background:var(--surface-2);
+  }
+  select {
+    appearance:none; cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2397A2B6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 11px center; padding-right:34px;
+  }
+  /* error state */
+  input.err, select.err { border-color:var(--danger); box-shadow:0 0 0 3px rgba(246,92,78,.16); }
+  .field-error { display:none; align-items:center; gap:6px; font-size:11.5px; color:var(--danger); margin:8px 0 0; }
+  .field-error.show { display:flex; }
+  .field-error svg { flex:none; }
+
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  @media (max-width:560px){ .grid-2, .grid-3 { grid-template-columns:1fr; } }
+
+  /* read-only auto field (第3希望) */
+  .field.readonly > label { color:var(--fg-muted); }
+  .auto-box { display:flex; align-items:center; gap:10px; width:100%; background:var(--surface-2); border:1px dashed var(--border-strong); border-radius:var(--r-md); padding:9px 12px; font-size:13.5px; color:var(--fg); }
+  .auto-box .lock { color:var(--fg-subtle); flex:none; display:flex; }
+  .auto-box .role-dot { width:9px; height:9px; border-radius:50%; flex:none; background:var(--fg-subtle); box-shadow:0 0 8px transparent; }
+  .auto-box .auto-tag { margin-left:auto; font-family:var(--font-mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--fg-subtle); background:var(--surface-3); border:1px solid var(--border); border-radius:999px; padding:2px 8px; }
+
+  /* ── rank declaration ── */
+  .rank-role { border:1px solid var(--border); border-radius:var(--r-xl); background:var(--surface-2); padding:16px 16px 18px; }
+  .rank-role + .rank-role { margin-top:14px; }
+  .rank-role-head { display:flex; align-items:center; gap:9px; margin-bottom:14px; }
+  .rank-role-head .role-dot { width:11px; height:11px; border-radius:50%; flex:none; }
+  .rank-role-head .rn { font-family:var(--font-sans); font-weight:700; font-size:13.5px; color:var(--fg); }
+  .rank-role-head .rtag { font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--fg-subtle); margin-left:auto; }
+  .rank-role[data-role="tank"] .role-dot { background:var(--mp-tank); box-shadow:0 0 10px rgba(76,155,232,.55); }
+  .rank-role[data-role="dps"] .role-dot { background:var(--mp-dps); box-shadow:0 0 10px rgba(242,89,107,.55); }
+  .rank-role[data-role="support"] .role-dot { background:var(--mp-support); box-shadow:0 0 10px rgba(63,208,138,.55); }
+  .season-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media (max-width:560px){ .season-grid { grid-template-columns:1fr; } }
+  .season { display:block; }
+  .season .slabel { font-size:11px; font-weight:600; color:var(--fg-muted); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .season .slabel .sn { font-family:var(--font-mono); color:var(--fg-subtle); font-size:10px; }
+  .rank-note { font-size:11.5px; color:var(--fg-muted); margin:14px 0 0; line-height:1.6; }
+
+  /* bonus */
+  .bonus-block { margin-top:18px; padding-top:18px; border-top:1px solid var(--border); }
+  .bonus-block .field { max-width:280px; }
+
+  /* submit */
+  .submit-wrap { margin-top:4px; }
+  .btn-submit { width:100%; font-family:var(--font-sans); font-weight:700; font-size:14.5px; color:var(--on-brand); background:var(--brand); border:none; border-radius:var(--r-lg); padding:14px; cursor:pointer; transition:background .15s, transform .05s; box-shadow:0 0 0 1px rgba(255,106,43,.35), 0 8px 22px rgba(255,106,43,.22); }
+  .btn-submit:hover { background:var(--brand-hover); }
+  .btn-submit:active { transform:translateY(1px); }
+  .btn-submit:disabled { background:var(--surface-3); color:var(--fg-subtle); cursor:not-allowed; box-shadow:0 0 0 1px var(--border); }
+  .submit-note { text-align:center; font-size:11.5px; color:var(--fg-subtle); margin:12px 0 0; }
+  .submit-note.warn { color:var(--danger); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand-nav">
+      <span class="logo"><span class="dot"></span>Matchpoint</span>
+      <nav>
+        <a href="#" class="active">イベント一覧</a>
+        <a href="#">マイページ</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <span class="bell">🔔<span class="count mono">3</span></span>
+      <span class="header-user"><span class="av">no</span><span class="nm">nori#1121</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="page" data-screen-label="応募フォーム">
+
+  <nav class="crumb">
+    <a href="#">イベント一覧</a>
+    <span class="sep">/</span>
+    <a href="#">第7回 Matchpoint Open</a>
+    <span class="sep">/</span>
+    <span class="cur">応募</span>
+  </nav>
+
+  <p class="kicker">参加者エントリー</p>
+  <h1 class="page-title"><span class="ev">第7回 Matchpoint Open</span> に応募</h1>
+  <p class="page-lede">希望ロールと直近シーズンのランクを申告してください。主催者はこの情報をもとにチームを編成します。応募内容は締切まであとから編集できます。</p>
+
+  <div class="ev-meta">
+    <span class="m"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>開催 <span class="mono">2026/07/25 20:00</span></span>
+    <span class="m"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>募集締切 <span class="mono">2026/07/23 23:59</span></span>
+    <span class="m"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5z"></path></svg>Overwatch 2 ・ 5v5</span>
+  </div>
+
+  <form id="apply-form" class="mp-form" autocomplete="off">
+
+    <!-- ══════ 01 プロフィール ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">01</span><h2>プロフィール</h2></div>
+
+      <div class="field">
+        <label for="displayName">登録名<span class="req">*</span><span class="opt">参加者として表示される名前</span></label>
+        <input id="displayName" name="displayName" type="text" maxlength="32" value="nori#1121" required="">
+        <p class="hint">対戦表やチーム編成に表示されます。既定は Discord 名です。</p>
+      </div>
+
+      <div class="field">
+        <label for="battleTag">バトルタグ<span class="req">*</span></label>
+        <input id="battleTag" name="battleTag" type="text" maxlength="32" value="Nori#31415" placeholder="例: Player#12345" required="">
+        <p class="hint">ゲーム内で照合に使います。過去の応募内容があれば引き継いでいます。</p>
+      </div>
+    </section>
+
+    <!-- ══════ 02 希望ロール ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">02</span><h2>希望ロール</h2><span class="sub">第3希望は自動</span></div>
+
+      <!-- [実装メモ] 送信 name は現行契約に合わせる: preferredRole1/2/3・rank_{role}_{s}・peak。
+           案の rolePref* / rank[..] / peakBonus は使わない。ランク選択肢は
+           buildOverwatchRankDefinitions() の score/label を使う（案のハードコードは使わない）。 -->
+      <div class="grid-2">
+        <div class="field">
+          <label for="preferredRole1">第1希望<span class="req">*</span></label>
+          <select id="preferredRole1" name="preferredRole1">
+            <option value="tank">タンク</option>
+            <option value="dps" selected="">DPS</option>
+            <option value="support">サポート</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="preferredRole2">第2希望<span class="req">*</span></label>
+          <select id="preferredRole2" name="preferredRole2">
+            <option value="tank">タンク</option>
+            <option value="dps">DPS</option>
+            <option value="support" selected="">サポート</option>
+          </select>
+        </div>
+      </div>
+
+      <p class="field-error" id="roleConflictError">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>
+        第1希望と第2希望は別のロールを選んでください。
+      </p>
+
+      <div class="field readonly" style="margin-top:18px">
+        <label>第3希望<span class="opt">残りのロールを自動で設定</span></label>
+        <div class="auto-box">
+          <span class="lock"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></span>
+          <span class="role-dot" id="pref3Dot"></span>
+          <span id="pref3Label">サポート</span>
+          <span class="auto-tag">自動 ・ 編集不可</span>
+        </div>
+        <input type="hidden" name="preferredRole3" id="preferredRole3" value="support">
+        <p class="hint">第1・第2で選ばなかったロールが確定します。編成の空きに応じて割り当てられる場合があります。</p>
+      </div>
+    </section>
+
+    <!-- ══════ 03 ランク申告 ══════ -->
+    <section class="card">
+      <div class="card-head"><span class="n">03</span><h2>ランク申告</h2><span class="sub">直近3シーズン</span></div>
+
+      <div id="rankRoles">
+        <div class="rank-role" data-role="tank">
+          <div class="rank-role-head"><span class="role-dot"></span><span class="rn">タンク</span><span class="rtag">Tank</span></div>
+          <div class="season-grid"></div>
+        </div>
+        <div class="rank-role" data-role="dps">
+          <div class="rank-role-head"><span class="role-dot"></span><span class="rn">DPS</span><span class="rtag">Damage</span></div>
+          <div class="season-grid"></div>
+        </div>
+        <div class="rank-role" data-role="support">
+          <div class="rank-role-head"><span class="role-dot"></span><span class="rn">サポート</span><span class="rtag">Support</span></div>
+          <div class="season-grid"></div>
+        </div>
+      </div>
+
+      <p class="rank-note">最新シーズンから順に、各シーズンの最高ランクを選んでください。プレイしていないシーズンは「未認定」のままで構いません。</p>
+
+      <div class="bonus-block" id="bonusBlock">
+        <div class="field">
+          <label for="peakBonus">到達ボーナス<span class="opt">最高到達ランク・任意</span></label>
+          <select id="peak" name="peak">
+            <option value="none" selected="">なし</option>
+            <option value="master">マスター到達</option>
+            <option value="gm">グランドマスター到達</option>
+            <option value="champion">チャンピオン到達</option>
+          </select>
+          <p class="hint">これまでの最高到達ランクに応じてスコアに加点されます。</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="submit-wrap">
+      <button type="submit" class="btn-submit" id="submitBtn">この内容で応募する</button>
+      <p class="submit-note" id="submitNote">応募後もマイページから内容を編集できます。</p>
+    </div>
+  </form>
+</main>
+
+<script>
+(function(){
+  /* ── event config (from server; do not change contract) ── */
+  var ROLE_SWAP_ALLOWED = true;   // false → 第1希望ロールのみ申告（連動）
+  var BONUS_ENABLED = true;       // 到達ボーナス
+  var DECLARED_SEASONS = 3;
+  var IS_PENDING = false;         // 送信処理中
+  var ROLES = { tank:'タンク', dps:'DPS', support:'サポート' };
+  var ALL_ROLES = ['tank','dps','support'];
+  var SEASON_LABELS = ['最新シーズン','1つ前','2つ前','3つ前','4つ前','5つ前'];
+
+  /* ── 40-tier options (Bronze5 … Champion1 = score 1..40) ── */
+  var TIERS = ['ブロンズ','シルバー','ゴールド','プラチナ','ダイヤモンド','マスター','グランドマスター','チャンピオン'];
+  function buildRankOptions(){
+    var html = '<option value="" selected>未認定</option>';
+    for(var t=0; t<TIERS.length; t++){
+      html += '<optgroup label="'+TIERS[t]+'">';
+      for(var d=5; d>=1; d--){
+        var score = t*5 + (6-d); // division5=low
+        html += '<option value="'+score+'">'+TIERS[t]+' '+d+'</option>';
+      }
+      html += '</optgroup>';
+    }
+    return html;
+  }
+  var RANK_OPTS = buildRankOptions();
+
+  /* ── build season selects into each role block ── */
+  function fillRole(block){
+    var role = block.getAttribute('data-role');
+    var grid = block.querySelector('.season-grid');
+    grid.innerHTML = '';
+    for(var s=0; s<DECLARED_SEASONS; s++){
+      var wrap = document.createElement('label');
+      wrap.className = 'season';
+      wrap.innerHTML =
+        '<span class="slabel">'+ (SEASON_LABELS[s]||('シーズン'+(s+1))) +' <span class="sn">S-'+s+'</span></span>' +
+        '<select name="rank['+role+'][s'+s+']">'+RANK_OPTS+'</select>';
+      grid.appendChild(wrap);
+    }
+  }
+  document.querySelectorAll('.rank-role').forEach(fillRole);
+
+  /* ── role-swap branching for rank blocks ── */
+  var pref1 = document.getElementById('rolePref1');
+  var pref2 = document.getElementById('rolePref2');
+  var pref3Hidden = document.getElementById('rolePref3');
+  var pref3Label = document.getElementById('pref3Label');
+  var pref3Dot = document.getElementById('pref3Dot');
+  var conflictErr = document.getElementById('roleConflictError');
+  var submitBtn = document.getElementById('submitBtn');
+  var submitNote = document.getElementById('submitNote');
+
+  var DOT_COLOR = { tank:'var(--mp-tank)', dps:'var(--mp-dps)', support:'var(--mp-support)' };
+  var DOT_GLOW = { tank:'0 0 8px rgba(76,155,232,.6)', dps:'0 0 8px rgba(242,89,107,.6)', support:'0 0 8px rgba(63,208,138,.6)' };
+
+  function syncRankRoles(){
+    if(ROLE_SWAP_ALLOWED){
+      document.querySelectorAll('.rank-role').forEach(function(b){ b.style.display=''; });
+      return;
+    }
+    // 第1希望ロールのみ表示（連動）
+    var only = pref1.value;
+    document.querySelectorAll('.rank-role').forEach(function(b){
+      b.style.display = (b.getAttribute('data-role') === only) ? '' : 'none';
+    });
+  }
+
+  function computePref3(){
+    var a = pref1.value, b = pref2.value;
+    var rest = ALL_ROLES.filter(function(r){ return r !== a && r !== b; });
+    return rest.length ? rest[0] : '';
+  }
+
+  function updateSubmitState(conflict){
+    var blocked = conflict || IS_PENDING;
+    submitBtn.disabled = blocked;
+    if(IS_PENDING){ submitNote.textContent = '送信中…'; submitNote.classList.remove('warn'); }
+    else if(conflict){ submitNote.textContent = '希望ロールの重複を解消すると応募できます。'; submitNote.classList.add('warn'); }
+    else { submitNote.textContent = '応募後もマイページから内容を編集できます。'; submitNote.classList.remove('warn'); }
+  }
+
+  function syncRoles(){
+    var conflict = pref1.value === pref2.value;
+    conflictErr.classList.toggle('show', conflict);
+    pref1.classList.toggle('err', conflict);
+    pref2.classList.toggle('err', conflict);
+
+    // 第3希望（自動）
+    var p3 = computePref3();
+    pref3Hidden.value = p3;
+    if(p3){
+      pref3Label.textContent = ROLES[p3];
+      pref3Dot.style.background = DOT_COLOR[p3];
+      pref3Dot.style.boxShadow = DOT_GLOW[p3];
+    } else {
+      pref3Label.textContent = '—';
+      pref3Dot.style.background = 'var(--fg-subtle)';
+      pref3Dot.style.boxShadow = 'none';
+    }
+
+    syncRankRoles();
+    updateSubmitState(conflict);
+  }
+
+  pref1.addEventListener('change', syncRoles);
+  pref2.addEventListener('change', syncRoles);
+
+  /* ── bonus visibility ── */
+  if(!BONUS_ENABLED){ document.getElementById('bonusBlock').style.display = 'none'; }
+
+  syncRoles();
+
+  document.getElementById('apply-form').addEventListener('submit', function(e){ e.preventDefault(); });
+})();
+</script>
+
+
+</body></html>

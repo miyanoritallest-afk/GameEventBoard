@@ -7,6 +7,39 @@
 
 ---
 
+## 2026-07-11 — デザイン刷新 フォーム系: 応募フォーム（参加者）
+
+応募フォーム（`/events/[id]/apply`）を Claude Design 案（`.theme-matchpoint`）で刷新。**参加者が触る唯一のフォーム**。直前に刷新したイベント作成/編集フォーム（`.mp-form` スコープ・Card/Field 作法）を「正」として揃えた。**判定・保存ロジック（Server Action `registerWithScore`・Zod・希望ロールの conflict/自動決定・ランクグリッドの name 契約）は一切触らず、UI とデータ整形のみ**差し替え。案HTMLは `docs/design-refs/apply-form-participant.html`（軽量版）に保管。
+
+### 情報設計の壁打ち（3論点を確定）
+- **セクション = 番号付き3カードに統一**（01 プロフィール〔登録名＋バトルタグ〕/ 02 希望ロール / 03 ランク申告）。登録名＋バトルタグは短いので1カードに集約。
+- **ランクグリッド = 現行構造維持で見た目だけ上質化**。ロール見出しにロール識別色ドット（`--mp-tank/dps/support`）＋英字タグ（Tank/Damage/Support）、シーズン列に「最新シーズン/1つ前/2つ前」＋`S-0` mono タグ、各ロールを surface-2 の枠カードに。
+- **到達ボーナスは「03 ランク申告」カード末尾に同居**（useBonus のときだけ・区切り線）。独立カードにすると非表示時に番号が飛ぶため回避。
+
+### 案と現行のギャップ（現行契約を優先）
+- **送信 name を現行に統一**: 案の `rolePref*`/`rank[..]`/`peakBonus` は使わず、現行の `preferredRole1/2/3`・`rank_{role}_{s}`・`peak` を維持（サーバーが読む名前）。design-ref HTML も現行 name に直して保管。
+- **ランク選択肢は `buildOverwatchRankDefinitions()` の score/label を使用**（案のハードコード `t*5+(6-d)` は使わない）。未認定既定・optgroup も現行どおり。
+- **デモ専用UI（サイトヘッダー・イベントメタストリップ・「締切まで編集可」lede）は入れない**（page.tsx に実データが無い・編集フロー未実装のため現行 lede を維持）。
+
+### やったこと
+- **apply-form.tsx**: form ルートに `.mp-form`。3カード（Card ヘルパー）＋ Field ヘルパー（event-form と同作法。**grid 段ズレ対策として Field 自身は余白を持たず親 gap に一元化**）。第3希望を「🔒＋ロール色ドット＋自動・編集不可タグ」の readOnly ボックスに。conflict エラーはアイコン付き＋両 select に赤枠（`.mp-invalid`）＋送信無効化。role_swap=false は第1希望ロールのみ申告（現行の連動を維持）。
+- **page.tsx**: `.dark`→`.theme-matchpoint`、`max-w-[720px]`。パンくず＋kicker「参加者エントリー」＋タイトル（イベント名をブランド色）＋lede に刷新。**リダイレクトガード（主催者/下書き/スコアなし/応募済み）は不変**。
+- **globals.css**: `.mp-form .mp-invalid`（エラー時の赤枠）を追加。
+
+### コードレビュー（/code-review high）→ 確定1件を修正
+- **希望ロールのサーバー検証エラー（fe.preferredRole1）を「第2希望」Field に誤って紐付けていた** → ペア直下の代表表示に移動（どのロール欄が問題かを誤認させない）。
+- **Card/Field が event-form.tsx と重複**（プロップ順に軽微ドリフト）→ 共通化候補だが今回はスコープ外（`events/_components/` 抽出は follow-up）。段ズレバグの再発が無いことは確認済み。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 367 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright・参加者視点）**: 全イベントの主催者が「のり」でガードに弾かれるため、**主催者/応募済みガードを一時無効化して確認 → 確認後に完全復元**（コミットには含めない）。swap あり（のり検証1）＝3ロールカード＋色ドット＋ボーナス、swap なし（OSL200）＝第1希望ロールのみ表示＆第1希望変更で連動、conflict で両 select 赤枠＋送信無効、ランク optgroup が40段階＋未認定で出ることを確認。**書き込み（応募）は試さず**DB汚染なし。
+
+### 次にやること
+- 残り未刷新（優先度 中）: `/events/[id]/registrations`（応募者一覧・承認）、`/events/[id]/schedule`、`/events/mine`、`/notifications`。フォーム系は一段落。次は registrations か mine あたり。引き継ぎメモの優先度を更新。
+- **follow-up**: フォーム系3画面で重複した Card/Field を `events/_components/` に共通化（プロップ順の統一も兼ねる）。
+
+---
+
 ## 2026-07-10 — デザイン刷新 フォーム系: イベント作成/編集フォーム
 
 イベント作成（`/events/new`）・編集（`/events/[id]/edit`）の共通フォーム（`event-form.tsx`）を Claude Design 案（`.theme-matchpoint`）で刷新。作成と編集は同じ `EventForm` を共有するので**セットで1PR**。**判定・保存ロジック（Server Action・Zod スキーマ・トグル表示制御・タイブレーク D&D・hidden input 送信契約）は一切触らず、UI とデータ整形のみ**差し替え。案HTMLは `docs/design-refs/event-form-organizer.html`（軽量版・並べ替え済み）に保管。

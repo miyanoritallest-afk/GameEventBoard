@@ -271,3 +271,8 @@
   background-position: right 11px center;
   padding-right: 34px;
 }
+/* バリデーションエラー中の入力（例: 希望ロール重複）。 */
+.mp-form .mp-invalid {
+  border-color: var(--mp-danger);
+  box-shadow: 0 0 0 3px rgba(246, 92, 78, 0.16);
+}
