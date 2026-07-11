@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — 日程・スクリム予定</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] @font-face 除去 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --success:#34D399; --warning:#F5B93D; --live:#22D3EE; --danger:#F65C4E; --info:#6AA8FF;
+    /* schedule-kind identity */
+    --k-match:#F2596B;      /* 公式戦 🔴 */
+    --k-scrim:#4C9BE8;      /* スクリム 🔵 */
+    --k-practice:#3FD08A;   /* 練習 🟢 */
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 32px rgba(0,0,0,.5);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.6;
+    font-feature-settings:"palt" 1;
+    background:
+      radial-gradient(1100px 520px at 86% -8%, rgba(255,106,43,.09), transparent 58%),
+      radial-gradient(820px 460px at 4% 2%, rgba(34,211,238,.06), transparent 54%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── Site header ── */
+  .site-header { border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(20,26,36,.72),rgba(11,14,20,.72)); backdrop-filter:blur(8px); position:sticky; top:0; z-index:40; }
+  .header-inner { max-width:920px; margin:0 auto; padding:0 34px; height:60px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand-nav { display:flex; align-items:center; gap:34px; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+  .brand-nav nav { display:flex; gap:22px; font-size:13.5px; color:var(--fg-muted); }
+  .brand-nav nav a.active { color:var(--fg); font-weight:500; }
+  .brand-nav nav a:hover { color:var(--fg); }
+  .header-right { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+  .bell { position:relative; width:36px; height:36px; display:grid; place-items:center; border-radius:var(--r-md); cursor:pointer; }
+  .bell:hover { background:var(--surface-2); }
+  .bell .count { position:absolute; top:-1px; right:-1px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger); color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 2px var(--bg); }
+  .header-user { display:inline-flex; align-items:center; gap:9px; }
+  .header-user .av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#5865F2,#3B45B5); display:grid; place-items:center; font-family:var(--font-sans); font-size:11px; font-weight:700; color:#fff; }
+  .header-user .nm { color:var(--fg); font-weight:500; }
+
+  /* ── Buttons ── */
+  .btn { font-family:var(--font-sans); font-weight:600; border-radius:var(--r-md); border:1px solid transparent; cursor:pointer; transition:background .15s,border-color .15s,transform .05s,box-shadow .15s,color .15s; display:inline-flex; align-items:center; justify-content:center; gap:7px; line-height:1; white-space:nowrap; }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:var(--brand); color:var(--on-brand); box-shadow:0 0 0 1px rgba(255,106,43,.35),0 6px 18px rgba(255,106,43,.2); }
+  .btn-primary:hover { background:var(--brand-hover); }
+  .btn-secondary { background:var(--surface-3); color:var(--fg); border-color:var(--border-strong); }
+  .btn-secondary:hover { background:var(--surface-2); border-color:var(--fg-subtle); }
+  .btn-ghost { background:transparent; color:var(--fg-muted); border-color:var(--border); }
+  .btn-ghost:hover { background:var(--surface); color:var(--fg); }
+  .btn-danger { background:transparent; color:var(--fg-muted); border-color:var(--border-strong); }
+  .btn-danger:hover { background:rgba(246,92,78,.12); color:var(--danger); border-color:rgba(246,92,78,.4); }
+  .btn-md { font-size:13px; padding:9px 15px; }
+  .btn-sm { font-size:12.5px; padding:7px 13px; }
+  .btn-xs { font-size:11.5px; padding:6px 11px; border-radius:var(--r-sm); }
+  .icon-btn { width:34px; height:34px; padding:0; }
+  .icon-btn svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* ── Page shell ── */
+  .page { max-width:920px; margin:0 auto; padding:26px 34px 100px; }
+  .crumb { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg-muted); margin-bottom:22px; flex-wrap:wrap; }
+  .crumb a { color:var(--fg-muted); }
+  .crumb a:hover { color:var(--fg); }
+  .crumb .sep { color:var(--fg-subtle); }
+  .crumb .cur { color:var(--fg); }
+
+  /* ── Hero ── */
+  .hero { border:1px solid var(--border); border-radius:var(--r-2xl); background:linear-gradient(160deg,var(--surface-2),var(--surface) 58%); box-shadow:var(--e2); overflow:hidden; position:relative; }
+  .hero::before { content:""; position:absolute; inset:0; background:radial-gradient(600px 220px at 92% 0%, rgba(255,106,43,.13), transparent 62%); pointer-events:none; }
+  .hero-body { padding:26px 30px 28px; position:relative; }
+  .hero-top { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; display:flex; align-items:center; gap:9px; }
+  .kicker::before { content:""; width:22px; height:2px; background:var(--accent); }
+  h1.page-title { font-family:var(--font-sans); font-weight:800; font-size:28px; line-height:1.16; letter-spacing:-.02em; margin:0; }
+  .page-title .ev { color:var(--fg-muted); font-weight:600; font-size:15px; display:block; margin-top:6px; }
+  .hero-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; margin-top:14px; font-size:12.5px; color:var(--fg-muted); }
+  .hero-meta .m { display:inline-flex; align-items:center; gap:7px; }
+  .hero-meta .m .k { color:var(--fg-subtle); }
+  .hero-meta .m .v { color:var(--fg); font-weight:500; }
+  .hero-meta .divider-dot { width:3px; height:3px; border-radius:50%; background:var(--fg-subtle); }
+  .team-chip { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--fg); background:var(--surface-3); border:1px solid var(--border-strong); padding:4px 11px; border-radius:999px; }
+  .team-chip .tdot { width:7px; height:7px; border-radius:50%; background:var(--brand); box-shadow:0 0 8px var(--brand); }
+
+  /* viewer-role switch (立場) */
+  .view-switch { display:flex; flex-direction:column; gap:6px; align-items:flex-end; flex:none; }
+  .view-switch .vs-lb { font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--fg-subtle); font-family:var(--font-mono); }
+  .seg { display:inline-flex; background:var(--surface-3); border:1px solid var(--border-strong); border-radius:999px; padding:3px; gap:2px; }
+  .seg button { font-family:var(--font-sans); font-weight:600; font-size:12px; color:var(--fg-muted); background:transparent; border:none; border-radius:999px; padding:6px 13px; cursor:pointer; transition:background .15s,color .15s; display:inline-flex; align-items:center; gap:6px; }
+  .seg button .d { width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.7; }
+  .seg button:hover { color:var(--fg); }
+  .seg button.on { background:var(--surface); color:var(--fg); box-shadow:var(--e1); }
+  .seg button.on.org { color:var(--brand); }
+
+  /* type legend */
+  .legend { display:flex; flex-wrap:wrap; gap:9px; margin-top:20px; }
+  .lchip { display:inline-flex; align-items:center; gap:8px; font-size:12px; font-weight:600; color:var(--fg); background:var(--surface); border:1px solid var(--border); padding:6px 13px 6px 11px; border-radius:999px; }
+  .lchip .em { font-size:11px; }
+  .lchip .cnt { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:11px; color:var(--fg-subtle); }
+  .lchip.match { border-color:rgba(242,89,107,.32); }
+  .lchip.scrim { border-color:rgba(76,155,232,.32); }
+  .lchip.practice { border-color:rgba(63,208,138,.32); }
+
+  /* toolbar above list */
+  .toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:30px 0 4px; flex-wrap:wrap; }
+  .toolbar .tnote { font-size:12px; color:var(--fg-subtle); }
+
+  /* ── section ── */
+  .sec-head { display:flex; align-items:baseline; gap:10px; margin:26px 0 14px; }
+  .sec-head .bar { width:3px; height:16px; border-radius:2px; background:var(--brand); position:relative; top:2px; }
+  .sec-head.done .bar { background:var(--fg-subtle); }
+  .sec-head h2 { font-family:var(--font-sans); font-weight:800; font-size:15px; letter-spacing:-.01em; margin:0; }
+  .sec-head.done h2 { color:var(--fg-muted); }
+  .sec-head .c { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:13px; font-weight:600; color:var(--fg-subtle); }
+  .sec-head .sub { margin-left:auto; font-size:12px; color:var(--fg-subtle); }
+
+  .sched-list { display:flex; flex-direction:column; gap:11px; }
+  .sched-list.done-list { opacity:.62; }
+
+  /* schedule card */
+  .sch { position:relative; display:flex; align-items:center; gap:18px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xl); box-shadow:var(--e1); padding:15px 20px 15px 22px; transition:border-color .14s,background .14s; overflow:hidden; }
+  .sch::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; }
+  .sch.k-match::before { background:var(--k-match); }
+  .sch.k-scrim::before { background:var(--k-scrim); }
+  .sch.k-practice::before { background:var(--k-practice); }
+  .sch:hover { border-color:var(--border-strong); }
+  .sch.foreign { opacity:.5; }
+  .sch.foreign:hover { opacity:.72; }
+
+  /* date block */
+  .sch-when { flex:none; width:96px; text-align:left; display:flex; flex-direction:column; gap:2px; }
+  .sch-when .wd { display:flex; align-items:baseline; gap:6px; }
+  .sch-when .md { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:19px; font-weight:600; color:var(--fg); line-height:1; }
+  .sch-when .dow { font-size:11px; color:var(--fg-muted); }
+  .sch-when .tm { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:13px; color:var(--fg-muted); margin-top:3px; }
+  .sch-when .yr { font-family:var(--font-mono); font-size:10px; color:var(--fg-subtle); margin-top:1px; }
+
+  .sch-div { width:1px; align-self:stretch; background:var(--border); flex:none; }
+
+  .sch-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:7px; }
+  .sch-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .kbadge { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:999px; white-space:nowrap; }
+  .kbadge .dot { width:7px; height:7px; border-radius:50%; }
+  .kbadge.match { color:#f7c3c9; background:rgba(242,89,107,.12); border:1px solid rgba(242,89,107,.3); }
+  .kbadge.match .dot { background:var(--k-match); box-shadow:0 0 7px rgba(242,89,107,.6); }
+  .kbadge.scrim { color:#cfe0f6; background:rgba(76,155,232,.12); border:1px solid rgba(76,155,232,.3); }
+  .kbadge.scrim .dot { background:var(--k-scrim); box-shadow:0 0 7px rgba(76,155,232,.6); }
+  .kbadge.practice { color:#cdeedd; background:rgba(63,208,138,.12); border:1px solid rgba(63,208,138,.3); }
+  .kbadge.practice .dot { background:var(--k-practice); box-shadow:0 0 7px rgba(63,208,138,.6); }
+  .sch-team { font-size:12px; color:var(--fg-muted); display:inline-flex; align-items:center; gap:6px; }
+  .sch-team .v { color:var(--fg); font-weight:500; }
+  .sch-title { font-family:var(--font-sans); font-weight:700; font-size:16px; color:var(--fg); line-height:1.3; }
+  .sch-title .vs { color:var(--fg-muted); font-weight:600; margin-right:5px; }
+  .sch-memo { font-size:12.5px; color:var(--fg-muted); line-height:1.55; }
+  .sch-links { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
+  .sch-stream { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--live); }
+  .sch-stream svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+  .sch-stream:hover { color:var(--accent); text-decoration:underline; }
+
+  .sch-actions { display:flex; align-items:center; gap:8px; flex:none; }
+  .locked { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--fg-subtle); }
+  .locked svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* empty state */
+  .empty { display:none; flex-direction:column; align-items:center; text-align:center; padding:60px 24px; background:var(--surface); border:1px dashed var(--border-strong); border-radius:var(--r-2xl); }
+  .empty.show { display:flex; }
+  .empty .ei { width:56px; height:56px; border-radius:50%; display:grid; place-items:center; background:var(--surface-3); border:1px solid var(--border); margin-bottom:16px; color:var(--fg-subtle); }
+  .empty .ei svg { width:26px; height:26px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .empty h3 { font-family:var(--font-sans); font-weight:700; font-size:16px; margin:0; color:var(--fg); }
+  .empty p { font-size:13px; color:var(--fg-muted); margin:8px 0 0; max-width:360px; }
+  .empty .btn { margin-top:18px; }
+
+  /* ══════════ MODAL ══════════ */
+  .modal-scrim { position:fixed; inset:0; z-index:100; background:rgba(6,8,12,.66); backdrop-filter:blur(6px); display:none; align-items:flex-start; justify-content:center; padding:56px 20px; overflow-y:auto; }
+  .modal-scrim.show { display:flex; }
+  .modal { width:100%; max-width:520px; background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--r-2xl); box-shadow:var(--e3); overflow:visible; animation:pop .16s ease; }
+  @keyframes pop { from { opacity:0; transform:translateY(8px) scale(.985); } to { opacity:1; transform:none; } }
+  .modal-head { display:flex; align-items:flex-start; gap:14px; padding:20px 22px 18px; border-bottom:1px solid var(--border); background:linear-gradient(180deg,var(--surface-2),transparent); border-radius:var(--r-2xl) var(--r-2xl) 0 0; }
+  .modal-head .m-id { min-width:0; flex:1; }
+  .modal-head .m-kick { font-family:var(--font-mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
+  .modal-head .m-name { font-family:var(--font-sans); font-weight:800; font-size:18px; color:var(--fg); }
+  .modal-head .m-close { flex:none; width:32px; height:32px; border-radius:var(--r-md); display:grid; place-items:center; background:transparent; border:1px solid var(--border); color:var(--fg-muted); cursor:pointer; }
+  .modal-head .m-close:hover { background:var(--surface-3); color:var(--fg); }
+  .modal-head .m-close svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+  .modal-body { padding:20px 22px 22px; }
+
+  /* ── form fields (.mp-form idiom) ── */
+  .field { display:block; }
+  .field + .field { margin-top:18px; }
+  .field.hidden { display:none; }
+  .field > label { display:block; font-size:13px; font-weight:600; color:var(--fg); margin-bottom:8px; }
+  .field .req { color:var(--brand); margin-left:3px; }
+  .field .opt { color:var(--fg-subtle); font-weight:400; font-size:11.5px; margin-left:6px; }
+  .hint { font-size:11.5px; color:var(--fg-muted); margin:7px 0 0; line-height:1.6; }
+  input[type=text], textarea, .dt-trigger {
+    width:100%; font-family:var(--font-jp); font-size:13.5px; color:var(--fg);
+    background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-md);
+    padding:10px 12px; line-height:1.4; transition:border-color .15s, box-shadow .15s, background .15s;
+  }
+  textarea { resize:vertical; min-height:80px; line-height:1.7; }
+  input::placeholder, textarea::placeholder { color:var(--fg-subtle); }
+  input:focus, textarea:focus, .dt-trigger:focus-visible {
+    outline:none; border-color:var(--brand);
+    box-shadow:0 0 0 3px rgba(255,106,43,.18); background:var(--surface-2);
+  }
+
+  /* kind segmented control */
+  .kind-seg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .kind-opt { position:relative; cursor:pointer; }
+  .kind-opt input { position:absolute; opacity:0; width:0; height:0; }
+  .kind-opt .face { display:flex; align-items:center; gap:9px; padding:11px 14px; border-radius:var(--r-md); background:var(--surface-3); border:1px solid var(--border-strong); transition:border-color .15s, background .15s; }
+  .kind-opt .kdot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .kind-opt.scrim .kdot { background:var(--k-scrim); box-shadow:0 0 8px rgba(76,155,232,.6); }
+  .kind-opt.practice .kdot { background:var(--k-practice); box-shadow:0 0 8px rgba(63,208,138,.6); }
+  .kind-opt .kl { display:flex; flex-direction:column; gap:1px; line-height:1.25; }
+  .kind-opt .kl .t { font-size:13.5px; font-weight:700; color:var(--fg); }
+  .kind-opt .kl .d { font-size:10.5px; color:var(--fg-muted); }
+  .kind-opt input:checked + .face { background:var(--surface-2); }
+  .kind-opt.scrim input:checked + .face { border-color:var(--k-scrim); box-shadow:0 0 0 1px var(--k-scrim); }
+  .kind-opt.practice input:checked + .face { border-color:var(--k-practice); box-shadow:0 0 0 1px var(--k-practice); }
+  .kind-opt input:focus-visible + .face { box-shadow:0 0 0 3px rgba(255,106,43,.22); }
+
+  /* datetime trigger */
+  .field-dt { position:relative; }
+  .dt-trigger { display:flex; align-items:center; gap:9px; text-align:left; cursor:pointer; font-size:13.5px; }
+  .dt-trigger .cal { flex:none; color:var(--fg-muted); }
+  .dt-trigger .dt-label { color:var(--fg); font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+  .dt-trigger.empty .dt-label { color:var(--fg-subtle); font-family:var(--font-jp); }
+  .dt-trigger:hover { border-color:var(--border-strong); background:var(--surface-2); }
+
+  .modal-foot { display:flex; align-items:center; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--border); background:var(--surface-2); border-radius:0 0 var(--r-2xl) var(--r-2xl); }
+  .modal-foot .foot-left { margin-right:auto; }
+
+  /* ── datetime popover ── */
+  .dt-pop { position:fixed; z-index:160; width:288px; background:var(--surface-2); border:1px solid var(--border-strong); border-radius:var(--r-xl); box-shadow:var(--e3); padding:14px; display:none; }
+  .dt-pop.open { display:block; }
+  .cal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-head .mlabel { font-family:var(--font-sans); font-weight:700; font-size:13.5px; }
+  .cal-nav { width:30px; height:30px; border-radius:var(--r-md); background:transparent; border:1px solid var(--border); color:var(--fg-muted); cursor:pointer; display:grid; place-items:center; }
+  .cal-nav:hover { background:var(--surface-3); color:var(--fg); }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+  .cal-dow { text-align:center; font-family:var(--font-mono); font-size:10px; color:var(--fg-subtle); padding:4px 0; }
+  .cal-day { aspect-ratio:1; border:none; background:transparent; color:var(--fg); font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:12.5px; border-radius:var(--r-sm); cursor:pointer; display:grid; place-items:center; }
+  .cal-day:hover { background:var(--surface-3); }
+  .cal-day.other { color:var(--fg-subtle); opacity:.45; }
+  .cal-day.today { box-shadow:inset 0 0 0 1px var(--border-strong); }
+  .cal-day.sel { background:var(--brand); color:var(--on-brand); font-weight:700; }
+  .cal-day.sel:hover { background:var(--brand-hover); }
+  .time-row { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+  .time-row select { font-family:var(--font-jp); color:var(--fg); background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-md); appearance:none; cursor:pointer; padding:6px 26px 6px 10px; font-size:13px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2397A2B6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center; }
+  .time-row select:focus { outline:none; border-color:var(--brand); }
+  .time-row .colon { color:var(--fg-muted); font-weight:700; }
+  .pop-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:12px; }
+  .pop-btn { font-family:var(--font-sans); font-weight:600; font-size:12.5px; border-radius:var(--r-md); padding:7px 13px; cursor:pointer; border:1px solid transparent; transition:background .15s, border-color .15s; }
+  .pop-btn.ghost { background:transparent; color:var(--fg-muted); border-color:var(--border); }
+  .pop-btn.ghost:hover { background:var(--surface-3); color:var(--fg); }
+  .pop-btn.primary { background:var(--brand); color:var(--on-brand); }
+  .pop-btn.primary:hover { background:var(--brand-hover); }
+
+  /* confirm dialog */
+  .confirm { max-width:400px; }
+  .confirm .modal-body { padding:22px; }
+  .confirm .c-h { font-family:var(--font-sans); font-weight:800; font-size:16px; color:var(--fg); margin:0 0 8px; }
+  .confirm .c-p { font-size:13px; color:var(--fg-muted); margin:0; line-height:1.65; }
+  .confirm .c-p b { color:var(--fg); font-weight:600; }
+  .btn-danger-solid { background:rgba(246,92,78,.14); color:var(--danger); border-color:rgba(246,92,78,.42); }
+  .btn-danger-solid:hover { background:rgba(246,92,78,.24); }
+
+  /* toast */
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:200; background:var(--surface-2); border:1px solid var(--border-strong); color:var(--fg); font-size:13px; padding:11px 17px; border-radius:var(--r-lg); box-shadow:var(--e3); opacity:0; transition:opacity .25s; pointer-events:none; display:flex; align-items:center; gap:9px; }
+  #toast .ti { width:16px; height:16px; flex:none; }
+
+  @media (max-width:640px){
+    .sch { flex-wrap:wrap; gap:12px; }
+    .sch-when { width:auto; flex-direction:row; align-items:baseline; gap:10px; }
+    .sch-div { display:none; }
+    .sch-actions { width:100%; justify-content:flex-end; padding-top:10px; border-top:1px solid var(--border); }
+    .view-switch { align-items:flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand-nav">
+      <span class="logo"><span class="dot"></span>Matchpoint</span>
+      <nav>
+        <a href="#">イベント一覧</a>
+        <a href="#">イベント詳細</a>
+        <a href="#" class="active">日程</a>
+        <a href="#">チーム編成</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <span class="bell">🔔<span class="count mono">3</span></span>
+      <span class="header-user"><span class="av">NO</span><span class="nm">nori#1121</span></span>
+      <button class="btn btn-ghost btn-sm">ログアウト</button>
+    </div>
+  </div>
+</header>
+
+<main class="page" data-screen-label="日程・スクリム予定">
+
+  <nav class="crumb">
+    <a href="#">イベント一覧</a>
+    <span class="sep">/</span>
+    <a href="#">第7回 Matchpoint Open</a>
+    <span class="sep">/</span>
+    <span class="cur">日程</span>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-body">
+      <div class="hero-top">
+        <div>
+          <p class="kicker">Schedule · Scrims &amp; Practice</p>
+          <h1 class="page-title">日程<span class="ev">第7回 Matchpoint Open — Team Aurora</span></h1>
+          <div class="hero-meta">
+            <span class="team-chip"><span class="tdot"></span>Team Aurora</span>
+            <span class="m"><span class="k">🔴 Overwatch 2</span></span>
+            <span class="divider-dot"></span>
+            <span class="m"><span class="k">現在時刻</span><span class="v mono">2026/07/11 21:00 JST</span></span>
+          </div>
+        </div>
+
+        <div class="view-switch">
+          <span class="vs-lb">表示する立場</span>
+          <div class="seg" id="viewSeg">
+            <button class="on org" data-view="member"><span class="d"></span>チームメンバー</button>
+            <button data-view="viewer"><span class="d"></span>閲覧者</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- type legend -->
+      <div class="legend">
+        <span class="lchip match"><span class="em">🔴</span>公式戦<span class="cnt" id="legMatch">0</span></span>
+        <span class="lchip scrim"><span class="em">🔵</span>スクリム<span class="cnt" id="legScrim">0</span></span>
+        <span class="lchip practice"><span class="em">🟢</span>練習<span class="cnt" id="legPractice">0</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- toolbar -->
+  <div class="toolbar">
+    <span class="tnote">公式戦は本戦の対戦表から自動生成され、この画面では編集できません。</span>
+    <button class="btn btn-primary btn-md" id="addBtn" data-add="">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      予定を追加
+    </button>
+  </div>
+
+  <!-- UPCOMING -->
+  <div class="sec-head" id="upHead">
+    <span class="bar"></span>
+    <h2>未消化</h2>
+    <span class="c" id="upCount"></span>
+    <span class="sub">開始が早い順</span>
+  </div>
+  <div class="sched-list" id="upList"></div>
+
+  <!-- empty state (whole schedule) -->
+  <div class="empty" id="emptyState">
+    <span class="ei"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg></span>
+    <h3>まだ予定はありません。</h3>
+    <p>スクリムや練習の予定を追加すると、開始が早い順にここへ並びます。公式戦は対戦表を生成すると自動で表示されます。</p>
+    <button class="btn btn-primary btn-md" data-add="">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      予定を追加
+    </button>
+  </div>
+
+  <!-- DONE -->
+  <div class="sec-head done" id="doneHead" style="display:none">
+    <span class="bar"></span>
+    <h2>消化済み</h2>
+    <span class="c" id="doneCount"></span>
+    <span class="sub">開始が新しい順</span>
+  </div>
+  <div class="sched-list done-list" id="doneList"></div>
+
+</main>
+
+<!-- ADD / EDIT MODAL -->
+<div class="modal-scrim" id="modalScrim">
+  <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- CONFIRM DELETE -->
+<div class="modal-scrim" id="confirmScrim">
+  <div class="modal confirm" id="confirmModal" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- toast -->
+<div id="toast"></div>
+
+<script>
+(function(){
+  /* ═══════════ SERVER-SIDE CONTEXT (contract — do not change) ═══════════ */
+  var MY_TEAM = 'Team Aurora';
+  var NOW = new Date('2026-07-11T21:00:00');   // demo "現在" (JST)
+  var DONE_AFTER_MS = 2 * 60 * 60 * 1000;       // 開始+2h で消化済み
+  var viewer = 'member';                        // 'member'(canManage) | 'viewer'
+
+  var DOW = ['日','月','火','水','木','金','土'];
+
+  /* kind meta */
+  var KIND = {
+    match:    { jp:'公式戦', em:'🔴', editable:false },
+    scrim:    { jp:'スクリム', em:'🔵', editable:true },
+    practice: { jp:'練習', em:'🟢', editable:true }
+  };
+
+  /* ── seed data (schema unchanged) ── */
+  var items = [
+    // upcoming — own team, editable
+    { id:'s1', kind:'scrim', team:'Team Aurora', startsAt:'2026-07-12T21:00', opponent:'Team Nova',
+      memo:'コントロール／ハイブリッド中心。VC 必須、20:45 集合。', streamUrl:null },
+    { id:'p1', kind:'practice', team:'Team Aurora', startsAt:'2026-07-13T22:00', opponent:null,
+      memo:'新構成（ラッシュ）の合わせ練。', streamUrl:null },
+    // upcoming — official match involving my team (locked, has stream)
+    { id:'m1', kind:'match', team:'Team Aurora vs Team Blaze', startsAt:'2026-07-14T20:00', opponent:null,
+      memo:'予選ブロックA 第3節・BO3。', streamUrl:'https://twitch.tv/matchpoint' },
+    // upcoming — official match NOT involving my team (muted)
+    { id:'m2', kind:'match', team:'Team Nova vs Team Vortex', startsAt:'2026-07-14T21:30', opponent:null,
+      memo:'予選ブロックB 第3節・BO3。', streamUrl:'https://twitch.tv/matchpoint' },
+    { id:'s2', kind:'scrim', team:'Team Aurora', startsAt:'2026-07-15T21:00', opponent:null,
+      memo:null, streamUrl:null },
+    // done — faded
+    { id:'p0', kind:'practice', team:'Team Aurora', startsAt:'2026-07-09T22:00', opponent:null,
+      memo:'エイム＆デュエル練。', streamUrl:null },
+    { id:'s0', kind:'scrim', team:'Team Aurora', startsAt:'2026-07-08T21:00', opponent:'Team Echo',
+      memo:'マップ4本。振り返りは Discord に共有済み。', streamUrl:null },
+    { id:'m0', kind:'match', team:'Team Aurora vs Team Nova', startsAt:'2026-07-06T20:00', opponent:null,
+      memo:'予選ブロックA 第2節・BO3。', streamUrl:'https://twitch.tv/videos/matchpoint' }
+  ];
+
+  /* ═══════════ helpers ═══════════ */
+  function parse(s){ return new Date(s + ':00'); }
+  function isDone(it){ return NOW.getTime() > parse(it.startsAt).getTime() + DONE_AFTER_MS; }
+  function isForeignMatch(it){ return it.kind==='match' && it.team.indexOf(MY_TEAM) < 0; }
+  function canManage(it){ return viewer==='member' && KIND[it.kind].editable && it.team.indexOf(MY_TEAM) >= 0; }
+
+  // JST "M/D(曜) HH:mm" split into parts for the date block
+  function whenParts(s){
+    var d = parse(s);
+    return {
+      md:  (d.getMonth()+1) + '/' + d.getDate(),
+      dow: DOW[d.getDay()],
+      tm:  String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'),
+      yr:  String(d.getFullYear())
+    };
+  }
+  function titleFor(it){
+    if(it.kind==='scrim') return it.opponent ? '<span class="vs">vs</span>'+esc(it.opponent) : 'スクリム';
+    if(it.kind==='practice') return '練習';
+    return esc(it.team); // match: "A vs B"
+  }
+  function esc(s){ return (s||'').replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  /* ═══════════ render ═══════════ */
+  function render(){
+    var upList = document.getElementById('upList');
+    var doneList = document.getElementById('doneList');
+    var empty = document.getElementById('emptyState');
+    var addBtn = document.getElementById('addBtn');
+
+    // legend counts (public)
+    var byKind = { match:0, scrim:0, practice:0 };
+    items.forEach(function(it){ byKind[it.kind]++; });
+    document.getElementById('legMatch').textContent = byKind.match;
+    document.getElementById('legScrim').textContent = byKind.scrim;
+    document.getElementById('legPractice').textContent = byKind.practice;
+
+    // permission: add button only for members
+    addBtn.style.display = viewer==='member' ? '' : 'none';
+
+    var up = items.filter(function(it){ return !isDone(it); })
+                  .sort(function(a,b){ return parse(a.startsAt) - parse(b.startsAt); });   // asc
+    var done = items.filter(isDone)
+                    .sort(function(a,b){ return parse(b.startsAt) - parse(a.startsAt); }); // desc
+
+    // whole-schedule empty
+    if(items.length===0){
+      empty.classList.add('show');
+      document.getElementById('upHead').style.display='none';
+    } else {
+      empty.classList.remove('show');
+      document.getElementById('upHead').style.display='';
+    }
+    document.getElementById('upCount').textContent = '('+up.length+')';
+
+    upList.innerHTML = up.map(cardHTML).join('') ||
+      (items.length ? '<div class="empty show" style="padding:44px 24px"><h3>未消化の予定はありません。</h3><p>これから始まる予定がここに表示されます。</p></div>' : '');
+
+    // done section
+    var dh = document.getElementById('doneHead');
+    if(done.length){ dh.style.display=''; document.getElementById('doneCount').textContent='('+done.length+')'; }
+    else { dh.style.display='none'; }
+    doneList.innerHTML = done.map(cardHTML).join('');
+  }
+
+  function cardHTML(it){
+    var k = KIND[it.kind];
+    var w = whenParts(it.startsAt);
+    var foreign = isForeignMatch(it);
+    var manage = canManage(it);
+
+    // meta / team line
+    var teamLine = it.kind==='match'
+      ? '<span class="sch-team">公式戦</span>'
+      : '<span class="sch-team"><span class="v">'+esc(it.team)+'</span></span>';
+
+    // links (stream for match)
+    var links = '';
+    if(it.streamUrl){
+      var label = isDone(it) ? 'アーカイブを見る' : '配信を見る';
+      links += '<a class="sch-stream" href="'+esc(it.streamUrl)+'" target="_blank" rel="noopener">'+
+        '<svg viewBox="0 0 24 24"><path d="m10 8 6 4-6 4V8z"/><rect x="2" y="4" width="20" height="16" rx="3"/></svg>'+label+'</a>';
+    }
+
+    // actions
+    var actions = '';
+    if(manage){
+      actions =
+        '<button class="btn btn-secondary icon-btn" title="編集" data-edit="'+it.id+'"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>'+
+        '<button class="btn btn-danger icon-btn" title="削除" data-del="'+it.id+'"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
+    } else if(it.kind==='match' && !foreign && viewer==='member'){
+      actions = '<span class="locked"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>自動生成</span>';
+    }
+
+    return '<div class="sch k-'+it.kind+(foreign?' foreign':'')+'" data-id="'+it.id+'">'+
+      '<div class="sch-when">'+
+        '<span class="wd"><span class="md">'+w.md+'</span><span class="dow">('+w.dow+')</span></span>'+
+        '<span class="tm">'+w.tm+'</span>'+
+        '<span class="yr">'+w.yr+'</span>'+
+      '</div>'+
+      '<div class="sch-div"></div>'+
+      '<div class="sch-main">'+
+        '<div class="sch-top">'+
+          '<span class="kbadge '+it.kind+'"><span class="dot"></span>'+k.em+' '+k.jp+'</span>'+
+          teamLine+
+        '</div>'+
+        '<div class="sch-title">'+titleFor(it)+'</div>'+
+        (it.memo ? '<div class="sch-memo">'+esc(it.memo)+'</div>' : '')+
+        (links ? '<div class="sch-links">'+links+'</div>' : '')+
+      '</div>'+
+      '<div class="sch-actions">'+actions+'</div>'+
+    '</div>';
+  }
+
+  /* ═══════════ add / edit modal ═══════════ */
+  var scrim = document.getElementById('modalScrim');
+  var modalEl = document.getElementById('modal');
+
+  function openForm(editId){
+    var editing = !!editId;
+    var it = editing ? items.find(function(x){ return x.id===editId; }) : null;
+    if(editing && !canManage(it)) return; // guard
+
+    var kind = editing ? it.kind : 'scrim';
+    var startsAt = editing ? it.startsAt : '';
+    var opponent = editing && it.opponent ? it.opponent : '';
+    var memo = editing && it.memo ? it.memo : '';
+
+    modalEl.innerHTML =
+      '<div class="modal-head">'+
+        '<div class="m-id">'+
+          '<p class="m-kick">'+(editing?'Edit schedule':'New schedule')+'</p>'+
+          '<div class="m-name">'+(editing?'予定を編集':'予定を追加')+'</div>'+
+        '</div>'+
+        '<button class="m-close" data-close aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'+
+      '</div>'+
+      '<form class="modal-body" id="schForm" autocomplete="off">'+
+        '<div class="field">'+
+          '<label>種別<span class="req">*</span></label>'+
+          '<div class="kind-seg">'+
+            '<label class="kind-opt scrim">'+
+              '<input type="radio" name="kind" value="scrim"'+(kind==='scrim'?' checked':'')+'>'+
+              '<span class="face"><span class="kdot"></span><span class="kl"><span class="t">🔵 スクリム</span><span class="d">他チームとの練習試合</span></span></span>'+
+            '</label>'+
+            '<label class="kind-opt practice">'+
+              '<input type="radio" name="kind" value="practice"'+(kind==='practice'?' checked':'')+'>'+
+              '<span class="face"><span class="kdot"></span><span class="kl"><span class="t">🟢 練習</span><span class="d">チーム内の練習枠</span></span></span>'+
+            '</label>'+
+          '</div>'+
+        '</div>'+
+        '<div class="field field-dt">'+
+          '<label>日時<span class="opt">JST</span><span class="req">*</span></label>'+
+          '<button type="button" class="dt-trigger'+(startsAt?'':' empty')+'" data-dt>'+
+            '<svg class="cal" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+
+            '<span class="dt-label">'+(startsAt?fmtDisplay(startsAt):'日時を選択')+'</span>'+
+          '</button>'+
+          '<input type="hidden" name="startsAt" value="'+startsAt+'">'+
+        '</div>'+
+        '<div class="field'+(kind==='scrim'?'':' hidden')+'" id="oppField">'+
+          '<label>相手<span class="opt">任意</span></label>'+
+          '<input type="text" name="opponent" maxlength="40" placeholder="Team Nova" value="'+esc(opponent)+'">'+
+          '<p class="hint">相手チーム名。空欄なら「スクリム」とだけ表示されます。</p>'+
+        '</div>'+
+        '<div class="field">'+
+          '<label>メモ<span class="opt">任意</span></label>'+
+          '<textarea name="memo" maxlength="500" placeholder="集合時間・使用マップ・VC など">'+esc(memo)+'</textarea>'+
+        '</div>'+
+      '</form>'+
+      '<div class="modal-foot">'+
+        '<button class="btn btn-ghost btn-md" data-close>キャンセル</button>'+
+        '<button class="btn btn-primary btn-md" data-submit="'+(editing?it.id:'')+'">'+(editing?'保存':'追加')+'</button>'+
+      '</div>';
+
+    // kind toggle → opponent field visibility (scrim only)
+    modalEl.querySelectorAll('input[name="kind"]').forEach(function(r){
+      r.addEventListener('change', function(){
+        var isScrim = modalEl.querySelector('input[name="kind"]:checked').value==='scrim';
+        modalEl.querySelector('#oppField').classList.toggle('hidden', !isScrim);
+      });
+    });
+
+    bindPicker();
+    openScrim(scrim);
+  }
+
+  function submitForm(editId){
+    var kind = modalEl.querySelector('input[name="kind"]:checked').value;
+    var startsAt = modalEl.querySelector('input[name="startsAt"]').value;
+    var opponent = modalEl.querySelector('input[name="opponent"]').value.trim();
+    var memo = modalEl.querySelector('textarea[name="memo"]').value.trim();
+
+    if(!startsAt){ flash('日時を選択してください', true); return; }
+
+    if(editId){
+      var it = items.find(function(x){ return x.id===editId; });
+      it.kind = kind; it.startsAt = startsAt;
+      it.opponent = (kind==='scrim' && opponent) ? opponent : null;   // opponent only for scrim
+      it.memo = memo || null;
+      closeScrim(scrim); render(); flash('予定を保存しました');
+    } else {
+      items.push({
+        id:'n'+Date.now(), kind:kind, team:MY_TEAM, startsAt:startsAt,
+        opponent:(kind==='scrim' && opponent) ? opponent : null,
+        memo:memo || null, streamUrl:null
+      });
+      closeScrim(scrim); render(); flash('予定を追加しました');
+    }
+  }
+
+  /* ═══════════ delete confirm ═══════════ */
+  var confirmScrim = document.getElementById('confirmScrim');
+  var confirmEl = document.getElementById('confirmModal');
+  function openDelete(id){
+    var it = items.find(function(x){ return x.id===id; });
+    if(!it || !canManage(it)) return;
+    var w = whenParts(it.startsAt);
+    var label = it.kind==='scrim' ? (it.opponent?('vs '+it.opponent):'スクリム') : '練習';
+    confirmEl.innerHTML =
+      '<div class="modal-body">'+
+        '<h3 class="c-h">この予定を削除しますか？</h3>'+
+        '<p class="c-p"><b>'+w.md+'('+w.dow+') '+w.tm+' · '+esc(label)+'</b><br>削除すると元に戻せません。</p>'+
+      '</div>'+
+      '<div class="modal-foot">'+
+        '<button class="btn btn-ghost btn-md" data-cancel-del>キャンセル</button>'+
+        '<button class="btn btn-danger-solid btn-md" data-confirm-del="'+id+'">削除する</button>'+
+      '</div>';
+    openScrim(confirmScrim);
+  }
+  function doDelete(id){
+    var idx = items.findIndex(function(x){ return x.id===id; });
+    if(idx<0) return;
+    items.splice(idx,1);
+    closeScrim(confirmScrim); render(); flash('予定を削除しました');
+  }
+
+  /* ═══════════ scrim open/close ═══════════ */
+  function openScrim(el){ el.classList.add('show'); document.body.style.overflow='hidden'; }
+  function closeScrim(el){ el.classList.remove('show'); if(!scrim.classList.contains('show') && !confirmScrim.classList.contains('show')) document.body.style.overflow=''; closePop(); }
+
+  /* ═══════════ events ═══════════ */
+  document.addEventListener('click', function(e){
+    if(e.target.closest('[data-add]')){ openForm(null); return; }
+    var ed = e.target.closest('[data-edit]'); if(ed){ openForm(ed.getAttribute('data-edit')); return; }
+    var dl = e.target.closest('[data-del]'); if(dl){ openDelete(dl.getAttribute('data-del')); return; }
+    var sb = e.target.closest('[data-submit]'); if(sb){ submitForm(sb.getAttribute('data-submit')); return; }
+    var cd = e.target.closest('[data-confirm-del]'); if(cd){ doDelete(cd.getAttribute('data-confirm-del')); return; }
+    if(e.target.closest('[data-cancel-del]')){ closeScrim(confirmScrim); return; }
+    if(e.target.closest('[data-close]')){ closeScrim(scrim); return; }
+    if(e.target===scrim){ closeScrim(scrim); return; }
+    if(e.target===confirmScrim){ closeScrim(confirmScrim); return; }
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ if(confirmScrim.classList.contains('show')) closeScrim(confirmScrim); else if(scrim.classList.contains('show')) closeScrim(scrim); }
+  });
+
+  /* viewer-role switch */
+  document.getElementById('viewSeg').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-view]'); if(!b) return;
+    viewer = b.getAttribute('data-view');
+    this.querySelectorAll('button').forEach(function(x){ x.classList.remove('on','org'); });
+    b.classList.add('on'); if(viewer==='member') b.classList.add('org');
+    render();
+  });
+
+  /* toast */
+  var toastT;
+  function flash(msg, danger){
+    var el = document.getElementById('toast');
+    el.innerHTML = '<span class="ti">'+(danger
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>')+'</span>'+msg;
+    el.style.borderColor = danger ? 'var(--danger)' : 'var(--border-strong)';
+    el.style.opacity='1'; clearTimeout(toastT); toastT=setTimeout(function(){ el.style.opacity='0'; }, 1900);
+  }
+
+  /* ═══════════ datetime picker (scoped to modal form) ═══════════ */
+  var MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  var PDOW = ['日','月','火','水','木','金','土'];
+  var HOURS = []; for(var h=0; h<24; h++) HOURS.push(String(h).padStart(2,'0'));
+  var MINS = ['00','15','30','45'];
+  var pop = null;
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function fmtDisplay(val){
+    var m = (val||'').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if(!m) return val||'';
+    var d = new Date(+m[1], +m[2]-1, +m[3]);
+    return (+m[2])+'/'+(+m[3])+'('+PDOW[d.getDay()]+') '+m[4]+':'+m[5];
+  }
+  function closePop(){ if(pop){ pop.remove(); pop=null; document.removeEventListener('mousedown', outside, true); } }
+  function outside(e){ if(pop && !pop.contains(e.target) && !e.target.closest('.dt-trigger')) closePop(); }
+
+  function bindPicker(){
+    var trigger = modalEl.querySelector('.dt-trigger');
+    if(!trigger) return;
+    trigger.addEventListener('click', function(){ openPicker(trigger); });
+  }
+
+  function openPicker(trigger){
+    if(pop && pop._trigger === trigger){ closePop(); return; }
+    closePop();
+    var hidden = modalEl.querySelector('input[name="startsAt"]');
+    var cur = hidden.value;
+    var draft = { date:null, hour:'21', min:'00' };
+    if(cur){ var mm = cur.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/); if(mm){ draft.date = new Date(+mm[1], +mm[2]-1, +mm[3]); draft.hour = mm[4]; draft.min = MINS.reduce(function(a,b){ return Math.abs(+b-+mm[5])<Math.abs(+a-+mm[5])?b:a; },'00'); } }
+    var viewDate = draft.date ? new Date(draft.date) : new Date(NOW);
+    viewDate.setDate(1);
+
+    pop = document.createElement('div');
+    pop.className = 'dt-pop open';
+    pop._trigger = trigger;
+    document.body.appendChild(pop);
+
+    function renderCal(){
+      var y = viewDate.getFullYear(), mo = viewDate.getMonth();
+      var startDow = new Date(y, mo, 1).getDay();
+      var daysInMonth = new Date(y, mo+1, 0).getDate();
+      var today = new Date(NOW);
+      var html = '<div class="cal-head">';
+      html += '<button type="button" class="cal-nav" data-nav="-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>';
+      html += '<span class="mlabel">'+y+'年 '+MONTHS[mo]+'</span>';
+      html += '<button type="button" class="cal-nav" data-nav="1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>';
+      html += '</div><div class="cal-grid">';
+      PDOW.forEach(function(d){ html += '<span class="cal-dow">'+d+'</span>'; });
+      for(var i=0;i<startDow;i++){ var pdd=new Date(y,mo,1-(startDow-i)); html += '<button type="button" class="cal-day other" data-d="'+pdd.getFullYear()+'-'+pad(pdd.getMonth()+1)+'-'+pad(pdd.getDate())+'">'+pdd.getDate()+'</button>'; }
+      for(var day=1; day<=daysInMonth; day++){
+        var cls='cal-day';
+        if(today.getFullYear()===y && today.getMonth()===mo && today.getDate()===day) cls+=' today';
+        if(draft.date && draft.date.getFullYear()===y && draft.date.getMonth()===mo && draft.date.getDate()===day) cls+=' sel';
+        html += '<button type="button" class="'+cls+'" data-d="'+y+'-'+pad(mo+1)+'-'+pad(day)+'">'+day+'</button>';
+      }
+      var cells=startDow+daysInMonth, trail=(7-(cells%7))%7;
+      for(var t=1;t<=trail;t++){ var nd=new Date(y,mo+1,t); html += '<button type="button" class="cal-day other" data-d="'+nd.getFullYear()+'-'+pad(nd.getMonth()+1)+'-'+pad(nd.getDate())+'">'+nd.getDate()+'</button>'; }
+      html += '</div>';
+      html += '<div class="time-row"><select data-time="hour">';
+      HOURS.forEach(function(hh){ html += '<option value="'+hh+'"'+(hh===draft.hour?' selected':'')+'>'+hh+'</option>'; });
+      html += '</select><span class="colon">:</span><select data-time="min">';
+      MINS.forEach(function(mn){ html += '<option value="'+mn+'"'+(mn===draft.min?' selected':'')+'>'+mn+'</option>'; });
+      html += '</select></div>';
+      html += '<div class="pop-actions"><button type="button" class="pop-btn ghost" data-act="cancel">キャンセル</button><button type="button" class="pop-btn primary" data-act="confirm">確定</button></div>';
+      pop.innerHTML = html; bind();
+    }
+    function bind(){
+      pop.querySelectorAll('[data-nav]').forEach(function(b){ b.onclick=function(){ viewDate.setMonth(viewDate.getMonth()+Number(b.dataset.nav)); renderCal(); }; });
+      pop.querySelectorAll('.cal-day').forEach(function(b){ b.onclick=function(){ var p=b.dataset.d.split('-'); draft.date=new Date(+p[0],+p[1]-1,+p[2]); renderCal(); }; });
+      pop.querySelector('[data-time="hour"]').onchange=function(e){ draft.hour=e.target.value; };
+      pop.querySelector('[data-time="min"]').onchange=function(e){ draft.min=e.target.value; };
+      pop.querySelector('[data-act="cancel"]').onclick=function(){ closePop(); };
+      pop.querySelector('[data-act="confirm"]').onclick=function(){
+        if(!draft.date){ closePop(); return; }
+        hidden.value = draft.date.getFullYear()+'-'+pad(draft.date.getMonth()+1)+'-'+pad(draft.date.getDate())+'T'+draft.hour+':'+draft.min;
+        var label = trigger.querySelector('.dt-label');
+        label.textContent = fmtDisplay(hidden.value); trigger.classList.remove('empty');
+        closePop();
+      };
+    }
+    renderCal();
+    var r = trigger.getBoundingClientRect();
+    var top = r.bottom + 6, left = r.left;
+    if(left + 288 > document.documentElement.clientWidth - 12) left = document.documentElement.clientWidth - 288 - 12;
+    if(top + 360 > document.documentElement.clientHeight) top = Math.max(12, r.top - 366);
+    pop.style.top = top+'px'; pop.style.left = left+'px';
+    setTimeout(function(){ document.addEventListener('mousedown', outside, true); }, 0);
+  }
+
+  /* init */
+  render();
+})();
+</script>
+
+
+</body></html>
