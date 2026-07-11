@@ -74,11 +74,12 @@ export function countByTab(
 }
 
 /** 状態バッジの見た目（色トーン）。一覧・詳細で共通の意味づけ。 */
-export type StatusTone = "success" | "live" | "warning" | "muted";
+export type StatusTone = "success" | "live" | "warning" | "muted" | "draft";
 
 /**
  * status → バッジのトーン。募集中=success、開催中=live、募集締切=warning、終了=muted。
- * published も募集受付中として success。想定外の値は muted に倒す。
+ * published も募集受付中として success。下書き=draft（自分のイベント一覧でのみ現れる）。
+ * 想定外の値は muted に倒す。
  */
 export function statusTone(status: EventStatus): StatusTone {
   switch (status) {
@@ -91,7 +92,65 @@ export function statusTone(status: EventStatus): StatusTone {
       return "warning";
     case "finished":
       return "muted";
+    case "draft":
+      return "draft";
     default:
       return "muted";
   }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * 自分のイベント一覧（/events/mine）専用のフィルタ。
+ * 公開一覧（上の TAB_*）と違い、主催者本人の画面なので下書き（draft）を独立タブで扱う。
+ * ここは純粋関数のみ（副作用なし）。/events 用の定義とは分離して既存挙動を壊さない。
+ * ───────────────────────────────────────────────────────────── */
+
+/** 自分のイベント一覧のタブ種別（URL クエリ ?tab= の許可値）。 */
+export type MyEventsTab = "all" | "draft" | "open" | "ended";
+
+/** タブ → 対象 status 群。all は空配列（絞らない）。 */
+const MY_TAB_STATUSES: Record<MyEventsTab, EventStatus[]> = {
+  all: [],
+  draft: ["draft"],
+  // 公開中：公開してから終了までの全段階（下書き・終了以外）。
+  open: ["published", "recruiting", "closed", "ongoing"],
+  ended: ["finished"],
+};
+
+/** タブの表示ラベル。 */
+export const MY_TAB_LABEL: Record<MyEventsTab, string> = {
+  all: "すべて",
+  draft: "下書き",
+  open: "公開中",
+  ended: "終了",
+};
+
+/** 不明な文字列を安全に既定タブ（all）へ丸める。 */
+export function normalizeMyTab(raw: string | undefined): MyEventsTab {
+  return raw === "draft" || raw === "open" || raw === "ended" ? raw : "all";
+}
+
+/** タブに対応する status 群を返す（all は空配列＝絞り込みなし）。 */
+export function statusesForMyTab(tab: MyEventsTab): EventStatus[] {
+  return MY_TAB_STATUSES[tab];
+}
+
+/**
+ * 状態一覧から各タブの件数を数える（タブの件数バッジ用・追加クエリ不要）。
+ */
+export function countByMyTab(
+  statuses: EventStatus[],
+): Record<MyEventsTab, number> {
+  const counts: Record<MyEventsTab, number> = {
+    all: statuses.length,
+    draft: 0,
+    open: 0,
+    ended: 0,
+  };
+  for (const s of statuses) {
+    if (MY_TAB_STATUSES.draft.includes(s)) counts.draft += 1;
+    else if (MY_TAB_STATUSES.open.includes(s)) counts.open += 1;
+    else if (MY_TAB_STATUSES.ended.includes(s)) counts.ended += 1;
+  }
+  return counts;
 }

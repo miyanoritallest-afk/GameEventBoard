@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-07-11 — デザイン刷新 運用画面: 自分のイベント一覧（主催者）
+
+自分のイベント一覧（`/events/mine`）を Claude Design 案（`.theme-matchpoint`）で刷新。刷新済みの公開イベント一覧（`/events`）の姉妹画面として作法を完全に揃えた。**遷移規則・取得ロジックは不変・UI とフィルタ整形のみ**。案HTMLは `docs/design-refs/mine-organizer.html`（軽量版）に保管。
+
+### 情報設計の壁打ち（2論点を確定）
+- **`/events` と同じカードグリッド**（sm:2列/lg:3列）。EventCard/StatusBadge/FilterTab/EmptyState の作法を踏襲。
+- **ステータスタブ（下書き含む）**「すべて/下書き/公開中/終了」。mine は主催者本人の画面なので **draft を独立タブ**で扱う（`/events` は公開のみで draft を出さない）。
+
+### やったこと
+- **event-list-filter.ts（Service 層）**: mine 専用の純粋関数を追加（`MyEventsTab`・`MY_TAB_LABEL`・`normalizeMyTab`・`statusesForMyTab`・`countByMyTab`）。**既存の `/events` 用（`TAB_*`）は変更せず分離**。`statusTone` に `draft` トーンを追加（`StatusTone` union を拡張）。`/events`・トップの `StatusBadge` は三項フォールバックなので draft 追加でも無害（draft はそこで描画されない）ことを確認。
+- **event-list-filter.test.ts**: mine 用関数のテスト11件を追加（367→378）。draft の網羅・normalize の安全弁・件数の網羅性。
+- **mine/page.tsx**: `.dark`→`.theme-matchpoint`。見出し行（kicker「My Events」＋総件数＋作成ボタン）＋4タブ（件数バッジ・URL クエリ `?tab=` で絞る）＋カードグリッド。EventCard に**詳細/編集の管理導線**を追加。**下書きカードは破線＋トーン減＋編集ボタンをブランド色**（公開を促す）、**終了カードは減光**。空状態を刷新（タブ別文言）。**未ログイン→/login・detailHref（draft=uuid / 公開=slug）・編集=uuid・取得順は不変**。
+
+### 案と現行のギャップ（現行を優先）
+- サイトヘッダーはデモ専用なので実装しない。status 名は案の独自名（open/live/ended）でなく現行（draft/published/…/finished）→ StatusBadge のトーンでマッピング。フィルタは `/events` と同じ URL クエリ方式。
+
+### コードレビュー（/code-review high）→ correctness 指摘なし
+- 共有 `statusTone` の draft 追加が3利用箇所（mine/events/top）すべてで安全なことを確認。フィルタは Service 層＋テスト。FilterTab 等が `/events` と重複（follow-up・共通化候補）だが今回はスコープ外。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 378 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright・主催者視点）**: のり（draft 6・published 6）で全タブ・カード・空状態を確認。下書き=破線＋ブランド色の編集ボタン、公開=実線＋控えめ、下書きタブで draft のみ絞り込み、終了タブ(0件)で空状態を確認。**書き込みなし**（閲覧・タブ切替のみ）。
+
+### 次にやること
+- 残り運用画面: `/events/[id]/schedule`（日程）、`/notifications`（通知一覧）。次は schedule か notifications。引き継ぎメモの優先度を更新。
+- **follow-up 継続**: フォーム系（Card/Field）＋一覧系（EventCard/StatusBadge/FilterTab）で刷新済み画面間のコンポーネント重複。区切りで `src/app/events/_components/` に共通化を検討。
+
+---
+
 ## 2026-07-11 — デザイン刷新 運用画面: 応募者一覧・承認（主催者）
 
 応募者一覧・承認ページ（`/events/[id]/registrations`）を Claude Design 案（`.theme-matchpoint`）で刷新。主催者の運用画面の第一歩。**判定・保存ロジック（Server Action `decideRegistration`・`overrideRegistrationScore`・スコア計算）は一切触らず、UI とデータ整形のみ**差し替え。案HTMLは `docs/design-refs/registrations-organizer.html`（軽量版）に保管。
