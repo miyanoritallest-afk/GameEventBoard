@@ -7,6 +7,36 @@
 
 ---
 
+## 2026-07-11 — デザイン刷新 運用画面: 応募者一覧・承認（主催者）
+
+応募者一覧・承認ページ（`/events/[id]/registrations`）を Claude Design 案（`.theme-matchpoint`）で刷新。主催者の運用画面の第一歩。**判定・保存ロジック（Server Action `decideRegistration`・`overrideRegistrationScore`・スコア計算）は一切触らず、UI とデータ整形のみ**差し替え。案HTMLは `docs/design-refs/registrations-organizer.html`（軽量版）に保管。
+
+### 情報設計の壁打ち（3論点を確定）
+- **リッチな行カードの縦リスト**（現状の1応募=1行を維持しつつ上質化）。テーブル/ステータス別セクション分けは不採用（横スクロールや新規グループ化ロジックが増えるため）。
+- **ヒーローに件数サマリーチップ**（応募 N / 承認待ち N〔warning強調〕/ 参加確定 N）。取得済み配列を status で数えるだけ（新規クエリ不要・全立場に公開）。
+- **詳細モーダル維持・見た目を上質化**（陳腐化対策の「保存後に閉じる」現行挙動を維持）。
+
+### 案と現行のギャップ（現行を優先）
+- **立場切替セグメント（view-switch）はデモ専用UIなので実装しない**（実際は page.tsx がサーバー側で isOrganizer を決める）。
+- **スコア再計算はしない**（案は tier/div から pt を再計算するが、現行は保存済み individual_score/final_score/score_breakdown を表示するだけ）。モーダルのランクグリッドは `breakdown.grid`＋`scoreToRankLabel` を使い、pt 列は現行に無いので出さない。
+- **toast・アバターは入れない**（ユーザー選択：モーダルのグリッド化のみ採用）。承認/却下のフィードバックは現行のインラインエラー表示のまま。
+
+### やったこと
+- **page.tsx**: `.dark`→`.theme-matchpoint`。パンくず＋kicker＋ヒーロー（件数サマリーチップ `SummaryCount`）。非主催者向けの info バナー。リスト見出し＋空状態を刷新。**RegistrationRowData の構築・プライバシー分岐（Discord名は主催者のみ）は不変**。
+- **registration-row.tsx**: リッチな行カード（表示名＋`StatusBadge`＋希望ロールの色チップ `PrefChips`〔第1→第2→第3・`--mp-tank/dps/support`〕＋メタ行＋右にスコア〔mono・上書きバッジ〕）。ステータス別の左アクセント帯（pending=warning・approved=success）・不参加/取り下げは減光。承認/却下ボタン（主催者・pending のみ）。詳細モーダルを上質化（blur・適用スコア・**ランクグリッド `RankGrid`**・算出内訳・上書き入力）。**Server Action 呼び出し・`canManage`/`showScore` ゲート・保存後に閉じる挙動は不変**。
+
+### コードレビュー（/code-review high）→ 指摘なし
+- 8アングルで精査。データ契約・プライバシー分岐・Server Action を忠実に維持しており correctness の回帰なし。cleanup も対応不要と判断。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 367 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright・主催者視点）**: のり検証1（応募38件）でヒーロー件数サマリー・行カード・希望ロール色チップ・詳細モーダルを確認。承認待ちの見た目（warning バッジ・左帯・承認/却下ボタン）確認のため**1件を一時 pending に変更 → 確認後 approved に復元**（DB クリーン）。ランクグリッドは grid ありデータ（実機検証カップ）で DPS/タンク/サポート×3シーズン・未認定扱い・到達ボーナス+2・小数スコア 30.8 が正しく出ることを確認。**承認/却下・上書きの書き込みは実行せず**。
+
+### 次にやること
+- 残り運用画面: `/events/[id]/schedule`（日程）、`/events/mine`（自分のイベント一覧）、`/notifications`（通知一覧）。次は mine か schedule。引き継ぎメモの優先度を更新。
+
+---
+
 ## 2026-07-11 — デザイン刷新 フォーム系: 応募フォーム（参加者）
 
 応募フォーム（`/events/[id]/apply`）を Claude Design 案（`.theme-matchpoint`）で刷新。**参加者が触る唯一のフォーム**。直前に刷新したイベント作成/編集フォーム（`.mp-form` スコープ・Card/Field 作法）を「正」として揃えた。**判定・保存ロジック（Server Action `registerWithScore`・Zod・希望ロールの conflict/自動決定・ランクグリッドの name 契約）は一切触らず、UI とデータ整形のみ**差し替え。案HTMLは `docs/design-refs/apply-form-participant.html`（軽量版）に保管。
