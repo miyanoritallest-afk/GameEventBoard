@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-07-12 — デザイン刷新 運用画面: 日程・スクリム予定
+
+チーム日程ページ（`/events/[id]/schedule`）を Claude Design 案（`.theme-matchpoint`）で刷新。公式戦/スクリム/練習を種別色分けで時系列に並べるリスト＋登録/編集モーダル。**判定・保存ロジック（Server Action `createScrim`/`editScrim`/`removeScrim`・Zod・`buildScheduleItems` の並び替え/消化ライン/濃淡判定）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/schedule-team.html`（軽量版）に保管。
+
+### 情報設計の壁打ち（2論点＋2判断を確定）
+- **縦リスト・種別左帯を上質化**（未消化を上・消化済みを下に薄く、の2セクションを維持）。
+- **モーダル維持・.mp-form で上質化**（種別ラジオをセグメント風トグルに）。
+- **削除確認は現行の confirm() を維持**（案の確認モーダルは新規 state が要るので不採用）。
+- **種別色は案の色をインラインで使う**（公式戦 #F2596B / スクリム #4C9BE8 / 練習 #3FD08A）。ロール識別色とは別物。
+
+### やったこと
+- **page.tsx**: `.dark`→`.theme-matchpoint`。パンくず＋ヒーロー（kicker「チーム日程」＋タイトル「日程」＋イベント名＋**種別凡例チップ**〔件数付き・`LegendChip`〕＋注記）。**buildScheduleItems・canManage 判定は不変**。
+- **schedule-list.tsx**: **日付ブロック**（M/D(曜)＋時刻＋年）＋種別の左アクセント帯/色ドット/バッジの行カード。他チーム公式戦は減光（emphasis=other）、消化済みセクションは薄く。公式戦（自チーム）に**「自動生成」ロック表示**、scrim/practice に編集✎/削除🗑 アイコンボタン。配信リンクは消化済みで「アーカイブを見る」。登録/編集モーダルを上質化（blur・ヘッダー・**種別セグメント `KindOption`**・`.mp-form` 入力・フッター）。**DateTimePicker（既存）・送信 name（kind/scheduledAt/opponentName/memo）・scrim のみ相手欄・成功で閉じる・confirm 削除・editable/canManage ゲートは不変**。
+
+### 案と現行のギャップ（現行を優先）
+- 立場切替セグメント（view-switch）・toast はデモ専用/新規基盤なので不採用。案の独自 DateTimePicker でなく既存コンポーネントを使用。案の `esc()` 文字列組み立ては移植せず React 自動エスケープに任せる（dangerouslySetInnerHTML 禁止・CLAUDE.md）。相手 maxLength は現行 schema の 60 を維持（案は 40）。
+
+### コードレビュー（/code-review high）→ 指摘なし
+- 8アングルで精査。JST 変換・Server Action バインド・送信 name・権限ゲート・種別分岐・confirm 削除を維持。追加要素（自動生成ロック・アーカイブ表記・メモ折り返し）は表示の質向上で回帰なし。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 378 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright・主催者視点）**: scrims/matches が実データ空だったため**テストデータ（scrim 3件〔スクリム/練習・未消化/消化済み〕＋公式戦 1件〔配信付き〕）を REST 投入 → 確認 → 全削除で原状復帰**（scrims 0・sched付きmatches 0 に戻したことを確認）。ヒーロー凡例・日付ブロック・種別バッジ/左帯・自動生成ロック・配信リンク・消化済み・モーダル（種別セグメント・日時プリフィル・練習で相手欄が消える分岐）を確認。**保存/削除の書き込みは実行せず**。
+
+### 次にやること
+- 残り運用画面: `/notifications`（通知一覧）。その後 `/series` 3画面・`/login`。引き継ぎメモの優先度を更新。
+
+---
+
 ## 2026-07-11 — デザイン刷新 運用画面: 自分のイベント一覧（主催者）
 
 自分のイベント一覧（`/events/mine`）を Claude Design 案（`.theme-matchpoint`）で刷新。刷新済みの公開イベント一覧（`/events`）の姉妹画面として作法を完全に揃えた。**遷移規則・取得ロジックは不変・UI とフィルタ整形のみ**。案HTMLは `docs/design-refs/mine-organizer.html`（軽量版）に保管。

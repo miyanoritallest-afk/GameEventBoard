@@ -46,26 +46,53 @@ export default async function SchedulePage({
     now: new Date(),
   });
 
+  // 種別ごとの件数（凡例チップ用）。取得済みの items を数えるだけ。
+  const kindCounts = {
+    match: items.filter((i) => i.kind === "match").length,
+    scrim: items.filter((i) => i.kind === "scrim").length,
+    practice: items.filter((i) => i.kind === "practice").length,
+  };
+
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="theme-matchpoint min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">日程</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
-          </div>
+        {/* パンくず */}
+        <nav className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
+          <Link href="/events" className="hover:text-foreground">
+            イベント一覧
+          </Link>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
           <Link
             href={`/events/${event.slug ?? id}`}
-            className="shrink-0 text-sm text-muted-foreground hover:underline"
+            className="max-w-[16rem] truncate hover:text-foreground"
           >
-            ← イベントへ
+            {event.title}
           </Link>
-        </div>
+          <span className="text-[color:var(--mp-fg-subtle)]">/</span>
+          <span className="text-foreground">日程</span>
+        </nav>
 
-        <p className="mt-3 text-xs text-muted-foreground">
-          公式戦（🔴）・スクリム（🔵）・練習（🟢）の予定です。スクリム/練習はチームメンバーなら
-          誰でも登録でき、チーム全員に共有されます。
-        </p>
+        {/* ヒーロー：kicker・タイトル・イベント名・種別凡例チップ */}
+        <header className="mt-5 overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e2)]">
+          <p className="flex items-center gap-[9px] font-mono text-[11px] uppercase tracking-[0.2em] text-[color:var(--mp-accent)] before:h-0.5 before:w-[22px] before:bg-[color:var(--mp-accent)] before:content-['']">
+            チーム日程
+          </p>
+          <h1 className="mt-2.5 text-2xl font-extrabold tracking-tight text-foreground">
+            日程
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">{event.title}</p>
+
+          {/* 種別凡例（件数付き） */}
+          <div className="mt-5 flex flex-wrap gap-2.5">
+            <LegendChip color="#F2596B" emoji="🔴" label="公式戦" count={kindCounts.match} />
+            <LegendChip color="#4C9BE8" emoji="🔵" label="スクリム" count={kindCounts.scrim} />
+            <LegendChip color="#3FD08A" emoji="🟢" label="練習" count={kindCounts.practice} />
+          </div>
+
+          <p className="mt-4 text-xs leading-relaxed text-[color:var(--mp-fg-subtle)]">
+            公式戦は本戦の対戦表から自動生成され、この画面では編集できません。スクリム/練習はチームメンバーなら誰でも登録でき、チーム全員に共有されます。
+          </p>
+        </header>
 
         <ScheduleList
           eventId={id}
@@ -74,5 +101,33 @@ export default async function SchedulePage({
         />
       </div>
     </div>
+  );
+}
+
+/** 種別凡例チップ（色ドット＋ラベル＋件数）。 */
+function LegendChip({
+  color,
+  emoji,
+  label,
+  count,
+}: {
+  color: string;
+  emoji: string;
+  label: string;
+  count: number;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-full border bg-[color:var(--mp-surface)] px-3 py-1.5 text-xs font-semibold text-foreground"
+      style={{ borderColor: `color-mix(in oklab, ${color} 32%, transparent)` }}
+    >
+      <span aria-hidden className="text-[11px]">
+        {emoji}
+      </span>
+      {label}
+      <span className="font-mono text-[11px] tabular-nums text-[color:var(--mp-fg-subtle)]">
+        {count}
+      </span>
+    </span>
   );
 }
