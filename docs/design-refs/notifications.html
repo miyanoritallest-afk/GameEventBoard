@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — 通知</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] @font-face 除去 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --success:#34D399; --warning:#F5B93D; --live:#22D3EE; --danger:#F65C4E; --info:#6AA8FF;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 32px rgba(0,0,0,.5);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.6;
+    font-feature-settings:"palt" 1;
+    background:
+      radial-gradient(1100px 520px at 86% -8%, rgba(255,106,43,.09), transparent 58%),
+      radial-gradient(820px 460px at 4% 2%, rgba(34,211,238,.06), transparent 54%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── Site header ── */
+  .site-header { border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(20,26,36,.72),rgba(11,14,20,.72)); backdrop-filter:blur(8px); position:sticky; top:0; z-index:40; }
+  .header-inner { max-width:780px; margin:0 auto; padding:0 34px; height:60px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand-nav { display:flex; align-items:center; gap:34px; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+  .brand-nav nav { display:flex; gap:22px; font-size:13.5px; color:var(--fg-muted); }
+  .brand-nav nav a.active { color:var(--fg); font-weight:500; }
+  .brand-nav nav a:hover { color:var(--fg); }
+  .header-right { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+  .bell { position:relative; width:36px; height:36px; display:grid; place-items:center; border-radius:var(--r-md); cursor:pointer; color:var(--fg); }
+  .bell.active { background:var(--surface-2); color:var(--brand); }
+  .bell:hover { background:var(--surface-2); }
+  .bell svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+  .bell .count { position:absolute; top:-1px; right:-1px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger); color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 2px var(--bg); }
+  .header-user { display:inline-flex; align-items:center; gap:9px; }
+  .header-user .av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#5865F2,#3B45B5); display:grid; place-items:center; font-family:var(--font-sans); font-size:11px; font-weight:700; color:#fff; }
+  .header-user .nm { color:var(--fg); font-weight:500; }
+
+  /* ── Buttons ── */
+  .btn { font-family:var(--font-sans); font-weight:600; border-radius:var(--r-md); border:1px solid transparent; cursor:pointer; transition:background .15s,border-color .15s,transform .05s,box-shadow .15s,color .15s; display:inline-flex; align-items:center; justify-content:center; gap:7px; line-height:1; white-space:nowrap; }
+  .btn:active { transform:translateY(1px); }
+  .btn-ghost { background:transparent; color:var(--fg-muted); border-color:var(--border); }
+  .btn-ghost:hover { background:var(--surface); color:var(--fg); }
+  .btn-secondary { background:var(--surface-3); color:var(--fg); border-color:var(--border-strong); }
+  .btn-secondary:hover { background:var(--surface-2); border-color:var(--fg-subtle); }
+  .btn-md { font-size:13px; padding:9px 15px; }
+  .btn-sm { font-size:12.5px; padding:7px 13px; }
+
+  /* ── Page shell ── */
+  .page { max-width:780px; margin:0 auto; padding:26px 34px 100px; }
+  .crumb { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg-muted); margin-bottom:22px; flex-wrap:wrap; }
+  .crumb a { color:var(--fg-muted); }
+  .crumb a:hover { color:var(--fg); }
+  .crumb .sep { color:var(--fg-subtle); }
+  .crumb .cur { color:var(--fg); }
+
+  /* ── Hero ── */
+  .hero { border:1px solid var(--border); border-radius:var(--r-2xl); background:linear-gradient(160deg,var(--surface-2),var(--surface) 58%); box-shadow:var(--e2); overflow:hidden; position:relative; }
+  .hero::before { content:""; position:absolute; inset:0; background:radial-gradient(600px 220px at 92% 0%, rgba(255,106,43,.13), transparent 62%); pointer-events:none; }
+  .hero-body { padding:26px 30px 28px; position:relative; }
+  .hero-top { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; display:flex; align-items:center; gap:9px; }
+  .kicker::before { content:""; width:22px; height:2px; background:var(--accent); }
+  h1.page-title { font-family:var(--font-sans); font-weight:800; font-size:28px; line-height:1.16; letter-spacing:-.02em; margin:0; }
+  .hero-sub { color:var(--fg-muted); font-size:13px; margin:12px 0 0; max-width:440px; line-height:1.65; }
+
+  /* unread count chip */
+  .unread-chip { display:inline-flex; align-items:center; gap:11px; padding:11px 17px 11px 13px; border-radius:var(--r-lg); flex:none; border:1px solid var(--border); background:var(--surface); }
+  .unread-chip.has { border-color:rgba(255,106,43,.34); background:linear-gradient(180deg,rgba(255,106,43,.07),var(--surface)); }
+  .unread-chip .ic { width:30px; height:30px; border-radius:var(--r-md); display:grid; place-items:center; flex:none; background:var(--surface-3); color:var(--fg-subtle); }
+  .unread-chip.has .ic { background:rgba(255,106,43,.14); color:var(--brand); }
+  .unread-chip .ic svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+  .unread-chip .txt { display:flex; flex-direction:column; line-height:1.2; }
+  .unread-chip .num { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:20px; font-weight:600; color:var(--fg); }
+  .unread-chip.has .num { color:var(--brand); }
+  .unread-chip .lab { font-size:11px; color:var(--fg-muted); margin-top:2px; }
+
+  /* ── list header ── */
+  .list-head { display:flex; align-items:baseline; gap:10px; margin:32px 0 14px; }
+  .list-head .bar { width:3px; height:16px; border-radius:2px; background:var(--brand); position:relative; top:2px; }
+  .list-head h2 { font-family:var(--font-sans); font-weight:800; font-size:16px; letter-spacing:-.01em; margin:0; }
+  .list-head .c { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:13px; font-weight:600; color:var(--fg-subtle); }
+  .list-head .sub { margin-left:auto; font-size:12px; color:var(--fg-subtle); }
+
+  .notif-list { display:flex; flex-direction:column; gap:10px; }
+
+  /* ── notification row (whole card = button) ── */
+  .nt { position:relative; width:100%; text-align:left; display:flex; align-items:flex-start; gap:15px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xl); box-shadow:var(--e1); padding:16px 20px 16px 21px; overflow:hidden; font-family:inherit; color:inherit; transition:border-color .14s, background .14s, transform .05s; }
+  .nt::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:transparent; }
+  /* unread: brand accent bar + emphasized surface */
+  .nt.unread { background:linear-gradient(100deg,rgba(255,106,43,.06),var(--surface) 34%); border-color:rgba(255,106,43,.26); }
+  .nt.unread::before { background:var(--brand); }
+  /* clickable (has link) */
+  .nt.linked { cursor:pointer; }
+  .nt.linked:hover { border-color:var(--border-strong); background:var(--surface-2); }
+  .nt.unread.linked:hover { border-color:rgba(255,106,43,.42); }
+  .nt.linked:active { transform:translateY(1px); }
+  /* no link: still clickable to mark read, but no hover lift */
+  .nt.nolink { cursor:pointer; }
+  .nt:focus-visible { outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(255,106,43,.2); }
+
+  /* bell icon (common — no type variants) */
+  .nt-ic { position:relative; width:40px; height:40px; border-radius:50%; flex:none; display:grid; place-items:center; background:var(--surface-3); border:1px solid var(--border); color:var(--fg-subtle); margin-top:1px; }
+  .nt.unread .nt-ic { background:rgba(255,106,43,.12); border-color:rgba(255,106,43,.32); color:var(--brand); }
+  .nt-ic svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  /* unread blue/brand dot on the bell */
+  .nt-ic .udot { position:absolute; top:-1px; right:-1px; width:11px; height:11px; border-radius:50%; background:var(--brand); box-shadow:0 0 8px var(--brand), 0 0 0 2px var(--surface); }
+  .nt.unread .nt-ic .udot { box-shadow:0 0 8px var(--brand), 0 0 0 2px #1e1712; }
+
+  .nt-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; }
+  .nt-title { font-family:var(--font-sans); font-size:14.5px; font-weight:600; color:var(--fg-muted); line-height:1.4; word-break:break-word; }
+  .nt.unread .nt-title { color:var(--fg); font-weight:700; }
+  .nt-body { font-size:13px; color:var(--fg-subtle); line-height:1.6; word-break:break-word; white-space:pre-wrap; }
+  .nt.unread .nt-body { color:var(--fg-muted); }
+
+  .nt-side { flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:8px; padding-left:6px; }
+  .nt-time { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:11.5px; color:var(--fg-subtle); white-space:nowrap; text-align:right; line-height:1.4; }
+  .nt-time .rel { display:block; color:var(--fg-muted); font-size:11px; margin-bottom:2px; }
+  .nt.unread .nt-time .rel { color:var(--fg); }
+  .nt-arrow { color:var(--fg-subtle); display:grid; place-items:center; }
+  .nt.linked:hover .nt-arrow { color:var(--brand); }
+  .nt-arrow svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:transform .14s, color .14s; }
+  .nt.linked:hover .nt-arrow svg { transform:translateX(2px); }
+
+  /* ── empty state ── */
+  .empty { display:none; flex-direction:column; align-items:center; text-align:center; padding:64px 24px; background:var(--surface); border:1px dashed var(--border-strong); border-radius:var(--r-2xl); }
+  .empty.show { display:flex; }
+  .empty .ei { width:56px; height:56px; border-radius:50%; display:grid; place-items:center; background:var(--surface-3); border:1px solid var(--border); margin-bottom:16px; color:var(--fg-subtle); }
+  .empty .ei svg { width:26px; height:26px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .empty h3 { font-family:var(--font-sans); font-weight:700; font-size:16px; margin:0; color:var(--fg); }
+  .empty p { font-size:13px; color:var(--fg-muted); margin:8px 0 0; max-width:340px; }
+
+  /* toast */
+  #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:200; background:var(--surface-2); border:1px solid var(--border-strong); color:var(--fg); font-size:13px; padding:11px 17px; border-radius:var(--r-lg); box-shadow:var(--e3); opacity:0; transition:opacity .25s; pointer-events:none; display:flex; align-items:center; gap:9px; }
+  #toast .ti { width:16px; height:16px; flex:none; }
+
+  @media (max-width:560px){
+    .header-inner, .page { padding-left:20px; padding-right:20px; }
+    .brand-nav nav { display:none; }
+    .nt { flex-wrap:nowrap; }
+    .nt-side { padding-left:2px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand-nav">
+      <span class="logo"><span class="dot"></span>Matchpoint</span>
+      <nav>
+        <a href="#">イベント一覧</a>
+        <a href="#">イベント作成</a>
+        <a href="#">マイページ</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <span class="bell active" title="通知">
+        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+        <span class="count mono" id="hdrCount">0</span>
+      </span>
+      <span class="header-user"><span class="av">NO</span><span class="nm">nori#1121</span></span>
+      <button class="btn btn-ghost btn-sm">ログアウト</button>
+    </div>
+  </div>
+</header>
+
+<main class="page" data-screen-label="通知一覧">
+
+  <nav class="crumb">
+    <a href="#">マイページ</a>
+    <span class="sep">/</span>
+    <span class="cur">通知</span>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-body">
+      <div class="hero-top">
+        <div>
+          <p class="kicker">お知らせ · Notifications</p>
+          <h1 class="page-title">通知</h1>
+          <p class="hero-sub">あなた宛てのお知らせを新しい順に表示します。未読の通知を開くと既読になります。</p>
+        </div>
+
+        <div class="unread-chip" id="unreadChip">
+          <span class="ic"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"></path></svg></span>
+          <span class="txt"><span class="num" id="unreadNum">0</span><span class="lab">未読</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LIST -->
+  <div class="list-head">
+    <span class="bar"></span>
+    <h2>すべての通知</h2>
+    <span class="c" id="listCount"></span>
+    <span class="sub">新しい順</span>
+  </div>
+
+  <div class="notif-list" id="notifList"></div>
+
+  <div class="empty" id="emptyState">
+    <span class="ei"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"></path></svg></span>
+    <h3>通知はまだありません。</h3>
+    <p>あなた宛てのお知らせが届くと、ここに新しい順で表示されます。</p>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+  /* ═══════════ SERVER-SIDE CONTEXT (contract — do not change) ═══════════
+     本人専用の一覧。各通知が持つのは title / body(任意) / link_url(任意)
+     / is_read / created_at のみ。種別(type)は無い → 共通ベルで統一・色分けしない。
+     現在時刻は相対表示の基準（JST）。 */
+  var NOW = new Date('2026-07-13T21:30:00+09:00');
+
+  /* newest-first で来る前提の自分宛て通知（seed）。id は行の識別用のみ。 */
+  var notifications = [
+    { id:'n1', title:'「第7回 Matchpoint Open」にあなたの応募が承認されました',
+      body:'参加が確定しました。チーム編成が公開されたら通知します。',
+      link_url:'#event-detail', is_read:false, created_at:'2026-07-13T20:12:00+09:00' },
+    { id:'n2', title:'新しいスクリムの予定が追加されました（7/15 21:00 vs Team Nova）',
+      body:'集合は20:45、VC必須。マップは当日調整します。',
+      link_url:'#schedule', is_read:false, created_at:'2026-07-13T18:40:00+09:00' },
+    { id:'n3', title:'フォロー中のイベント「第7回 Matchpoint Open」の募集締切が近づいています',
+      body:null, link_url:'#event-detail', is_read:false, created_at:'2026-07-13T09:05:00+09:00' },
+    { id:'n4', title:'あなたのスコアが主催者によって更新されました',
+      body:'適用スコアが 3,540 に変更されました。詳細は応募者一覧から確認できます。',
+      link_url:'#registrations', is_read:true, created_at:'2026-07-12T22:18:00+09:00' },
+    { id:'n5', title:'プロフィールのバトルタグを確認してください',
+      body:'一部のシーズンでランク申告が未入力です。マイページから更新できます。',
+      link_url:null, is_read:true, created_at:'2026-07-12T11:47:00+09:00' },
+    { id:'n6', title:'ブロック分けが公開されました。あなたはブロックAに割り当てられました',
+      body:null, link_url:'#blocks', is_read:true, created_at:'2026-07-11T19:30:00+09:00' },
+    { id:'n7', title:'決勝トーナメントの組み合わせが確定しました',
+      body:'観戦ビューから最新のトーナメント表を確認できます。',
+      link_url:'#tournament', is_read:true, created_at:'2026-07-10T21:02:00+09:00' }
+  ];
+
+  var listEl  = document.getElementById('notifList');
+  var emptyEl = document.getElementById('emptyState');
+
+  /* ── created_at → JST 表示（絶対＋相対） ── */
+  var JP_DOW = ['日','月','火','水','木','金','土'];
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function toJST(iso){
+    // +09:00 付き ISO をそのまま JST の壁時計として読む
+    var m = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    return { y:+m[1], mo:+m[2], d:+m[3], h:+m[4], mi:+m[5], date:new Date(iso) };
+  }
+  function absLabel(iso){
+    var t = toJST(iso);
+    return t.y + '/' + pad(t.mo) + '/' + pad(t.d) + ' ' + pad(t.h) + ':' + pad(t.mi);
+  }
+  function relLabel(iso){
+    var diff = Math.floor((NOW.getTime() - new Date(iso).getTime()) / 1000);
+    if(diff < 60)      return 'たった今';
+    if(diff < 3600)    return Math.floor(diff/60) + '分前';
+    if(diff < 86400)   return Math.floor(diff/3600) + '時間前';
+    if(diff < 604800)  return Math.floor(diff/86400) + '日前';
+    var t = toJST(iso);
+    return (t.mo) + '月' + (t.d) + '日';
+  }
+
+  /* ── icons (共通ベルのみ) ── */
+  var BELL = '<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
+  var ARROW = '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+
+  /* ── counts ── */
+  function refreshCounts(){
+    var unread = notifications.filter(function(n){ return !n.is_read; }).length;
+    var total  = notifications.length;
+    document.getElementById('unreadNum').textContent  = unread;
+    document.getElementById('hdrCount').textContent   = unread;
+    document.getElementById('listCount').textContent  = '(' + total + ')';
+    document.getElementById('hdrCount').style.display = unread ? '' : 'none';
+    document.getElementById('unreadChip').classList.toggle('has', unread > 0);
+  }
+
+  /* ── build one row (createElement + textContent → XSS-safe / innerHTML で組み立てない) ── */
+  function buildRow(n){
+    var hasLink = !!n.link_url;
+
+    var row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'nt ' + (n.is_read ? '' : 'unread ') + (hasLink ? 'linked' : 'nolink');
+    row.dataset.id = n.id;
+
+    // bell icon (+ unread dot)
+    var ic = document.createElement('span');
+    ic.className = 'nt-ic';
+    ic.innerHTML = BELL;                       // 固定マークアップ（ユーザー入力なし）
+    if(!n.is_read){
+      var dot = document.createElement('span'); dot.className = 'udot'; ic.appendChild(dot);
+    }
+    row.appendChild(ic);
+
+    // main: title (+ optional body) — textContent でエスケープ
+    var main = document.createElement('div'); main.className = 'nt-main';
+    var title = document.createElement('div'); title.className = 'nt-title';
+    title.textContent = n.title;
+    main.appendChild(title);
+    if(n.body){
+      var body = document.createElement('div'); body.className = 'nt-body';
+      body.textContent = n.body;
+      main.appendChild(body);
+    }
+    row.appendChild(main);
+
+    // side: time (+ arrow if link)
+    var side = document.createElement('div'); side.className = 'nt-side';
+    var time = document.createElement('div'); time.className = 'nt-time';
+    var rel = document.createElement('span'); rel.className = 'rel'; rel.textContent = relLabel(n.created_at);
+    time.appendChild(rel);
+    time.appendChild(document.createTextNode(absLabel(n.created_at)));
+    side.appendChild(time);
+    if(hasLink){
+      var arrow = document.createElement('span'); arrow.className = 'nt-arrow'; arrow.innerHTML = ARROW;
+      side.appendChild(arrow);
+    }
+    row.appendChild(side);
+
+    return row;
+  }
+
+  function render(){
+    listEl.innerHTML = '';
+    if(notifications.length === 0){
+      emptyEl.classList.add('show');
+    } else {
+      emptyEl.classList.remove('show');
+      notifications.forEach(function(n){ listEl.appendChild(buildRow(n)); });
+    }
+    refreshCounts();
+  }
+
+  /* ── click: 未読なら既読化（楽観的）＋ link_url があれば遷移 / 無ければ既読化のみ ── */
+  function markReadOptimistic(n, rowEl){
+    if(n.is_read) return;
+    n.is_read = true;                          // 楽観的更新
+    rowEl.classList.remove('unread');
+    var d = rowEl.querySelector('.nt-ic .udot'); if(d) d.remove();
+    refreshCounts();
+    // 実サーバーでは markRead(n.id) を投げ、失敗時のみ巻き戻す（挙動は不変）
+  }
+
+  listEl.addEventListener('click', function(e){
+    var rowEl = e.target.closest('.nt'); if(!rowEl) return;
+    var n = notifications.find(function(x){ return x.id === rowEl.dataset.id; }); if(!n) return;
+
+    markReadOptimistic(n, rowEl);
+
+    if(n.link_url){
+      // 実装では location.href = n.link_url。デモではトーストで遷移を示す。
+      flash('リンク先へ移動します');
+    }
+  });
+
+  /* toast */
+  var toastT;
+  function flash(msg){
+    var el = document.getElementById('toast');
+    el.innerHTML = '<span class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>' + msg;
+    el.style.opacity = '1'; clearTimeout(toastT); toastT = setTimeout(function(){ el.style.opacity='0'; }, 1700);
+  }
+
+  render();
+})();
+</script>
+
+
+</body></html>

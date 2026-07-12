@@ -7,6 +7,37 @@
 
 ---
 
+## 2026-07-13 — デザイン刷新 運用画面: 通知一覧（運用画面フェーズ完了）
+
+通知一覧ページ（`/notifications`）を Claude Design 案（`.theme-matchpoint`）で刷新。**運用画面フェーズ（registrations / mine / schedule / notifications）の最後**。**判定・保存ロジック（Server Action `markRead`・クリック既読化＋遷移・XSS 対策）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/notifications.html`（軽量版）に保管。
+
+### 情報設計の壁打ち（2論点を確定）
+- **行カード＋未読サマリー**（未読を左帯＋ブランド背景で強調・既読は控えめ）。通知に**種別（type）列は無い**（notifications テーブルは title/body/link_url/is_read/created_at のみ）ので**共通ベルアイコンで統一・色分けしない**（テキストからの推測もしない）。
+- **「すべて既読にする」は追加しない**（新規 Server Action が要る＝今回の「UI のみ」スコープ外）。
+- 日時は**絶対日時のみ**（相対時刻は現在時刻依存で hydration mismatch/分ズレのリスクがあり見送り）。
+
+### やったこと
+- **page.tsx**: `.dark`→`.theme-matchpoint`。パンくず＋ヒーロー（kicker「お知らせ」＋タイトル「通知」＋補足＋**未読件数チップ**〔取得済み配列を is_read=false で数えるだけ・未読ありでブランド強調〕）。リスト見出し＋空状態を刷新（共通 `BellIcon`）。**本人専用リダイレクト・listMyNotifications は不変**。
+- **notification-item.tsx**: 行カード（ベルアイコン＋未読は青ドット・未読=左アクセント帯＋強調背景・既読=通常）。title は太さ、body は任意、日時 mono、link ありで矢印＋hover。**handleClick（未読なら楽観的既読→markRead→link_url へ push・link 無しは既読化のみ）・XSS（title/body は React 自動エスケープ・innerHTML で組み立てない）は現行を厳密踏襲**。
+
+### 案と現行のギャップ（現行を優先）
+- サイトヘッダー・ヘッダー通知バッジ・toast はデモ専用/新規基盤で不採用。相対時刻・イベント委譲（案は listEl に addEventListener）は採らず、現行の React 各アイテム onClick を維持。案の DOM 構築（createElement+textContent）は React 自動エスケープに置き換え。
+
+### コードレビュー（/code-review high）→ 指摘なし
+- 8アングルで精査。handleClick・XSS・未読/既読分岐・link 矢印ゲート・props 契約を維持。ベル SVG/チップの軽微な重複は既知の共通化 follow-up と同テーマで許容。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 378 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright・のり視点）**: 通知が実データ空だったため**テストデータ（notification_events 6＋notifications 6件〔未読3/既読3・link あり/なし・body あり/なし〕）を REST 投入 → 確認 → 全削除で原状復帰**（notifications 0・test events 0）。ヒーロー未読チップ・未読/既読の見た目分岐・link 矢印・body 有無を確認。**未読1件をクリック → link 先へ遷移 → 戻ると既読化され未読 3→2**（markRead が効いていることを実証）。
+
+### デザイン刷新の進捗
+運用画面フェーズ完了。**刷新済み16 / 未刷新4**（残り: `/series` 3画面・`/login`）。
+
+### 次にやること
+- 残り: `/series` 3画面（一覧/詳細/作成・まとめて刷新が効率的）、`/login`（軽い・単独）。次はシリーズ3画面 or login。
+
+---
+
 ## 2026-07-12 — デザイン刷新 運用画面: 日程・スクリム予定
 
 チーム日程ページ（`/events/[id]/schedule`）を Claude Design 案（`.theme-matchpoint`）で刷新。公式戦/スクリム/練習を種別色分けで時系列に並べるリスト＋登録/編集モーダル。**判定・保存ロジック（Server Action `createScrim`/`editScrim`/`removeScrim`・Zod・`buildScheduleItems` の並び替え/消化ライン/濃淡判定）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/schedule-team.html`（軽量版）に保管。
