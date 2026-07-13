@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ログイン — Matchpoint</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] @font-face 除去 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --discord:#5865F2; --discord-hover:#6b76f5; --discord-press:#4a54d6;
+    --success:#34D399; --warning:#F5B93D; --danger:#F65C4E;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 40px rgba(0,0,0,.55);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.7;
+    font-feature-settings:"palt" 1;
+    background:var(--bg);
+    min-height:100vh; display:flex; flex-direction:column;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── minimal header (brand only) ── */
+  .site-header { position:relative; z-index:20; }
+  .header-inner { max-width:1152px; margin:0 auto; padding:26px 32px 0; display:flex; align-items:center; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+
+  /* ── stage ── */
+  .stage {
+    position:relative; overflow:hidden;
+    flex:1; display:flex; align-items:center; justify-content:center;
+    padding:56px 24px 72px;
+  }
+  .stage::before {
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(1100px 620px at 72% -8%, rgba(255,106,43,.22), transparent 56%),
+      radial-gradient(860px 560px at 8% 108%, rgba(34,211,238,.12), transparent 54%),
+      linear-gradient(180deg, rgba(11,14,20,0), rgba(11,14,20,.55));
+  }
+  .stage::after {
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.4;
+    background-image:linear-gradient(rgba(41,50,63,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(41,50,63,.5) 1px,transparent 1px);
+    background-size:52px 52px;
+    -webkit-mask-image:radial-gradient(760px 520px at 50% 40%, #000 12%, transparent 70%);
+            mask-image:radial-gradient(760px 520px at 50% 40%, #000 12%, transparent 70%);
+  }
+
+  /* ── card ── */
+  .card {
+    position:relative; z-index:1; width:100%; max-width:432px;
+    background:linear-gradient(180deg,var(--surface-2),var(--surface));
+    border:1px solid var(--border-strong);
+    border-radius:var(--r-2xl);
+    box-shadow:var(--e3), 0 0 0 1px rgba(255,255,255,.02) inset;
+    padding:40px 40px 34px;
+  }
+  .card::before {
+    content:""; position:absolute; left:0; right:0; top:0; height:2px; border-radius:var(--r-2xl) var(--r-2xl) 0 0;
+    background:linear-gradient(90deg,transparent, var(--brand) 45%, var(--accent) 88%, transparent);
+    opacity:.7;
+  }
+
+  .card-logo { display:inline-flex; align-items:center; gap:11px; font-family:var(--font-sans); font-weight:800; font-size:20px; letter-spacing:-.02em; color:var(--fg); }
+  .card-logo .dot { width:11px; height:11px; border-radius:50%; background:var(--brand); box-shadow:0 0 16px 2px var(--brand); }
+
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); margin:28px 0 0; display:flex; align-items:center; gap:9px; }
+  .kicker::before { content:""; width:20px; height:2px; background:var(--accent); }
+  h1.card-title { font-family:var(--font-sans); font-weight:800; font-size:30px; line-height:1.12; letter-spacing:-.025em; margin:10px 0 0; }
+  .card-lede { font-size:14px; line-height:1.75; color:var(--fg-muted); margin:14px 0 0; text-wrap:pretty; }
+
+  /* ── discord button ── */
+  .btn { font-family:var(--font-sans); font-weight:600; border-radius:var(--r-md); border:1px solid transparent; cursor:pointer; transition:background .15s,border-color .15s,transform .05s,box-shadow .15s,opacity .15s; display:inline-flex; align-items:center; justify-content:center; gap:10px; line-height:1; white-space:nowrap; text-decoration:none; }
+  .btn:active { transform:translateY(1px); }
+  .btn-discord {
+    width:100%; margin-top:28px; font-size:15px; padding:15px 22px;
+    background:var(--discord); color:#fff;
+    box-shadow:0 0 0 1px rgba(88,101,242,.4),0 8px 22px rgba(88,101,242,.28);
+  }
+  .btn-discord:hover { background:var(--discord-hover); }
+  .btn-discord:active { background:var(--discord-press); }
+  .btn-discord:disabled { cursor:progress; opacity:.7; }
+  .btn-discord:disabled:active { transform:none; }
+  .discord-ic { width:21px; height:21px; flex:none; }
+  .spinner { width:17px; height:17px; flex:none; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .note { font-size:12px; line-height:1.7; color:var(--fg-subtle); margin:16px 0 0; text-align:center; text-wrap:pretty; }
+  .note a { color:var(--fg-muted); text-decoration:underline; text-underline-offset:2px; text-decoration-color:var(--border-strong); }
+  .note a:hover { color:var(--fg); }
+
+  /* ── error ── */
+  .error {
+    display:none; margin-top:20px; align-items:flex-start; gap:10px;
+    background:rgba(246,92,78,.09); border:1px solid rgba(246,92,78,.32);
+    border-radius:var(--r-md); padding:12px 14px;
+    font-size:12.5px; line-height:1.6; color:#FCA79E;
+  }
+  .error.show { display:flex; }
+  .error .ic { flex:none; font-size:14px; line-height:1.4; }
+
+  .divider { display:flex; align-items:center; gap:12px; margin-top:26px; color:var(--fg-subtle); font-family:var(--font-mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; }
+  .divider::before, .divider::after { content:""; height:1px; flex:1; background:var(--border); }
+
+  .back-home { display:block; text-align:center; margin-top:20px; font-size:13px; color:var(--fg-muted); font-family:var(--font-sans); }
+  .back-home:hover { color:var(--brand); }
+
+  @media (max-width:520px){
+    .card { padding:34px 26px 30px; }
+    h1.card-title { font-size:26px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="Matchpoint トップ（ランディング）.html" class="logo"><span class="dot"></span>Matchpoint</a>
+  </div>
+</header>
+
+<main class="stage" data-screen-label="ログイン">
+  <div class="card">
+    <div class="card-logo"><span class="dot"></span>Matchpoint</div>
+
+    <p class="kicker">Sign in</p>
+    <h1 class="card-title">ログイン</h1>
+    <p class="card-lede">Discord アカウントでログインして、大会に参加したり、自分のイベントを主催しよう。</p>
+
+    <button type="button" class="btn btn-discord" id="loginBtn" aria-live="polite">
+      <svg class="discord-ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.27 5.33A16.6 16.6 0 0 0 15.1 4l-.2.4a12.5 12.5 0 0 1 3.7 1.9 13.9 13.9 0 0 0-11.2 0A12.5 12.5 0 0 1 11.1 4.4L10.9 4a16.6 16.6 0 0 0-4.17 1.33C4.1 9.24 3.4 13.05 3.75 16.8a16.7 16.7 0 0 0 5.06 2.56l.42-.6c-.7-.26-1.36-.58-1.98-.96l.16-.12a11.9 11.9 0 0 0 9.18 0l.16.12c-.62.38-1.28.7-1.98.96l.42.6a16.7 16.7 0 0 0 5.06-2.56c.42-4.35-.68-8.13-2.98-11.47ZM9.68 14.5c-.98 0-1.79-.9-1.79-2s.79-2 1.79-2 1.8.9 1.79 2c0 1.1-.8 2-1.79 2Zm4.64 0c-.98 0-1.79-.9-1.79-2s.79-2 1.79-2 1.8.9 1.79 2c0 1.1-.79 2-1.79 2Z"></path></svg>
+      <span id="loginLabel">Discord でログイン</span>
+    </button>
+
+    <div class="error" id="errorBox" role="alert">
+      <span class="ic">⚠</span>
+      <span id="errorMsg">ログインに失敗しました。時間をおいて再度お試しください。</span>
+    </div>
+
+    <p class="note">続行すると<a href="#">利用規約</a>および<a href="#">プライバシーポリシー</a>に同意したものとみなされます。</p>
+
+    <div class="divider">Matchpoint</div>
+    <a href="Matchpoint トップ（ランディング）.html" class="back-home">← トップに戻る</a>
+  </div>
+</main>
+
+<script>
+  // Standalone demo of the login button's loading behaviour.
+  // In the real app this triggers signInWithOAuth({ provider:'discord' })
+  // and redirects to the Discord authorization screen, carrying ?redirect.
+  (function () {
+    var btn = document.getElementById('loginBtn');
+    var label = document.getElementById('loginLabel');
+    var err = document.getElementById('errorBox');
+    btn.addEventListener('click', function () {
+      err.classList.remove('show');
+      btn.disabled = true;
+      var ic = btn.querySelector('.discord-ic');
+      ic.outerHTML = '<span class="spinner" aria-hidden="true"></span>';
+      label.textContent = 'リダイレクト中...';
+    });
+  })();
+</script>
+
+
+
+</body></html>
