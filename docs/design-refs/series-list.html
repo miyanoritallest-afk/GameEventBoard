@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — シリーズ一覧</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+/* [軽量版] @font-face 除去 */
+  :root {
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --brand-hover:#FF7E48; --brand-press:#E85A1E; --on-brand:#21110A;
+    --accent:#22D3EE;
+    --success:#34D399; --warning:#F5B93D; --live:#22D3EE; --danger:#F65C4E; --muted:#667084;
+    --c1:#FF6A2B; --c2:#22D3EE; --c3:#A78BFA; --c4:#34D399; --c5:#F5B93D;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45); --e3:0 12px 32px rgba(0,0,0,.5);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body {
+    margin:0; color:var(--fg); font-family:var(--font-jp); line-height:1.7;
+    font-feature-settings:"palt" 1;
+    background:
+      radial-gradient(1000px 520px at 84% -6%, rgba(255,106,43,.10), transparent 58%),
+      radial-gradient(760px 460px at 6% 2%, rgba(34,211,238,.06), transparent 54%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a { color:var(--brand); text-decoration:none; }
+  a:hover { color:var(--brand-hover); }
+  .mono { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  /* ── Site header ── */
+  .site-header { border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(20,26,36,.7),rgba(11,14,20,.7)); backdrop-filter:blur(8px); position:sticky; top:0; z-index:20; }
+  .header-inner { max-width:1152px; margin:0 auto; padding:0 32px; height:60px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .brand-nav { display:flex; align-items:center; gap:32px; }
+  .logo { font-family:var(--font-sans); font-weight:800; font-size:18px; letter-spacing:-.02em; display:inline-flex; align-items:center; gap:10px; color:var(--fg); }
+  .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); }
+  .brand-nav nav { display:flex; gap:22px; font-size:13.5px; color:var(--fg-muted); }
+  .brand-nav nav a.active { color:var(--fg); font-weight:500; }
+  .brand-nav nav a:hover { color:var(--fg); }
+  .header-right { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+  .bell { position:relative; width:36px; height:36px; display:grid; place-items:center; border-radius:var(--r-md); cursor:pointer; }
+  .bell:hover { background:var(--surface-2); }
+  .bell .count { position:absolute; top:-1px; right:-1px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger); color:#fff; font-family:var(--font-mono); font-size:10px; font-weight:600; display:grid; place-items:center; box-shadow:0 0 0 2px var(--bg); }
+  .user-name { color:var(--fg); font-weight:500; }
+
+  .btn { font-family:var(--font-sans); font-weight:600; border-radius:var(--r-md); border:1px solid transparent; cursor:pointer; transition:background .15s,border-color .15s,transform .05s,box-shadow .15s; display:inline-flex; align-items:center; justify-content:center; gap:8px; line-height:1; white-space:nowrap; }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:var(--brand); color:var(--on-brand); box-shadow:0 0 0 1px rgba(255,106,43,.35),0 6px 18px rgba(255,106,43,.2); }
+  .btn-primary:hover { background:var(--brand-hover); }
+  .btn-secondary { background:var(--surface-3); color:var(--fg); border-color:var(--border-strong); }
+  .btn-secondary:hover { background:var(--surface-2); border-color:var(--fg-subtle); }
+  .btn-ghost { background:transparent; color:var(--fg-muted); border-color:var(--border); }
+  .btn-ghost:hover { background:var(--surface); color:var(--fg); }
+  .btn-lg { font-size:15px; padding:13px 20px; }
+  .btn-md { font-size:13.5px; padding:10px 16px; }
+  .btn-sm { font-size:12.5px; padding:7px 13px; }
+
+  /* ── Layout ── */
+  .page { max-width:1152px; margin:0 auto; padding:34px 32px 80px; }
+
+  /* ── Page head ── */
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  .page-head .lhs { min-width:0; }
+  .kicker { font-family:var(--font-mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 8px; display:flex; align-items:center; gap:9px; }
+  .kicker::before { content:""; width:22px; height:2px; background:var(--accent); }
+  h1.page-title { font-family:var(--font-sans); font-weight:800; font-size:32px; line-height:1.15; letter-spacing:-.02em; margin:0; display:flex; align-items:baseline; gap:12px; }
+  h1.page-title .count { font-family:var(--font-mono); font-feature-settings:"tnum" 1; font-size:16px; font-weight:500; color:var(--fg-subtle); }
+  .page-lede { color:var(--fg-muted); font-size:14px; margin:12px 0 0; max-width:560px; }
+
+  /* ── Grid ── */
+  .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:30px; }
+  @media (max-width:1024px){ .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:640px){ .grid { grid-template-columns:1fr; } }
+
+  .se-card {
+    position:relative; display:flex; flex-direction:column;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xl);
+    padding:20px 20px 16px 22px; box-shadow:var(--e1); cursor:pointer; overflow:hidden;
+    transition:border-color .16s, transform .12s, box-shadow .16s, background .16s;
+  }
+  .se-card::before {
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:var(--sc, var(--brand)); opacity:.85; transition:opacity .16s;
+  }
+  .se-card:hover { border-color:var(--border-strong); transform:translateY(-3px); box-shadow:var(--e2); background:var(--surface-2); }
+  .se-card:hover::before { opacity:1; }
+  .se-card:active { transform:translateY(-1px); }
+
+  .se-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .se-kind { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:10.5px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; color:var(--fg-muted); }
+  .se-kind .sq { width:9px; height:9px; border-radius:3px; background:var(--sc, var(--brand)); }
+  .se-rounds-badge { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--fg); background:var(--surface-3); border:1px solid var(--border); padding:4px 10px; border-radius:999px; }
+  .se-rounds-badge .n { font-family:var(--font-mono); font-feature-settings:"tnum" 1; }
+
+  .se-title { font-family:var(--font-sans); font-weight:700; font-size:18px; line-height:1.35; letter-spacing:-.01em; color:var(--fg); margin:15px 0 0; text-wrap:pretty;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .se-desc { color:var(--fg-muted); font-size:13px; line-height:1.65; margin:9px 0 0;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; min-height:3.5em; }
+  .se-desc.empty { color:var(--fg-subtle); font-style:italic; }
+
+  .se-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); }
+  .org { display:inline-flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg-muted); min-width:0; }
+  .org-avatar { width:22px; height:22px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:10.5px; font-weight:700; color:#fff; font-family:var(--font-sans); }
+  .org .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .se-foot .go { color:var(--fg-subtle); font-size:15px; transition:color .16s, transform .16s; }
+  .se-card:hover .se-foot .go { color:var(--brand); transform:translateX(3px); }
+
+  /* ── Empty state ── */
+  .empty-demo-label { margin:64px 0 14px; display:flex; align-items:center; gap:12px; font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--fg-subtle); }
+  .empty-demo-label::after { content:""; flex:1; height:1px; background:var(--border); }
+  .empty {
+    border:1px dashed var(--border-strong); border-radius:var(--r-2xl);
+    background:linear-gradient(180deg,var(--surface),rgba(20,26,36,.4));
+    padding:64px 32px; text-align:center; display:flex; flex-direction:column; align-items:center;
+  }
+  .empty .ic { width:64px; height:64px; border-radius:var(--r-xl); background:var(--surface-3); border:1px solid var(--border-strong); display:grid; place-items:center; font-size:28px; box-shadow:var(--e1); }
+  .empty h2 { font-family:var(--font-sans); font-weight:700; font-size:19px; letter-spacing:-.01em; margin:22px 0 0; }
+  .empty p { color:var(--fg-muted); font-size:13.5px; max-width:420px; margin:10px 0 0; }
+  .empty .actions { display:flex; gap:10px; margin-top:24px; flex-wrap:wrap; justify-content:center; }
+  .empty .signin-note { font-size:12px; color:var(--fg-subtle); margin-top:16px; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand-nav">
+      <span class="logo"><span class="dot"></span>Matchpoint</span>
+      <nav>
+        <a href="#">イベント一覧</a>
+        <a href="#" class="active">シリーズ</a>
+        <a href="#">イベント作成</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <span class="bell">🔔<span class="count mono">3</span></span>
+      <span class="user-name">nori#1121</span>
+      <button class="btn btn-ghost btn-sm">ログアウト</button>
+    </div>
+  </div>
+</header>
+
+<main class="page" data-screen-label="シリーズ一覧">
+
+  <div class="page-head">
+    <div class="lhs">
+      <p class="kicker">Series</p>
+      <h1 class="page-title">シリーズ一覧 <span class="count mono">6 件</span></h1>
+      <p class="page-lede">継続して開催される企画のまとまりです。各シリーズには複数の開催回がぶら下がります。</p>
+    </div>
+    <!-- ログイン時のみ表示 -->
+    <button class="btn btn-primary btn-md">＋ シリーズを作成</button>
+  </div>
+
+  <!-- Card grid -->
+  <div class="grid">
+
+    <a class="se-card" style="--sc:var(--c1)">
+      <div class="se-top">
+        <span class="se-kind"><span class="sq"></span>Series</span>
+        <span class="se-rounds-badge"><span class="n">7</span> 回</span>
+      </div>
+      <h3 class="se-title">Matchpoint Open シリーズ</h3>
+      <p class="se-desc">Overwatch 2 コミュニティ公式戦の本流シリーズ。予選総当たりから決勝トーナメントまで、シーズンを通して開催しています。</p>
+      <div class="se-foot">
+        <span class="org"><span class="org-avatar" style="background:linear-gradient(135deg,var(--brand),#B23D12)">N</span><span class="name">nori#1121</span></span>
+        <span class="go">→</span>
+      </div>
+    </a>
+
+    <a class="se-card" style="--sc:var(--c2)">
+      <div class="se-top">
+        <span class="se-kind"><span class="sq"></span>Series</span>
+        <span class="se-rounds-badge"><span class="n">12</span> 回</span>
+      </div>
+      <h3 class="se-title">週末スクリムリーグ</h3>
+      <p class="se-desc">毎週末に開催する総当たり予選中心のリーグ。気軽な合流とロール育成を目的にしています。</p>
+      <div class="se-foot">
+        <span class="org"><span class="org-avatar" style="background:linear-gradient(135deg,#22D3EE,#0E7490)">K</span><span class="name">kaito#4402</span></span>
+        <span class="go">→</span>
+      </div>
+    </a>
+
+    <a class="se-card" style="--sc:var(--c3)">
+      <div class="se-top">
+        <span class="se-kind"><span class="sq"></span>Series</span>
+        <span class="se-rounds-badge"><span class="n">3</span> 回</span>
+      </div>
+      <h3 class="se-title">Rank Up Cup</h3>
+      <p class="se-desc">マスター帯以上限定のトーナメントシリーズ。ハイレート帯の実力者が集う短期集中フォーマット。</p>
+      <div class="se-foot">
+        <span class="org"><span class="org-avatar" style="background:linear-gradient(135deg,#A78BFA,#6D28D9)">S</span><span class="name">saya#0071</span></span>
+        <span class="go">→</span>
+      </div>
+    </a>
+
+    <a class="se-card" style="--sc:var(--c4)">
+      <div class="se-top">
+        <span class="se-kind"><span class="sq"></span>Series</span>
+        <span class="se-rounds-badge"><span class="n">5</span> 回</span>
+      </div>
+      <h3 class="se-title">初心者歓迎ミックス大会</h3>
+      <p class="se-desc">ロール抽選ありのミックス大会シリーズ。はじめての大会参加でも安心して合流できる設計です。</p>
+      <div class="se-foot">
+        <span class="org"><span class="org-avatar" style="background:linear-gradient(135deg,#34D399,#047857)">R</span><span class="name">ren#8890</span></span>
+        <span class="go">→</span>
+      </div>
+    </a>
+
+    <a class="se-card" style="--sc:var(--c5)">
+      <div class="se-top">
+        <span class="se-kind"><span class="sq"></span>Series</span>
+        <span class="se-rounds-badge"><span class="n">9</span> 回</span>
+      </div>
+      <h3 class="se-title">Matchpoint Monthly</h3>
+      <p class="se-desc">月次のレギュラーシーズン。毎月のランキングを積み上げて年間王者を決めます。</p>
+      <div class="se-foot">
+        <span class="org"><span class="org-avatar" style="background:linear-gradient(135deg,var(--brand),#B23D12)">N</span><span class="name">nori#1121</span></span>
+        <span class="go">→</span>
+      </div>
+    </a>
+
+    <a class="se-card" style="--sc:var(--c2)">
+      <div class="se-top">
+        <span class="se-kind"><span class="sq"></span>Series</span>
+        <span class="se-rounds-badge"><span class="n">2</span> 回</span>
+      </div>
+      <h3 class="se-title">深夜練習会シリーズ</h3>
+      <p class="se-desc empty">説明は未設定です。</p>
+      <div class="se-foot">
+        <span class="org"><span class="org-avatar" style="background:linear-gradient(135deg,#F5B93D,#B45309)">T</span><span class="name">taku#3310</span></span>
+        <span class="go">→</span>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ══════ 空状態のデザイン（参考表示） ══════ -->
+  <div class="empty-demo-label">空状態 · シリーズがまだ無いとき</div>
+  <div class="empty">
+    <div class="ic">🗂️</div>
+    <h2>まだシリーズがありません</h2>
+    <p>継続開催の企画をシリーズとしてまとめられます。最初のシリーズを作成して、開催回を束ねましょう。</p>
+    <div class="actions">
+      <!-- ログイン時のみ表示 -->
+      <button class="btn btn-primary btn-md">＋ 最初のシリーズを作成</button>
+    </div>
+    <p class="signin-note">※ 未ログインのときは作成ボタンは表示されません。</p>
+  </div>
+
+</main>
+
+
+
+</body></html>

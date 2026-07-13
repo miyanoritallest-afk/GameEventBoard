@@ -7,6 +7,42 @@
 
 ---
 
+## 2026-07-13 — デザイン刷新 シリーズ3画面（一覧/詳細/作成）
+
+シリーズ（継続企画）の3画面（`/series` 一覧・`/series/[id]` 詳細・`/series/new` 作成）を Claude Design 案（`.theme-matchpoint`）でまとめて刷新。**判定・保存ロジック（Server Action `createSeries`/`inviteMember`/`removeMember`/`respondInvite`/`searchInviteCandidates`・立場判定 isStaff/isOwner/isInvited）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/series-{list,detail,new}.html`（軽量版）に保管。
+
+### 情報設計の壁打ち（4論点を確定）
+- **3画面まとめて1PR**（相互遷移する小グループ・デザイン言語を揃えて一気に）。
+- **一覧＝/events 風カードグリッド**、**詳細＝1カラム・ヒーロー＋セクション**（events/[id] 作法）、**作成＝event-form 風の1カードフォーム**（.mp-form・番号カード）。
+- **管理パネル＝カード内に行＋.mp-form 検索**（現行構造維持・上質化・invitedIds/confirm 不変）。
+- **頭文字アバターを使う**（discord_avatar_url でなく名前の頭文字＋決定的グラデ・外部画像依存なし）／**メタ件数は現行が持つ分だけ**（オーナー/開催回/運営・フォロワー数はクエリ追加になるので出さない）。
+
+### やったこと
+- **series/page.tsx（一覧）**: `.dark`→`.theme-matchpoint`。見出し行（kicker「Series」＋件数＋lede＋作成ボタン〔ログイン時〕）＋カードグリッド（左アクセント帯を id から決定色・name＋説明・矢印）＋空状態（作成可否で導線変更）。**listSeries は id/name/description のみ（開催回数・オーナーを持たない）ので一覧では出さない**。
+- **series/new/page.tsx＋series-form.tsx（作成）**: パンくず＋ヒーロー＋「01 基本情報」カード（.mp-form の name/description）。**本人専用リダイレクト・createSeries・fieldErrors は不変**。
+- **series/[id]/page.tsx（詳細）**: ヒーロー（紫アクセント・SERIES＋タイトル＋FollowButton〔既存流用〕＋メタ〔オーナーアバター/開催回/運営〕＋説明＋「次の開催回を作成」〔isStaff〕）＋開催回セクション（#番号・status バッジ・矢印）＋運営メンバー（owner=管理パネル / 非owner=読み取りチップ）。**立場判定・FollowButton・?series= プリフィル導線は不変**。
+- **members-panel.tsx**: admin-note＋メンバー行（アバター・ロールチップ〔★オーナー/運営/⏳招待中〕・左アクセント帯・削除/退会/取消）＋検索招待（.mp-form・検索アイコン付き input）。**confirm 削除・検索 submit・invitedIds 管理・Server Action は不変**。
+- **invite-banner.tsx**: warning バナーを上質化（アイコン＋承認/辞退）。**respondInvite・承認/辞退ロジック不変**。
+- **avatar.tsx（新規）**: 頭文字アバターの共通コンポーネント（server/client 両対応・純粋）。page と members-panel で共有。
+
+### 案と現行のギャップ（現行を優先）
+- サイトヘッダー・toast・「シリーズを編集」ボタン（編集機能なし）・add-round 破線ボタン（「次の開催回を作成」に統一）・フォロワー数・検索リアルタイム（submit 維持）はデモ専用/現行維持で不採用。案の `esc()`/innerHTML 文字列組み立ては React 自動エスケープに置き換え（dangerouslySetInnerHTML 禁止）。
+
+### コードレビュー（/code-review high）→ 指摘なし
+- 8アングルで3画面を精査。立場ゲート・5つの Server Action バインド・confirm 削除・invitedIds・検索フロー・XSS を維持。avatar 抽出はクリーン。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 378 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright・のり視点）**: 実データ空だったため**テストデータ（シリーズ2件＋series_members〔owner=のり active／admin active／admin invited〕＋開催回2件紐付け）を REST 投入 → 確認 → 全削除で原状復帰**（シリーズ0・series_id付きevent 0）。一覧（カードグリッド・説明なしカード）、詳細（owner 視点＝ヒーローメタ・開催回・管理パネル・招待中・検索フロー〔「D30タンク盾」検索→＋招待ボタン〕）、作成フォームを確認。**招待/削除/作成の書き込みは実行せず**。
+
+### デザイン刷新の進捗
+**刷新済み19 / 未刷新1**（残り: `/login` のみ）。次で完了。
+
+### 次にやること
+- `/login`（軽い・単独）を刷新すれば**全画面のデザイン刷新が完了**。
+
+---
+
 ## 2026-07-13 — デザイン刷新 運用画面: 通知一覧（運用画面フェーズ完了）
 
 通知一覧ページ（`/notifications`）を Claude Design 案（`.theme-matchpoint`）で刷新。**運用画面フェーズ（registrations / mine / schedule / notifications）の最後**。**判定・保存ロジック（Server Action `markRead`・クリック既読化＋遷移・XSS 対策）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/notifications.html`（軽量版）に保管。
