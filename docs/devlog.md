@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-07-14 — デザイン刷新 ログイン（🏁 全画面のデザイン刷新 完了）
+
+ログイン画面（`/login`）を Claude Design 案（`.theme-matchpoint`）で刷新。**デザイン刷新の最後の1画面**。**認証ロジック（`signInWithOAuth`・`safeRedirect`・OAuth フロー・loading/error・Suspense）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/login.html`（軽量版）に保管。
+
+### 情報設計の壁打ち（1論点を確定）
+- **ブランド感のある中央カード**（中央寄せ1カードを維持しつつ上質化）。第一印象を決める画面なので少しリッチに。
+
+### やったこと
+- **login/page.tsx**: `.dark`→`.theme-matchpoint`。**背景ステージ**（ブランド＋アクセントの radial-gradient グロー＋グリッド線・中央フェードマスク）＋**カード**（surface グラデ＋上端のブランド→アクセントのグラデ帯＋発光ロゴドット）。ロゴ「● Matchpoint」＋kicker「Sign in」＋タイトル＋lede。**Discord ボタン**（`--mp-discord` #5865F2・Discord アイコン・ローディング時スピナー＋「リダイレクト中...」・disabled）。エラー表示（⚠・role=alert）。区切り＋「← トップに戻る」（`/` 実在）。
+
+### 案と現行のギャップ（現行を優先）
+- **案の左上ミニヘッダーは実装しない**（ルートレイアウトが共通 `<SiteHeader />` を全ページに出すため二重になる）。**規約/プライバシーリンクは作らない**（実在しないページ・プロンプトの「実在しない導線を作らない」に従いテキストも省略）。Discord 以外のログイン手段・メール欄なども無し。
+
+### コードレビュー（/code-review high）→ 1件修正
+- **min-h の magic number**: `min-h-[calc(100vh-3.5rem)]` が SiteHeader の実高さ（h 固定でなく py-3＋内容依存 ~64px）と一致せず中央が僅かにズレる/短い viewport でスクロールの恐れ。→ 原状の `min-h-screen`（magic number 非依存・ヘッダーが自然に押し下げる）に戻して解消。`safeRedirect`・OAuth・loading/error・Suspense は不変を確認。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 378 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright）**: 背景グロー/グリッド・カードのグラデ帯・ロゴ・kicker/タイトル/lede・Discord ボタン（`rgb(88,101,242)`＝#5865F2 が tree-shake されず色付き・アイコン付き）・「← トップに戻る」を確認。ローディング/エラーは state 依存（実 OAuth は発火させず、条件分岐はコードで担保）。**書き込み・OAuth 発火なし**。
+
+### 🏁 デザイン刷新フェーズ 完了
+**全20ページの `.dark` → `.theme-matchpoint` 刷新が完了**。フォーム系（new/edit/apply）→運用画面（registrations/mine/schedule/notifications）→シリーズ3画面→ログイン、と全画面を Claude Design 案ベースで刷新。各画面「実装＋devlog＋関連 doc 更新」を1セット・code-review high・Playwright 実機確認を通した。
+
+### 次にやること（デザイン刷新の後始末・任意）
+- **follow-up: コンポーネント共通化**。刷新済み画面間で重複したヘルパーを `src/app/events/_components/`（または共通 UI）へ抽出する候補が溜まっている: フォーム系の `Card`/`Field`（new/edit/apply）、一覧系の `EventCard`/`StatusBadge`/`FilterTab`（events/mine/series）、件数チップ（registrations/notifications/mine）、頭文字 `Avatar`（series）。区切りのよいところで着手する。
+- 機能開発に戻る場合は `docs/デザイン刷新-引き継ぎメモ.md` は役目を終える（刷新は完了）。
+
+---
+
 ## 2026-07-13 — デザイン刷新 シリーズ3画面（一覧/詳細/作成）
 
 シリーズ（継続企画）の3画面（`/series` 一覧・`/series/[id]` 詳細・`/series/new` 作成）を Claude Design 案（`.theme-matchpoint`）でまとめて刷新。**判定・保存ロジック（Server Action `createSeries`/`inviteMember`/`removeMember`/`respondInvite`/`searchInviteCandidates`・立場判定 isStaff/isOwner/isInvited）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/series-{list,detail,new}.html`（軽量版）に保管。
