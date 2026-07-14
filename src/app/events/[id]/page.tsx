@@ -275,7 +275,7 @@ export default async function EventDetailPage({
                     href={`/events/${event.id}/schedule`}
                     icon={CalendarDays}
                     title="日程"
-                    desc="スクリム・練習の予定"
+                    desc="試合の予定"
                   />
                   {showGroupStage && (
                     <>

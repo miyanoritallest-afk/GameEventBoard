@@ -352,6 +352,8 @@ export default async function EventTournamentPage({
           podium={podium}
           initialAdvanceCount={currentAdvance}
           previewSeeded={previewSeeded}
+          seedTeams={groupStage ? blockSeedData.seeds : []}
+          teamNames={Object.fromEntries(teamNameById)}
           roundBoGroups={roundBoGroups}
           initialMatches={matches}
         />

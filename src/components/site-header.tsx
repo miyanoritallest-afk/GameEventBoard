@@ -52,15 +52,26 @@ export async function SiteHeader() {
               <NotificationsRealtime userId={user.id} />
               <Link
                 href="/notifications"
-                className="relative rounded-lg p-2 hover:bg-accent"
+                className="relative rounded-lg p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
                 title="通知"
                 aria-label={
                   unreadCount > 0 ? `通知（未読 ${unreadCount} 件）` : "通知"
                 }
               >
-                <span aria-hidden className="text-lg leading-none">
-                  🔔
-                </span>
+                <svg
+                  aria-hidden
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="block"
+                >
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
+                </svg>
                 {unreadCount > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">
                     {unreadCount > 99 ? "99+" : unreadCount}

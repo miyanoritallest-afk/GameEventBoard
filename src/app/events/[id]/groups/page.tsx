@@ -198,7 +198,21 @@ export default async function EventGroupsPage({
           </div>
         </header>
 
+        {/*
+          key にサーバー状態のシグネチャ（ブロック構成＋未割当）を渡す。
+          GroupsBoard は initialGroups/Unassigned を useState の初期値にするため、
+          自動ブロック分け等の router.refresh() で props が変わっても、key が変わらないと
+          ローカル state が初期値のままで画面へ反映されない（リロードするまで出ない UX バグ）。
+          割当が変わると key も変わり再マウントされ、最新状態で初期化される。ドラッグ等の
+          楽観更新は Server Action 成功後も router.refresh() を呼ばず props が変わらないので、
+          key も変わらず再マウントは起きない（楽観状態は保持される）。
+        */}
         <GroupsBoard
+          key={
+            groups
+              .map((g) => `${g.id}:${g.teams.map((t) => t.id).join(",")}`)
+              .join("|") + `#${unassigned.map((t) => t.id).join(",")}`
+          }
           eventId={event.id}
           readOnly={!isOrganizer}
           locked={matchesGenerated}
