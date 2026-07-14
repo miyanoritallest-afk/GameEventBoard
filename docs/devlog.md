@@ -7,6 +7,35 @@
 
 ---
 
+## 2026-07-14 — デザイン刷新 後始末: コンポーネント共通化（重複ヘルパー抽出）
+
+デザイン刷新の過程で画面間に溜まった重複ヘルパーを共通コンポーネントに抽出。**見た目・挙動を変えない純粋なリファクタリング**（ロジック・Server Action は無関係）。`src/components/matchpoint/` に集約。
+
+### 方針（過去の「共通化しすぎない」判断を踏襲）
+- **「名前が同じ」と「実装が同じ」は別**。全定義を diff で厳密比較し、**確実に同一なものだけ**抽出。別物（型/ロジックが違う）は触らない（ScoreStepper で学んだ轍を踏まない）。
+
+### やったこと（3コンポーネント抽出・7ファイルから重複削除・純減 -197行）
+- **`FormCard` / `FormField`**（`form-card.tsx`）: event-form / apply-form / series-form の番号カード＋入力フィールド。3ファイルのローカル定義を削除して import に統一。**統一時にラベルの描画順を required(*)→opt に揃えた**（event-form は旧 opt→required だったので、開催開始/終了など required＋opt を両方持つ2フィールドで `JST *`→`* JST` に見た目が変わる。機能影響なし）。series-form は htmlFor/id 紐付け→label 内包に変更（暗黙ラベルで focus 挙動は同じ・id 参照は他に無いことを確認）。
+- **`FilterTab`**（`filter-tab.tsx`）: events / mine の件数バッジ付きタブ。差分は `font-mono` 1クラスのみだったので font-mono 込みに統一（events のタブ件数も等幅に）。
+- **`EventStatusBadge`**（`event-status-badge.tsx`）: events / mine / top の状態バッジ。mine が draft 対応（accent 色・✎・破線・bg 12%）の上位互換だったので**mine 版に統一**（events/top は draft を出さないので無害・bg 14%→12% の差は視認不可）。`STATUS_LABEL`・トーン色分けもここに内包し3ファイルの重複解消。
+
+### 触らなかったもの（意図的・別物）
+- **StatusBadge の他4種**（registrations=登録status・series=別statusColor・events/[id]=tone/labelを引数で受ける別API・teams=承認バッジ専用）は型もロジックも別。**共通化しない**（各画面ローカルのまま）。
+- **EventCard**（events/mine/top で props やデータ形が違う）、**件数チップ**（SummaryCount/LegendChip は名前も中身も別物）。
+- **Avatar**（`series/[id]/avatar.tsx`）は series 内でのみ使うので移動不要。
+
+### コードレビュー（/code-review high）→ correctness 0件
+- 8アングルで精査。抽出漏れ・未使用 import・id 削除の影響なしを確認。唯一の見た目変化（FormField ラベル順 `* JST`）を報告（意図的・目視確認時の注意点）。
+
+### 確認
+- `npm run check`（lint 0 error＝既存 actions.ts 警告のみ／typecheck OK／test 378 passed）。`npm run build` 全ルート成功。
+- **実機（Playwright）**: events 一覧（FilterTab・EventStatusBadge）・イベント作成フォーム（FormCard/FormField）が刷新前と同じ見た目で描画されることを確認。**書き込みなし**。
+
+### 次にやること
+- ユーザーによる全画面の目視確認 → 違和感は修正・拡張は検討（②）。
+
+---
+
 ## 2026-07-14 — デザイン刷新 ログイン（🏁 全画面のデザイン刷新 完了）
 
 ログイン画面（`/login`）を Claude Design 案（`.theme-matchpoint`）で刷新。**デザイン刷新の最後の1画面**。**認証ロジック（`signInWithOAuth`・`safeRedirect`・OAuth フロー・loading/error・Suspense）は一切触らず、UI とデータ整形のみ**。案HTMLは `docs/design-refs/login.html`（軽量版）に保管。

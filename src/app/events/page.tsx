@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { FilterSelect } from "./filter-select";
+import { FilterTab } from "@/components/matchpoint/filter-tab";
 import {
   listPublishedEvents,
   listGamesInPublishedEvents,
 } from "@/lib/repositories/events";
+import { EventStatusBadge } from "@/components/matchpoint/event-status-badge";
 import type { EventStatus } from "@/lib/services/event-status";
 import {
   type EventListTab,
@@ -14,8 +16,6 @@ import {
   normalizeSort,
   statusesForTab,
   countByTab,
-  statusTone,
-  type StatusTone,
 } from "@/lib/services/event-list-filter";
 
 export const dynamic = "force-dynamic";
@@ -32,14 +32,6 @@ function fmtJst(iso: string | null): string {
     minute: "2-digit",
   });
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  published: "募集中",
-  recruiting: "募集中",
-  closed: "募集締切",
-  ongoing: "開催中",
-  finished: "終了",
-};
 
 /** 締切が近い（24時間以内・未来）かどうか。募集締切間近バッジ用。 */
 function isDeadlineSoon(iso: string | null): boolean {
@@ -192,75 +184,6 @@ function buildHref(params: {
   return s ? `/events?${s}` : "/events";
 }
 
-/** フィルタタブ1つ（件数バッジ付き）。active でブランド強調。 */
-function FilterTab({
-  label,
-  count,
-  active,
-  href,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-        active
-          ? "bg-[color:var(--mp-brand)]/15 text-[color:var(--mp-brand)]"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {label}
-      <span
-        className={`text-xs tabular-nums ${
-          active
-            ? "text-[color:var(--mp-brand)]"
-            : "text-[color:var(--mp-fg-subtle)]"
-        }`}
-      >
-        {count}
-      </span>
-    </Link>
-  );
-}
-
-/** 状態バッジ（トーン別）。live は pulse、success は ✓。 */
-function StatusBadge({ status }: { status: EventStatus }) {
-  const tone: StatusTone = statusTone(status);
-  const label = STATUS_LABEL[status] ?? status;
-  const color =
-    tone === "success"
-      ? "var(--mp-success)"
-      : tone === "live"
-        ? "var(--mp-live)"
-        : tone === "warning"
-          ? "var(--mp-warning)"
-          : "var(--mp-fg-subtle)";
-  const prefix = tone === "success" ? "✓ " : "";
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-      style={{
-        color,
-        backgroundColor: `color-mix(in oklab, ${color} 14%, transparent)`,
-        border: `1px solid color-mix(in oklab, ${color} 38%, transparent)`,
-      }}
-    >
-      <span
-        aria-hidden
-        className={`h-1.5 w-1.5 rounded-full ${tone === "live" ? "animate-pulse" : ""}`}
-        style={{ backgroundColor: color }}
-      />
-      {prefix}
-      {label}
-    </span>
-  );
-}
-
 /** イベントカード。 */
 function EventCard({
   href,
@@ -295,7 +218,7 @@ function EventCard({
           />
           {gameName}
         </span>
-        <StatusBadge status={status} />
+        <EventStatusBadge status={status} />
       </div>
 
       {/* タイトル */}

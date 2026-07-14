@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listEventsByOrganizer } from "@/lib/repositories/events";
+import { FilterTab } from "@/components/matchpoint/filter-tab";
+import { EventStatusBadge } from "@/components/matchpoint/event-status-badge";
 import type { EventStatus } from "@/lib/services/event-status";
 import {
   type MyEventsTab,
@@ -9,8 +11,6 @@ import {
   normalizeMyTab,
   statusesForMyTab,
   countByMyTab,
-  statusTone,
-  type StatusTone,
 } from "@/lib/services/event-list-filter";
 
 export const dynamic = "force-dynamic";
@@ -27,15 +27,6 @@ function fmtJst(iso: string | null): string {
     minute: "2-digit",
   });
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "下書き",
-  published: "募集中",
-  recruiting: "募集中",
-  closed: "募集締切",
-  ongoing: "開催中",
-  finished: "終了",
-};
 
 export default async function MyEventsPage({
   searchParams,
@@ -139,77 +130,6 @@ function buildHref(tab: MyEventsTab): string {
   return tab === "all" ? "/events/mine" : `/events/mine?tab=${tab}`;
 }
 
-/** フィルタタブ1つ（件数バッジ付き）。active でブランド強調。 */
-function FilterTab({
-  label,
-  count,
-  active,
-  href,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-        active
-          ? "bg-[color:var(--mp-brand)]/15 text-[color:var(--mp-brand)]"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {label}
-      <span
-        className={`font-mono text-xs tabular-nums ${
-          active
-            ? "text-[color:var(--mp-brand)]"
-            : "text-[color:var(--mp-fg-subtle)]"
-        }`}
-      >
-        {count}
-      </span>
-    </Link>
-  );
-}
-
-/** 状態バッジ（トーン別）。live は pulse、success は ✓、draft は破線。 */
-function StatusBadge({ status }: { status: EventStatus }) {
-  const tone: StatusTone = statusTone(status);
-  const label = STATUS_LABEL[status] ?? status;
-  const color =
-    tone === "success"
-      ? "var(--mp-success)"
-      : tone === "live"
-        ? "var(--mp-live)"
-        : tone === "warning"
-          ? "var(--mp-warning)"
-          : tone === "draft"
-            ? "var(--mp-accent)"
-            : "var(--mp-fg-subtle)";
-  const prefix = tone === "success" ? "✓ " : tone === "draft" ? "✎ " : "";
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-      style={{
-        color,
-        backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
-        border: `1px ${tone === "draft" ? "dashed" : "solid"} color-mix(in oklab, ${color} 38%, transparent)`,
-      }}
-    >
-      <span
-        aria-hidden
-        className={`h-1.5 w-1.5 rounded-full ${tone === "live" ? "animate-pulse" : ""}`}
-        style={{ backgroundColor: color }}
-      />
-      {prefix}
-      {label}
-    </span>
-  );
-}
-
 /** 自分のイベントカード（詳細/編集の管理導線つき）。下書き・終了はトーンを落とす。 */
 function EventCard({
   detailHref,
@@ -249,7 +169,7 @@ function EventCard({
           />
           {gameName}
         </span>
-        <StatusBadge status={status} />
+        <EventStatusBadge status={status} />
       </div>
 
       {/* タイトル */}

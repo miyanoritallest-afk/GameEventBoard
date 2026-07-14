@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { registerWithScore, type ScoredRegisterState } from "../../actions";
 import { buildOverwatchRankDefinitions } from "@/lib/services/overwatch-ranks";
 import { deriveThirdRole, type Role } from "@/lib/services/scored-application";
+import { FormCard, FormField } from "@/components/matchpoint/form-card";
 
 const ROLE_LABEL: Record<string, string> = {
   tank: "タンク",
@@ -147,8 +148,8 @@ export function ApplyForm({
       )}
 
       {/* ══════ 01 プロフィール（登録名＋バトルタグ） ══════ */}
-      <Card n="01" title="プロフィール">
-        <Field
+      <FormCard n="01" title="プロフィール">
+        <FormField
           label="登録名"
           required
           opt="参加者として表示される名前"
@@ -161,9 +162,9 @@ export function ApplyForm({
             defaultValue={defaultDisplayName}
             maxLength={32}
           />
-        </Field>
+        </FormField>
 
-        <Field
+        <FormField
           label="バトルタグ"
           required
           error={fe.battleTag}
@@ -176,13 +177,13 @@ export function ApplyForm({
             maxLength={32}
             placeholder="例: Player#12345"
           />
-        </Field>
-      </Card>
+        </FormField>
+      </FormCard>
 
       {/* ══════ 02 希望ロール（第1・第2を選択、第3は自動） ══════ */}
-      <Card n="02" title="希望ロール" sub="第3希望は自動">
+      <FormCard n="02" title="希望ロール" sub="第3希望は自動">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="第1希望" required>
+          <FormField label="第1希望" required>
             <select
               name="preferredRole1"
               value={role1}
@@ -195,8 +196,8 @@ export function ApplyForm({
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="第2希望" required>
+          </FormField>
+          <FormField label="第2希望" required>
             <select
               name="preferredRole2"
               value={role2}
@@ -209,7 +210,7 @@ export function ApplyForm({
                 </option>
               ))}
             </select>
-          </Field>
+          </FormField>
         </div>
 
         {role2Conflict && (
@@ -285,10 +286,10 @@ export function ApplyForm({
         </div>
         {/* 第3希望は hidden で送信（自動決定値）。 */}
         <input type="hidden" name="preferredRole3" value={role3 ?? ""} />
-      </Card>
+      </FormCard>
 
       {/* ══════ 03 ランク申告（＋到達ボーナス） ══════ */}
-      <Card
+      <FormCard
         n="03"
         title="ランク申告"
         sub={`直近${declaredSeasons}シーズン`}
@@ -313,7 +314,7 @@ export function ApplyForm({
         {useBonus && (
           <div className="mt-[18px] border-t border-border pt-[18px]">
             <div className="max-w-[280px]">
-              <Field label="最高到達ランク" opt="到達ボーナス・任意">
+              <FormField label="最高到達ランク" opt="到達ボーナス・任意">
                 <select name="peak" defaultValue="none">
                   <option value="none">なし</option>
                   <option value="master">マスター到達</option>
@@ -323,11 +324,11 @@ export function ApplyForm({
                 <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
                   これまでの最高到達ランクに応じてスコアに加点されます。
                 </p>
-              </Field>
+              </FormField>
             </div>
           </div>
         )}
-      </Card>
+      </FormCard>
 
       <div className="mt-1">
         <button
@@ -353,77 +354,3 @@ export function ApplyForm({
   );
 }
 
-/** 設定群を1つのカードに（番号付き見出し）。sub は右寄せの補足文言。 */
-function Card({
-  n,
-  title,
-  sub,
-  children,
-}: {
-  n: string;
-  title: string;
-  sub?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e1)]">
-      <div className="mb-5 flex items-baseline gap-3">
-        <span className="font-mono text-xs font-semibold tracking-[0.14em] text-[color:var(--mp-brand)]">
-          {n}
-        </span>
-        <h2 className="text-base font-extrabold tracking-tight text-foreground">
-          {title}
-        </h2>
-        {sub && (
-          <span className="ml-auto text-xs text-[color:var(--mp-fg-muted)]">
-            {sub}
-          </span>
-        )}
-      </div>
-      {/* 直下の各ブロックを一定間隔で縦積みする。 */}
-      <div className="flex flex-col gap-[18px]">{children}</div>
-    </section>
-  );
-}
-
-/** 1入力欄（ラベル＋任意/必須マーク＋子＋エラー/ヒント）。 */
-function Field({
-  label,
-  required,
-  opt,
-  error,
-  hint,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  /** 任意・補足のラベル（"任意" / "到達ボーナス・任意" 等）。 */
-  opt?: string;
-  error?: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  // 縦の間隔は親（Card body / grid の gap）が持つ。Field 自身は余白を持たない。
-  return (
-    <div>
-      <label className="mb-[7px] block text-[13px] font-semibold text-foreground">
-        {label}
-        {required && (
-          <span className="ml-[3px] text-[color:var(--mp-brand)]">*</span>
-        )}
-        {opt && (
-          <span className="ml-1.5 text-[11.5px] font-normal text-[color:var(--mp-fg-subtle)]">
-            {opt}
-          </span>
-        )}
-      </label>
-      {children}
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
-      {hint && (
-        <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
-}

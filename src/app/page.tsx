@@ -7,8 +7,8 @@ import {
 } from "@/lib/repositories/events";
 import { listMyParticipatingEvents } from "@/lib/repositories/registrations";
 import { findDiscordName } from "@/lib/repositories/users";
+import { EventStatusBadge } from "@/components/matchpoint/event-status-badge";
 import type { EventStatus } from "@/lib/services/event-status";
-import { statusTone, type StatusTone } from "@/lib/services/event-list-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -27,15 +27,6 @@ function fmtJst(iso: string | null): string {
     minute: "2-digit",
   });
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "下書き",
-  published: "募集中",
-  recruiting: "募集中",
-  closed: "募集締切",
-  ongoing: "開催中",
-  finished: "終了",
-};
 
 const REG_STATUS_LABEL: Record<string, string> = {
   pending: "承認待ち",
@@ -56,38 +47,6 @@ type EventCardData = {
   regStatusLabel?: string;
 };
 
-/** 状態バッジ（一覧・詳細と共通の意味づけ）。live は pulse、success は ✓。 */
-function StatusBadge({ status }: { status: EventStatus }) {
-  const tone: StatusTone = statusTone(status);
-  const label = STATUS_LABEL[status] ?? status;
-  const color =
-    tone === "success"
-      ? "var(--mp-success)"
-      : tone === "live"
-        ? "var(--mp-live)"
-        : tone === "warning"
-          ? "var(--mp-warning)"
-          : "var(--mp-fg-subtle)";
-  const prefix = tone === "success" ? "✓ " : "";
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-      style={{
-        color,
-        backgroundColor: `color-mix(in oklab, ${color} 14%, transparent)`,
-        border: `1px solid color-mix(in oklab, ${color} 38%, transparent)`,
-      }}
-    >
-      <span
-        aria-hidden
-        className={`h-1.5 w-1.5 rounded-full ${tone === "live" ? "animate-pulse" : ""}`}
-        style={{ backgroundColor: color }}
-      />
-      {prefix}
-      {label}
-    </span>
-  );
-}
 
 /** イベント1件のカード（一覧ページと同じデザイン体系）。詳細へのリンク付き。 */
 function EventCard({ ev }: { ev: EventCardData }) {
@@ -112,7 +71,7 @@ function EventCard({ ev }: { ev: EventCardData }) {
               {ev.regStatusLabel}
             </span>
           )}
-          <StatusBadge status={status} />
+          <EventStatusBadge status={status} />
         </div>
       </div>
 
