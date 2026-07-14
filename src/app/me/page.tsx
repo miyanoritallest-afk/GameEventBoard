@@ -60,7 +60,7 @@ export default async function MePage() {
                   aria-hidden
                   className="h-1.5 w-1.5 rounded-full bg-[color:var(--mp-discord)]"
                 />
-                Discord アカウント（変更不可）
+Discord から取得した名前です
               </p>
             </div>
           </div>

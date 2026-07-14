@@ -177,7 +177,7 @@ export function EventForm({
             type="text"
             maxLength={80}
             defaultValue={d.title ?? ""}
-            placeholder="第7回 Matchpoint Open — シーズン中盤 5v5"
+            placeholder="第1回 Matchpoint Open"
           />
         </FormField>
 

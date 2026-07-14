@@ -7,6 +7,7 @@ import {
   useLayoutEffect,
   useEffect,
   useCallback,
+  useMemo,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -38,7 +39,11 @@ import {
   swapBracketTeams,
   updateRoundBestOfAction,
 } from "./actions";
-import type { RoundBoGroup } from "@/lib/services/bracket";
+import {
+  extractSeededTeams,
+  type RoundBoGroup,
+  type SeedTeam,
+} from "@/lib/services/bracket";
 import { updateSchedule, updateStream } from "../matches/actions";
 import {
   validateBoScore,
@@ -128,6 +133,8 @@ export function TournamentBoard({
   podium,
   initialAdvanceCount,
   previewSeeded,
+  seedTeams,
+  teamNames,
   roundBoGroups,
   initialMatches,
 }: {
@@ -145,8 +152,15 @@ export function TournamentBoard({
   /** 表彰台（優勝・準優勝・3位の表示名）。 */
   podium: Podium;
   initialAdvanceCount: number;
-  /** 現在の進出数で抽出されるシード順チーム（生成前プレビュー）。 */
+  /**
+   * 生成前プレビューの初期値（サーバー計算）。トーナメントのみ形式ではこれを使う。
+   * 予選あり形式では seedTeams から advanceCount に応じてクライアント再計算する。
+   */
   previewSeeded: PreviewSeed[];
+  /** 予選あり形式の全ブロック全チームの順位データ（advanceCount 追従プレビューの再計算元）。 */
+  seedTeams: SeedTeam[];
+  /** teamId → チーム名（プレビュー表示用）。 */
+  teamNames: Record<string, string>;
   /** ラウンド別 BO 編集グループ（PR-4・主催者のみ編集）。 */
   roundBoGroups: RoundBoGroup[];
   initialMatches: BoardBracketMatch[];
@@ -156,6 +170,26 @@ export function TournamentBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
   const [advanceCount, setAdvanceCount] = useState(initialAdvanceCount);
+
+  // 生成前プレビュー。予選あり形式は advanceCount に追従してクライアント再計算する
+  // （入力を変えると進出チーム・件数が即座に更新される）。トーナメントのみ形式は
+  // advanceCount を使わないのでサーバー計算の初期値（previewSeeded prop）をそのまま使う。
+  const livePreviewSeeded = useMemo<PreviewSeed[]>(() => {
+    if (!groupStage) return previewSeeded;
+    return extractSeededTeams(seedTeams, advanceCount).map((teamId, i) => ({
+      seed: i + 1,
+      teamId,
+      teamName: teamNames[teamId] ?? "-",
+    }));
+  }, [groupStage, previewSeeded, seedTeams, teamNames, advanceCount]);
+
+  // 予選順位が未確定（＝全チームが同順位）だと上位N で絞れず全チームが進出する。
+  // 各ブロックで rank がすべて 1（＝結果未入力）かどうかで判定し、注記を出す。
+  const seedingUnresolved = useMemo(() => {
+    if (!groupStage || seedTeams.length === 0) return false;
+    return seedTeams.every((t) => t.rank === 1);
+  }, [groupStage, seedTeams]);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -254,7 +288,8 @@ export function TournamentBoard({
           rankingEnabled={rankingEnabled}
           advanceCount={advanceCount}
           setAdvanceCount={setAdvanceCount}
-          previewSeeded={previewSeeded}
+          previewSeeded={livePreviewSeeded}
+          seedingUnresolved={seedingUnresolved}
           isPending={isPending}
           onOpenDialog={() => setDialogOpen(true)}
         />
@@ -862,6 +897,7 @@ function GeneratePanel({
   advanceCount,
   setAdvanceCount,
   previewSeeded,
+  seedingUnresolved,
   isPending,
   onOpenDialog,
 }: {
@@ -872,6 +908,8 @@ function GeneratePanel({
   advanceCount: number;
   setAdvanceCount: (n: number) => void;
   previewSeeded: PreviewSeed[];
+  /** 予選順位が未確定（全チーム同順位）で上位N 絞り込みが効かない状態か。 */
+  seedingUnresolved: boolean;
   isPending: boolean;
   onOpenDialog: () => void;
 }) {
@@ -912,40 +950,62 @@ function GeneratePanel({
 
       {/* 進出数（予選ありのみ）。 */}
       {groupStage && (
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          <label className="text-sm text-muted-foreground" htmlFor="advance-count">
-            各ブロック上位
-          </label>
-          <input
-            id="advance-count"
-            type="number"
-            min={1}
-            max={99}
-            value={advanceCount}
-            onChange={(e) =>
-              setAdvanceCount(Math.max(1, Math.floor(Number(e.target.value) || 1)))
-            }
-            className="w-20 rounded-md border border-border bg-[color:var(--mp-surface-3)] px-3 py-2 text-sm"
-          />
-          <span className="text-sm text-muted-foreground">チームが進出</span>
-        </div>
+        <>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <label
+              className="text-sm text-muted-foreground"
+              htmlFor="advance-count"
+            >
+              各ブロック上位
+            </label>
+            <input
+              id="advance-count"
+              type="number"
+              min={1}
+              max={99}
+              value={advanceCount}
+              onChange={(e) =>
+                setAdvanceCount(
+                  Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                )
+              }
+              className="w-20 rounded-md border border-border bg-[color:var(--mp-surface-3)] px-3 py-2 text-sm"
+            />
+            <span className="text-sm text-muted-foreground">チームが進出</span>
+          </div>
+          <p className="mx-auto mt-2.5 max-w-[560px] text-[12px] leading-relaxed text-[color:var(--mp-fg-subtle)]">
+            各ブロック内の順位で上位のチームを抽出します。ブロックのチーム数より大きい値を指定した場合は、そのブロックの全チームが進出します。下のプレビューは入力に応じて更新され、「生成する」を押した時点の順位で確定します。
+          </p>
+        </>
+      )}
+
+      {/* 予選順位が未確定（全チーム同順位）で上位N が効かないときの注記。 */}
+      {groupStage && seedingUnresolved && (
+        <p className="mx-auto mt-4 max-w-[560px] rounded-lg border border-[color:var(--mp-warning)]/30 bg-[color:var(--mp-warning)]/[0.08] px-4 py-2.5 text-[12px] leading-relaxed text-[color:var(--mp-warning)]">
+          いまは全チームが同順位（1位）扱いのため、「各ブロック上位」を変えても全チームが進出します。予選の試合結果を入力して順位が確定すると、上位N で絞り込めます。
+        </p>
       )}
 
       {/* 進出予定チームのプレビュー。 */}
       {previewSeeded.length > 0 && (
-        <div className="mx-auto mt-5 flex max-w-[640px] flex-wrap justify-center gap-2">
-          {previewSeeded.map((s) => (
-            <span
-              key={s.teamId}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-[color:var(--mp-surface-2)] py-1 pl-1.5 pr-3 text-[12.5px] font-semibold"
-            >
-              <span className="grid h-5 w-5 place-items-center rounded border border-border bg-[color:var(--mp-surface-3)] font-mono text-[10.5px] font-bold text-[color:var(--mp-fg-subtle)]">
-                {s.seed}
+        <>
+          <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--mp-fg-subtle)]">
+            進出予定 {previewSeeded.length} チーム
+          </p>
+          <div className="mx-auto mt-2.5 flex max-w-[640px] flex-wrap justify-center gap-2">
+            {previewSeeded.map((s) => (
+              <span
+                key={s.teamId}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-[color:var(--mp-surface-2)] py-1 pl-1.5 pr-3 text-[12.5px] font-semibold"
+              >
+                <span className="grid h-5 w-5 place-items-center rounded border border-border bg-[color:var(--mp-surface-3)] font-mono text-[10.5px] font-bold text-[color:var(--mp-fg-subtle)]">
+                  {s.seed}
+                </span>
+                {s.teamName}
               </span>
-              {s.teamName}
-            </span>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       <button

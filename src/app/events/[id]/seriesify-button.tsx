@@ -27,7 +27,7 @@ export function SeriesifyButton({ eventId }: { eventId: string }) {
         type="button"
         onClick={handleClick}
         disabled={pending}
-        className="text-sm text-primary hover:underline disabled:opacity-60"
+        className="text-sm text-foreground/90 underline-offset-2 hover:underline disabled:opacity-60"
       >
         {pending ? "シリーズ化中…" : "シリーズ化する"}
       </button>
