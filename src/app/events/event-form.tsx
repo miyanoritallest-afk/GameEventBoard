@@ -11,6 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { DateTimePicker } from "@/components/datetime-picker";
+import { FormCard, FormField } from "@/components/matchpoint/form-card";
 import { scoreToRankAbbrev } from "@/lib/services/overwatch-ranks";
 import {
   hasGroupStage,
@@ -154,9 +155,9 @@ export function EventForm({
       )}
 
       {/* ══════ 01 基本情報 ══════ */}
-      <Card n="01" title="基本情報">
+      <FormCard n="01" title="基本情報">
         {/* 登録名（主催者としての公開表示名。既定は Discord 名） */}
-        <Field
+        <FormField
           label="登録名"
           opt="主催者として表示される名前"
           error={fe.organizerDisplayName}
@@ -168,9 +169,9 @@ export function EventForm({
             maxLength={32}
             defaultValue={d.organizerDisplayName ?? discordName}
           />
-        </Field>
+        </FormField>
 
-        <Field label="タイトル" required error={fe.title}>
+        <FormField label="タイトル" required error={fe.title}>
           <input
             name="title"
             type="text"
@@ -178,9 +179,9 @@ export function EventForm({
             defaultValue={d.title ?? ""}
             placeholder="第7回 Matchpoint Open — シーズン中盤 5v5"
           />
-        </Field>
+        </FormField>
 
-        <Field label="ゲーム" required error={fe.gameId}>
+        <FormField label="ゲーム" required error={fe.gameId}>
           <select name="gameId" defaultValue={d.gameId ?? games[0]?.id ?? ""}>
             {games.map((g) => (
               <option key={g.id} value={g.id}>
@@ -188,9 +189,9 @@ export function EventForm({
               </option>
             ))}
           </select>
-        </Field>
+        </FormField>
 
-        <Field label="説明" opt="任意" error={fe.description}>
+        <FormField label="説明" opt="任意" error={fe.description}>
           <textarea
             name="description"
             rows={4}
@@ -198,26 +199,26 @@ export function EventForm({
             defaultValue={d.description ?? ""}
             placeholder="大会の概要・参加条件・合流方法などを記載します。"
           />
-        </Field>
+        </FormField>
 
         {/* 開催期間 */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="開催開始" opt="JST" required error={fe.startsAt}>
+          <FormField label="開催開始" opt="JST" required error={fe.startsAt}>
             <DateTimePicker name="startsAt" defaultValue={d.startsAt ?? ""} />
-          </Field>
-          <Field label="開催終了" opt="JST" required error={fe.endsAt}>
+          </FormField>
+          <FormField label="開催終了" opt="JST" required error={fe.endsAt}>
             <DateTimePicker name="endsAt" defaultValue={d.endsAt ?? ""} />
-          </Field>
+          </FormField>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="募集締切" opt="任意・JST" error={fe.recruitDeadline}>
+          <FormField label="募集締切" opt="任意・JST" error={fe.recruitDeadline}>
             <DateTimePicker
               name="recruitDeadline"
               defaultValue={d.recruitDeadline ?? ""}
             />
-          </Field>
-          <Field label="定員" opt="チーム数・任意" error={fe.capacity}>
+          </FormField>
+          <FormField label="定員" opt="チーム数・任意" error={fe.capacity}>
             <input
               name="capacity"
               type="number"
@@ -225,12 +226,12 @@ export function EventForm({
               defaultValue={d.capacity ?? ""}
               placeholder="16"
             />
-          </Field>
+          </FormField>
         </div>
-      </Card>
+      </FormCard>
 
       {/* ══════ 02 スコアリング設定 ══════ */}
-      <Card n="02" title="スコアリング設定">
+      <FormCard n="02" title="スコアリング設定">
         {/* 親トグル: 個人スコアを計算するか。OFF なら配下を隠す（スコアなしイベント）。 */}
         <Toggle
           name="requireScore"
@@ -250,7 +251,7 @@ export function EventForm({
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="申告シーズン数" error={fe.declaredSeasons}>
+              <FormField label="申告シーズン数" error={fe.declaredSeasons}>
                 <input
                   name="declaredSeasons"
                   type="number"
@@ -258,8 +259,8 @@ export function EventForm({
                   max={10}
                   defaultValue={d.declaredSeasons ?? 3}
                 />
-              </Field>
-              <Field label="未認定ロールの扱い" error={fe.uncertifiedHandling}>
+              </FormField>
+              <FormField label="未認定ロールの扱い" error={fe.uncertifiedHandling}>
                 <select
                   name="uncertifiedHandling"
                   defaultValue={d.uncertifiedHandling ?? "exclude"}
@@ -270,7 +271,7 @@ export function EventForm({
                     </option>
                   ))}
                 </select>
-              </Field>
+              </FormField>
             </div>
 
             {/* 孫トグル: 到達ボーナスを使うか。ON のときだけ加点欄を表示。 */}
@@ -283,7 +284,7 @@ export function EventForm({
 
             {useBonus && (
               <div className="grid grid-cols-3 gap-4">
-                <Field label="マスター" error={fe.bonusMaster}>
+                <FormField label="マスター" error={fe.bonusMaster}>
                   <input
                     name="bonusMaster"
                     type="number"
@@ -292,8 +293,8 @@ export function EventForm({
                     step="0.5"
                     defaultValue={d.bonusMaster ?? 0}
                   />
-                </Field>
-                <Field label="GM" error={fe.bonusGm}>
+                </FormField>
+                <FormField label="GM" error={fe.bonusGm}>
                   <input
                     name="bonusGm"
                     type="number"
@@ -302,8 +303,8 @@ export function EventForm({
                     step="0.5"
                     defaultValue={d.bonusGm ?? 0}
                   />
-                </Field>
-                <Field label="チャンピオン" error={fe.bonusChampion}>
+                </FormField>
+                <FormField label="チャンピオン" error={fe.bonusChampion}>
                   <input
                     name="bonusChampion"
                     type="number"
@@ -312,7 +313,7 @@ export function EventForm({
                     step="0.5"
                     defaultValue={d.bonusChampion ?? 0}
                   />
-                </Field>
+                </FormField>
               </div>
             )}
 
@@ -330,7 +331,7 @@ export function EventForm({
             )}
 
             {useScoreCap ? (
-              <Field label="チームスコア上限" error={fe.teamScoreCap}>
+              <FormField label="チームスコア上限" error={fe.teamScoreCap}>
                 <input
                   name="teamScoreCap"
                   type="number"
@@ -350,7 +351,7 @@ export function EventForm({
                         scoreCap,
                       )})`}
                 </p>
-              </Field>
+              </FormField>
             ) : (
               <p className="text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
                 ※ 上限なし（チーム編成時にスコアの上限チェックを行いません）。
@@ -358,12 +359,12 @@ export function EventForm({
             )}
           </Nest>
         )}
-      </Card>
+      </FormCard>
 
       {/* ══════ 03 本戦設定（予選BO・本戦-3d） ══════ */}
-      <Card n="03" title="本戦設定">
+      <FormCard n="03" title="本戦設定">
         {/* イベント形式（2026-06-30 壁打ち）。総当たり/トーナメント/両方を選ぶ。 */}
-        <Field label="イベント形式" error={fe.format}>
+        <FormField label="イベント形式" error={fe.format}>
           <select
             name="format"
             value={format}
@@ -379,12 +380,12 @@ export function EventForm({
             大会の進め方を選びます。「総当たり →
             決勝トーナメント」は予選で順位を決めてから上位チームでトーナメント、「総当たりのみ」はリーグ戦で完結、「トーナメントのみ」は予選なしで一発勝負です。
           </p>
-        </Field>
+        </FormField>
 
         {/* 総当たりBO は予選（総当たり）を持つ形式でのみ。トーナメントのみでは出さない。 */}
         {showGroupConfig && (
           <div>
-            <Field label="BO" opt="1試合のマップ数" error={fe.groupBestOf}>
+            <FormField label="BO" opt="1試合のマップ数" error={fe.groupBestOf}>
               <input
                 name="groupBestOf"
                 type="number"
@@ -395,7 +396,7 @@ export function EventForm({
               <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
                 総当たりの1試合で最大何マップ戦うか（BO3＝2マップ先取・最大3マップ）。対戦表を生成すると全試合に反映されます。偶数は引分けあり。
               </p>
-            </Field>
+            </FormField>
           </div>
         )}
 
@@ -414,10 +415,10 @@ export function EventForm({
             />
           </div>
         )}
-      </Card>
+      </FormCard>
 
       {/* ══════ 04 順位設定（本戦-3b） ══════ */}
-      <Card n="04" title="順位設定">
+      <FormCard n="04" title="順位設定">
         {/* 親トグル: 順位機能を使うか。OFF なら配下を隠す（順位を争わないイベント）。 */}
         <Toggle
           name="rankingEnabled"
@@ -430,7 +431,7 @@ export function EventForm({
         {rankingEnabled && (
           <Nest>
             <div className="grid grid-cols-3 gap-4">
-              <Field label="勝ち点" error={fe.pointsWin}>
+              <FormField label="勝ち点" error={fe.pointsWin}>
                 <input
                   name="pointsWin"
                   type="number"
@@ -438,8 +439,8 @@ export function EventForm({
                   max={99}
                   defaultValue={d.pointsWin ?? 3}
                 />
-              </Field>
-              <Field label="引分点" error={fe.pointsDraw}>
+              </FormField>
+              <FormField label="引分点" error={fe.pointsDraw}>
                 <input
                   name="pointsDraw"
                   type="number"
@@ -447,8 +448,8 @@ export function EventForm({
                   max={99}
                   defaultValue={d.pointsDraw ?? 1}
                 />
-              </Field>
-              <Field label="負け点" error={fe.pointsLoss}>
+              </FormField>
+              <FormField label="負け点" error={fe.pointsLoss}>
                 <input
                   name="pointsLoss"
                   type="number"
@@ -456,7 +457,7 @@ export function EventForm({
                   max={99}
                   defaultValue={d.pointsLoss ?? 0}
                 />
-              </Field>
+              </FormField>
             </div>
 
             <div>
@@ -474,12 +475,12 @@ export function EventForm({
             </div>
           </Nest>
         )}
-      </Card>
+      </FormCard>
 
       {/* ══════ 05 Discord 連携（④ 全体告知） ══════ */}
       {/* イベントのルールとは無関係の +α 機能なので最下部に置く。 */}
-      <Card n="05" title="Discord 連携" sub="任意・+α">
-        <Field
+      <FormCard n="05" title="Discord 連携" sub="任意・+α">
+        <FormField
           label="告知チャンネルの Webhook URL"
           opt="任意"
           error={fe.discordWebhookUrl}
@@ -491,8 +492,8 @@ export function EventForm({
             defaultValue={d.discordWebhookUrl ?? ""}
             placeholder="https://discord.com/api/webhooks/..."
           />
-        </Field>
-      </Card>
+        </FormField>
+      </FormCard>
 
       <div className="mt-1">
         <button
@@ -504,39 +505,6 @@ export function EventForm({
         </button>
       </div>
     </form>
-  );
-}
-
-/** 設定群を1つのカードに（番号付き見出し）。sub は右寄せの補足チップ文言。 */
-function Card({
-  n,
-  title,
-  sub,
-  children,
-}: {
-  n: string;
-  title: string;
-  sub?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-card p-6 shadow-[var(--mp-e1)]">
-      <div className="mb-5 flex items-baseline gap-3">
-        <span className="font-mono text-xs font-semibold tracking-[0.14em] text-[color:var(--mp-brand)]">
-          {n}
-        </span>
-        <h2 className="text-base font-extrabold tracking-tight text-foreground">
-          {title}
-        </h2>
-        {sub && (
-          <span className="ml-auto text-xs text-[color:var(--mp-fg-muted)]">
-            {sub}
-          </span>
-        )}
-      </div>
-      {/* 直下の各ブロック（Field / grid / Nest）を一定間隔で縦積みする。 */}
-      <div className="flex flex-col gap-[18px]">{children}</div>
-    </section>
   );
 }
 
@@ -778,45 +746,3 @@ function TiebreakerCard({
   );
 }
 
-/** 1入力欄（ラベル＋任意/必須マーク＋子＋エラー/ヒント）。 */
-function Field({
-  label,
-  required,
-  opt,
-  error,
-  hint,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  /** 任意・補足のラベル（"任意" / "JST" 等）。 */
-  opt?: string;
-  error?: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  // 縦の間隔は親（Card body / Nest / grid の gap）が持つ。Field 自身は余白を持たない。
-  // （以前は [&+&]:mt-* で隣接余白を持たせていたが grid の列2以降に漏れて段ズレした）
-  return (
-    <div>
-      <label className="mb-[7px] block text-[13px] font-semibold text-foreground">
-        {label}
-        {opt && (
-          <span className="ml-1.5 text-[11.5px] font-normal text-[color:var(--mp-fg-subtle)]">
-            {opt}
-          </span>
-        )}
-        {required && (
-          <span className="ml-[3px] text-[color:var(--mp-brand)]">*</span>
-        )}
-      </label>
-      {children}
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
-      {hint && (
-        <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
-}
