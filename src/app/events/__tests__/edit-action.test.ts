@@ -61,6 +61,7 @@ function ownedEvent(overrides: Record<string, unknown> = {}) {
     slug: null,
     title: "元タイトル",
     game_id: GAME_ID,
+    current_count: 0,
     ...overrides,
   };
 }
@@ -147,6 +148,41 @@ describe("updateEvent — 検証・楽観ロック・成功", () => {
       /NEXT_REDIRECT/,
     );
     expect(mocks.redirect).toHaveBeenCalledWith(`/events/${SLUG}`);
+  });
+});
+
+describe("updateEvent — 定員の下限制約（既存応募者を締め出さない）", () => {
+  it("公開後、現在の承認済みチーム数を下回る定員は fieldErrors で拒否し更新しない", async () => {
+    loggedIn();
+    mocks.findEventById.mockResolvedValue(
+      ownedEvent({ status: "published", current_count: 8 }),
+    );
+    const result = await updateEvent(EVENT_ID, {}, validForm({ capacity: "6" }));
+    expect(result.fieldErrors?.capacity).toContain("8");
+    expect(mocks.updateEventRepo).not.toHaveBeenCalled();
+  });
+
+  it("公開後、定員 = 現在数（境界）は締め出さないので許可", async () => {
+    loggedIn();
+    mocks.findEventById.mockResolvedValue(
+      ownedEvent({ status: "published", current_count: 8, slug: SLUG }),
+    );
+    await expect(
+      updateEvent(EVENT_ID, {}, validForm({ capacity: "8" })),
+    ).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(mocks.updateEventRepo).toHaveBeenCalled();
+  });
+
+  it("下書き中は現在数を下回る定員でも許可（制約は公開後のみ）", async () => {
+    loggedIn();
+    // 下書きでは current_count は実質 0 だが、あえて 5 が入っていても制約しないことを確認。
+    mocks.findEventById.mockResolvedValue(
+      ownedEvent({ status: "draft", current_count: 5, slug: SLUG }),
+    );
+    await expect(
+      updateEvent(EVENT_ID, {}, validForm({ capacity: "2" })),
+    ).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(mocks.updateEventRepo).toHaveBeenCalled();
   });
 });
 
