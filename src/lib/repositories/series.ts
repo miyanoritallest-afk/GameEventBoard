@@ -10,20 +10,19 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * シリーズを1件作成し、作成者を owner・active として series_members に登録する。
- * id はアプリ側で事前生成（members への紐付けに使う）。作成者確認は RLS（0032）が最終防衛。
+ * 作成者（created_by / owner）は DB 関数が auth.uid() から取る（0037）。呼び出し側から
+ * ユーザーIDを渡さない＝他人名義での作成を原理的に不可能にする（RLS もバイパスできない）。
  */
 export async function insertSeries(params: {
   name: string;
   description: string | null;
-  createdBy: string;
 }): Promise<{ id: string }> {
   const supabase = await createClient();
-  // シリーズ作成＋作成者の owner 登録を1トランザクション（0032 の security definer 関数）で。
+  // シリーズ作成＋作成者の owner 登録を1トランザクション（security definer 関数）で。
   // 分割 INSERT だと後者失敗で owner 不在の孤立シリーズが残るため（誰も編集できない）。
   const { data, error } = await supabase.rpc("create_series_with_owner", {
     p_name: params.name,
     p_description: params.description,
-    p_created_by: params.createdBy,
   });
   if (error) throw error;
   if (data === null) {

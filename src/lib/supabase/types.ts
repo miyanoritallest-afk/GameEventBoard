@@ -1344,7 +1344,6 @@ export type Database = {
         Args: {
           p_name: string
           p_description: string | null
-          p_created_by: string
         }
         Returns: string
       }

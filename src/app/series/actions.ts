@@ -74,10 +74,10 @@ export async function createSeries(
     return { error: "入力内容を確認してください。", fieldErrors };
   }
 
+  // 作成者（owner）は DB 関数が auth.uid() から取る（0037）。ここでは渡さない。
   const { id } = await insertSeries({
     name: parsed.data.name,
     description: parsed.data.description ?? null,
-    createdBy: user.id,
   });
 
   revalidatePath("/series");
@@ -115,10 +115,10 @@ export async function seriesifyEvent(
   }
 
   // シリーズ名はイベント名を初期値にする（後からシリーズ編集で変更可＝⑥-2）。
+  // 作成者（owner）は DB 関数が auth.uid() から取る（0037）。ここでは渡さない。
   const { id: seriesId } = await insertSeries({
     name: event.title,
     description: null,
-    createdBy: user.id,
   });
 
   const linked = await linkEventToSeries({

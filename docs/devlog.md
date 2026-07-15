@@ -7,6 +7,33 @@
 
 ---
 
+## 2026-07-15 — security definer 関数の認可バイパス修正（ロジック層の監査で発見）
+
+デザイン刷新より前に書かれた（＝Claude review 導入前の）ロジック層を、セキュリティ観点で監査した。actions/RLS/definer/schema を横断で読み、認証・認可・マスアサインメント・IDOR・入力検証を確認。全体は堅牢だったが、**0034 の series 共同運営セキュリティ修正から取り残された同型の穴を2件**発見し修正した（0037）。
+
+### 監査で問題なしと確認した領域
+- actions 全体の認証→認可→書き込みの順序（共通ヘルパー currentUserId/requireOrganizer/requireReporter）。
+- 結果入力の認可はアプリ層(requireReporter)＋DB層(can_report_match)で二重・完全一致。
+- マスアサインメント対策: registerWithScore はスコアをサーバー算出(calcScore)、winner/reported_by/status/organizer_id 等はサーバー固定。
+- IDOR: assignTeam は他イベントのチーム混入を event_id 一致で拒否。
+- series 共同運営(0034)は actor=auth.uid()・anon から EXECUTE REVOKE・TOCTOU 対策まで完備（模範的）。
+
+### 発見・修正した2件（0037）
+1. **create_series_with_owner（0032）— 他人名義のシリーズ作成（実害あり）**: actor を `p_created_by` 引数で受け＋EXECUTE が PUBLIC のままで、REST 直叩きで他人の UUID を渡せば他人を owner にしたシリーズを勝手に作れた（0034 で塞いだ権限昇格と同型）。→ `p_created_by` を廃止し関数内 `auth.uid()` を使う・anon から EXECUTE REVOKE（authenticated のみ grant）。Repository/Server Action/types.ts も2引数に追従（正規経路は元々 user.id を渡していたので挙動不変）。
+2. **upsert_notification_event（0031）— 通知イベントの外部生成（予防）**: EXECUTE が PUBLIC のままで、任意ユーザーが notification_events に任意行を作れた（dedup_key 占有で正規通知を抑止/汚染）。→ サーバー処理専用なので anon/authenticated 双方から EXECUTE REVOKE（Server Action は service_role で呼ぶので影響なし）。
+
+### 決めたこと（なぜ）
+- **0034 の流儀に完全に揃える**（actor=auth.uid()・不要な EXECUTE を REVOKE）。特殊対応を足すのではなく、既にある正しいパターンへ寄せる。
+- 監査は「1本ずつ全部読む」ではなく、共通ヘルパー/definer の土台を重点確認し、そこが堅ければ派生も堅い、という当たりの付け方で出力を抑えた。
+
+### 確認
+- `npm run check`（lint 0 error／typecheck OK／test 387 passed）。
+- **実機（anon 直叩きで攻撃経路の遮断を確証）**: (1) 旧3引数の create_series_with_owner → 404（旧シグネチャ消滅）、(2) 新2引数を anon で → 400 "not authenticated"（auth.uid() が null で例外＝他人名義作成不可）、(3) upsert_notification_event を anon で → 401 permission denied（REVOKE 済み）。
+- 正規経路（ログインしてシリーズ作成）の実ログイン E2E は Discord OAuth のためヘッドレス未実施。型/ビルド整合＋関数ロジック不変（actor 取得元が引数→auth.uid() に変わっただけ・Server Action は元々自分の id を渡していた）＋anon 2引数が本体まで到達している事実で担保とする。
+
+### 次にやること
+- 監査は主要領域（actions/definer/RLS/コア認可）を完了。残りの service 純粋ロジック（スコア/順位/ブラケット）は自動テストで担保済みのため深掘りは保留。ユーザー判断待ち。
+
 ## 2026-07-15 — 観戦ビューの Realtime ライブ更新（匿名観戦者にも配信）
 
 観戦ビュー（/events/[id]/watch）を、主催者の結果入力・日時/配信変更の瞬間に**リロードなしで自動更新**するようにした（拡張候補②のライブ更新部分）。これで②は完了。
