@@ -22,9 +22,9 @@ npm install
 
 ### 2. Supabase プロジェクトを用意
 1. https://supabase.com でプロジェクトを作成（無料枠でよい）。
-2. ダッシュボード > Project Settings > API から URL と anon キーを取得。
-3. SQL Editor で [`supabase/migrations/0001_initial_schema.sql`](./supabase/migrations/0001_initial_schema.sql) を実行し、テーブルを作成。
-4. Authentication > Providers で **Discord** を有効化（OAuth クライアントIDとシークレットを設定）。
+2. ダッシュボード > Project Settings > API から URL・anon キー・service_role キーを取得。
+3. SQL Editor で [`supabase/migrations/`](./supabase/migrations) 配下の `.sql` を **`0001` から番号順にすべて実行**する（スキーマ・RLS ポリシー・security definer 関数・Realtime 有効化まで含む。番号は依存順なので順序を守る）。
+4. Authentication > Providers で **Discord** を有効化（OAuth クライアントIDとシークレットを設定）。リダイレクト URL に `<APP_URL>/auth/callback` を登録する。
 
 ### 3. 環境変数
 `.env.local.example` を `.env.local` にコピーして値を埋める。
