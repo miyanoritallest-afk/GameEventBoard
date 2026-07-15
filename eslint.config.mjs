@@ -12,10 +12,22 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // 使い捨ての UI 実験（prototype ルート）は静的解析の対象外。
-    // 本番コードの品質ゲートに、ラフな試作のメモ化警告等を混ぜない。
-    "src/app/prototype/**",
   ]),
+  {
+    rules: {
+      // アンダースコア始まりの変数は「意図的に未使用」の慣習。分割代入で特定キーを
+      // 除外する（`const { x: _x, ...rest } = obj`）等で使うため、警告の対象外にする。
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;
