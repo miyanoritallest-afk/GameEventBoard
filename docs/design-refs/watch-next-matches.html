@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchpoint — 次の試合ブロック</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>/* cyrillic-ext */
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* symbols2 */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* symbols2 */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* symbols2 */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+/* cyrillic-ext */
+
+/* cyrillic */
+
+/* symbols2 */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* cyrillic */
+
+/* vietnamese */
+
+/* latin-ext */
+
+/* latin */
+
+</style>
+<style>
+  :root{
+    --bg:#0B0E14; --surface:#141A24; --surface-2:#1B2230; --surface-3:#242D3D;
+    --border:#29323F; --border-strong:#3A4657;
+    --fg:#EDF1F8; --fg-muted:#97A2B6; --fg-subtle:#667084;
+    --brand:#FF6A2B; --accent:#22D3EE; --live:#22D3EE; --danger:#F65C4E;
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-2xl:18px;
+    --e1:0 1px 2px rgba(0,0,0,.4); --e2:0 4px 14px rgba(0,0,0,.45);
+    --font-jp:"Noto Sans JP",system-ui,sans-serif;
+    --font-sans:"Geist",var(--font-jp);
+    --font-mono:"Geist Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{margin:0;color:var(--fg);font-family:var(--font-jp);line-height:1.6;font-feature-settings:"palt" 1;
+    background:radial-gradient(1100px 520px at 86% -8%,rgba(255,106,43,.08),transparent 58%),radial-gradient(820px 460px at 4% 2%,rgba(34,211,238,.06),transparent 54%),var(--bg);min-height:100vh}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{color:#5ce2f2}
+  .mono{font-family:var(--font-mono);font-feature-settings:"tnum" 1}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:40px 34px 120px}
+  .doc-h{font-family:var(--font-sans);font-weight:800;font-size:22px;letter-spacing:-.01em;margin:0 0 6px}
+  .doc-sub{font-size:13px;color:var(--fg-subtle);margin:0 0 30px;max-width:720px}
+
+  /* faux hero edge to show placement */
+  .hero-edge{position:relative;background:var(--surface);border:1px solid var(--border);border-bottom:none;border-radius:var(--r-2xl) var(--r-2xl) 0 0;padding:16px 26px 18px;overflow:hidden}
+  .hero-edge::before{content:"";position:absolute;inset:0;background:radial-gradient(520px 180px at 88% -60%,rgba(34,211,238,.1),transparent 66%);pointer-events:none}
+  .he-title{font-family:var(--font-sans);font-weight:800;font-size:17px;letter-spacing:-.02em;opacity:.5}
+  .he-band{display:flex;align-items:center;gap:10px;margin-top:12px;padding:8px 13px;border-radius:var(--r-lg);background:linear-gradient(90deg,rgba(34,211,238,.08),transparent);border:1px solid rgba(34,211,238,.22);font-size:11px;color:var(--fg-subtle);opacity:.6}
+  .he-band .d{width:6px;height:6px;border-radius:50%;background:var(--live);box-shadow:0 0 8px var(--live)}
+  .placement-tag{position:absolute;top:14px;right:18px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-subtle);opacity:.7}
+  .after-note{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);opacity:.45;padding:10px 4px 0}
+  .after-note .ln{flex:1;height:1px;background:var(--border)}
+
+  .variant{margin-bottom:64px}
+  .v-cap{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+  .v-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--accent);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);border-radius:var(--r-sm);padding:3px 9px;flex:none}
+  .v-name{font-family:var(--font-sans);font-weight:700;font-size:15px}
+  .v-desc{font-size:12px;color:var(--fg-subtle)}
+
+  /* ── shared block chrome ── */
+  .nm-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-2xl);box-shadow:var(--e2)}
+  .nm-block.attached{border-top-left-radius:0;border-top-right-radius:0;border-top:1px solid var(--border)}
+  .nm-head{display:flex;align-items:center;gap:12px;padding:13px 18px 12px}
+  .nm-kicker{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);display:inline-flex;align-items:center;gap:9px;margin:0}
+  .nm-kicker::before{content:"";width:16px;height:2px;background:var(--accent)}
+  .nm-kicker .clk{font-size:11px}
+  .nm-count{font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);background:var(--surface-3);border:1px solid var(--border);border-radius:999px;padding:2px 8px}
+  .nm-all{margin-left:auto;font-family:var(--font-sans);font-size:11.5px;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:5px}
+  .nm-all svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* chips shared */
+  .phase{font-family:var(--font-mono);font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:999px;flex:none;letter-spacing:.02em}
+  .phase.grp{color:#0B0E14}
+  .phase.ko{color:var(--fg);background:var(--surface-3);border:1px solid var(--border-strong)}
+  .bo{font-family:var(--font-mono);font-size:9px;font-weight:600;color:var(--brand);background:rgba(255,106,43,.1);border:1px solid rgba(255,106,43,.3);border-radius:999px;padding:1px 7px;flex:none}
+  .soon{font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.06em;color:var(--live);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.32);border-radius:999px;padding:2px 8px;flex:none;display:inline-flex;align-items:center;gap:5px}
+  .soon .d{width:5px;height:5px;border-radius:50%;background:var(--live);box-shadow:0 0 7px var(--live);animation:pulse 1.6s ease-in-out infinite}
+  .tdot{width:8px;height:8px;border-radius:50%;flex:none}
+  .tnm{font-family:var(--font-sans);font-weight:700;font-size:14px;color:var(--fg);white-space:nowrap}
+  .tnm.tbd{color:var(--fg-subtle);font-weight:600}
+  .vs{font-family:var(--font-mono);font-size:11px;color:var(--fg-subtle);font-weight:400;flex:none}
+  .watch{font-family:var(--font-sans);font-size:11.5px;font-weight:600;color:var(--accent);background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.3);border-radius:var(--r-md);padding:6px 12px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:background .14s,border-color .14s}
+  .watch:hover{background:rgba(34,211,238,.15);border-color:rgba(34,211,238,.5)}
+  .watch .by{color:var(--fg-subtle);font-weight:500;font-size:10.5px;font-family:var(--font-mono)}
+  .nostream{font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);letter-spacing:.04em;white-space:nowrap}
+
+  /* ══ A · 1行リスト ══ */
+  .rowlist{border-top:1px solid var(--border)}
+  .nmrow{display:flex;align-items:center;gap:16px;padding:11px 18px;border-bottom:1px solid var(--border)}
+  .nmrow:last-child{border-bottom:none}
+  .nmrow:hover{background:var(--surface-2)}
+  .nmrow .dt{font-family:var(--font-mono);font-feature-settings:"tnum" 1;font-size:12.5px;font-weight:600;color:var(--fg);flex:none;display:inline-flex;align-items:baseline;gap:6px}
+  .nmrow .dt .jst{font-size:9px;color:var(--fg-subtle);font-weight:500}
+  .nmrow .chips{display:flex;align-items:center;gap:7px;flex:none}
+  .nmrow .card-match{display:flex;align-items:center;gap:9px;min-width:0}
+  .nmrow .spacer{flex:1;min-width:12px}
+  .nmrow .act{flex:none}
+  @media (max-width:760px){.nmrow{flex-wrap:wrap;gap:9px}.nmrow .spacer{display:none}.nmrow .act{margin-left:auto}}
+
+  /* ══ B · 2カード ══ */
+  .cardgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:4px 14px 16px}
+  .nmcard{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 15px 14px;overflow:hidden;transition:border-color .14s,transform .1s}
+  .nmcard:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+  .nmcard.next{border-color:rgba(34,211,238,.32);box-shadow:0 0 22px -8px rgba(34,211,238,.45)}
+  .nmcard.next::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--live)}
+  .nc-top{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .nc-top .bo{margin-left:auto}
+  .nc-dt{font-family:var(--font-mono);font-feature-settings:"tnum" 1;font-size:19px;font-weight:700;color:var(--fg);line-height:1;display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
+  .nc-dt .day{font-size:11px;color:var(--fg-subtle);font-weight:500;letter-spacing:.02em}
+  .nc-match{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .nc-match .side{display:flex;align-items:center;gap:8px;min-width:0}
+  .nc-foot{display:flex;align-items:center}
+  @media (max-width:680px){.cardgrid{grid-template-columns:1fr}}
+
+  /* ══ C · ハイブリッド ══ */
+  .hyb-feat{display:flex;align-items:center;gap:20px;padding:16px 18px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .hyb-time{flex:none;text-align:center;padding-right:20px;border-right:1px solid var(--border)}
+  .hyb-time .day{font-family:var(--font-mono);font-size:10px;color:var(--live);letter-spacing:.06em;margin-bottom:3px}
+  .hyb-time .hm{font-family:var(--font-mono);font-feature-settings:"tnum" 1;font-size:26px;font-weight:700;line-height:1}
+  .hyb-time .md{font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);margin-top:4px}
+  .hyb-mid{flex:1;min-width:0}
+  .hyb-mid .chips{display:flex;align-items:center;gap:7px;margin-bottom:10px}
+  .hyb-mid .card-match{display:flex;align-items:center;gap:11px}
+  .hyb-mid .tnm{font-size:16px;font-weight:800}
+  .hyb-feat .act{flex:none}
+  .hyb-feat .watch{font-size:12.5px;padding:9px 16px}
+  .hyb-line{display:flex;align-items:center;gap:16px;padding:11px 18px}
+  .hyb-line .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);flex:none}
+  .hyb-line .dt{font-family:var(--font-mono);font-feature-settings:"tnum" 1;font-size:12px;font-weight:600;color:var(--fg-muted);flex:none}
+  .hyb-line .chips{display:flex;align-items:center;gap:7px;flex:none}
+  .hyb-line .card-match{display:flex;align-items:center;gap:9px;min-width:0}
+  .hyb-line .spacer{flex:1;min-width:12px}
+  @media (max-width:760px){.hyb-feat{flex-wrap:wrap;gap:14px}.hyb-time{border-right:none;padding-right:0;text-align:left}.hyb-line{flex-wrap:wrap;gap:9px}.hyb-line .spacer{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc-h">「次の試合」ブロック — 3案</h1>
+  <p class="doc-sub">観戦ビューのヒーロー直下に置く軽量ブロック。直近の予定を最大2件だけコンパクトに表示。既存のデザイン言語（ダーク・角丸2xl・薄ボーダー・シアンアクセント・等幅kicker・チーム色ドット）に馴染ませています。上に大会ヒーローの下端を薄く再現して配置イメージを示しています。</p>
+
+  <!-- ══════════ A ══════════ -->
+  <div class="variant">
+    <div class="v-cap"><span class="v-badge">案A</span><span class="v-name">最小 · 1行リスト風</span><span class="v-desc">最も縦が短い。予定を素早く拾える。</span></div>
+    <div class="hero-edge">
+      <div class="he-title">第7回 Matchpoint Open</div>
+      <div class="he-band"><span class="d"></span>観戦ビュー — 大会の全体像を上から順に通覧できます</div>
+      <span class="placement-tag">Hero ↑</span>
+    </div>
+    <div class="nm-block attached">
+      <div class="nm-head">
+        <p class="nm-kicker"><span class="clk">◷</span>Next · 次の試合</p>
+        <span class="nm-count">2件</span>
+        <a class="nm-all" href="#">全日程 <svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></a>
+      </div>
+      <div class="rowlist">
+        <div class="nmrow">
+          <span class="dt">07/15 20:00 <span class="jst">JST</span></span>
+          <span class="chips"><span class="phase grp" style="background:#FF6A2B">A組</span><span class="bo">BO3</span><span class="soon"><span class="d"></span>今夜</span></span>
+          <span class="card-match"><span class="tdot" style="background:#FF6A2B"></span><span class="tnm">Team Alpha</span><span class="vs">vs</span><span class="tnm">Team Bravo</span><span class="tdot" style="background:#22D3EE"></span></span>
+          <span class="spacer"></span>
+          <span class="act"><a class="watch" href="#">▶ 配信を見る <span class="by">by のり</span></a></span>
+        </div>
+        <div class="nmrow">
+          <span class="dt">07/16 21:00 <span class="jst">JST</span></span>
+          <span class="chips"><span class="phase ko">準決勝</span><span class="bo">BO5</span></span>
+          <span class="card-match"><span class="tdot" style="background:#45C08A"></span><span class="tnm">Team Charlie</span><span class="vs">vs</span><span class="tnm tbd">未定</span><span class="tdot" style="background:var(--border-strong)"></span></span>
+          <span class="spacer"></span>
+          <span class="act"><span class="nostream">配信予定なし</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="after-note"><span class="ln"></span>この下に「参加チーム」以降のセクションが続く<span class="ln"></span></div>
+  </div>
+
+  <!-- ══════════ B ══════════ -->
+  <div class="variant">
+    <div class="v-cap"><span class="v-badge">案B</span><span class="v-name">2カード横並び</span><span class="v-desc">日時大きめ・LIVE感。直近の1件をシアンで強調。</span></div>
+    <div class="hero-edge">
+      <div class="he-title">第7回 Matchpoint Open</div>
+      <div class="he-band"><span class="d"></span>観戦ビュー — 大会の全体像を上から順に通覧できます</div>
+      <span class="placement-tag">Hero ↑</span>
+    </div>
+    <div class="nm-block attached">
+      <div class="nm-head">
+        <p class="nm-kicker"><span class="clk">◷</span>Next · 次の試合</p>
+        <span class="nm-count">2件</span>
+        <a class="nm-all" href="#">全日程 <svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></a>
+      </div>
+      <div class="cardgrid">
+        <div class="nmcard next">
+          <div class="nc-top"><span class="soon"><span class="d"></span>今夜</span><span class="phase grp" style="background:#FF6A2B">A組</span><span class="bo">BO3</span></div>
+          <div class="nc-dt">07/15 20:00 <span class="day">JST</span></div>
+          <div class="nc-match">
+            <span class="side"><span class="tdot" style="background:#FF6A2B"></span><span class="tnm">Team Alpha</span></span>
+            <span class="vs">vs</span>
+            <span class="side"><span class="tdot" style="background:#22D3EE"></span><span class="tnm">Team Bravo</span></span>
+          </div>
+          <div class="nc-foot"><a class="watch" href="#">▶ 配信を見る <span class="by">by のり</span></a></div>
+        </div>
+        <div class="nmcard">
+          <div class="nc-top"><span class="phase ko">準決勝</span><span class="bo">BO5</span></div>
+          <div class="nc-dt">07/16 21:00 <span class="day">JST · 明日</span></div>
+          <div class="nc-match">
+            <span class="side"><span class="tdot" style="background:#45C08A"></span><span class="tnm">Team Charlie</span></span>
+            <span class="vs">vs</span>
+            <span class="side"><span class="tdot" style="background:var(--border-strong)"></span><span class="tnm tbd">未定</span></span>
+          </div>
+          <div class="nc-foot"><span class="nostream">配信予定なし</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="after-note"><span class="ln"></span>この下に「参加チーム」以降のセクションが続く<span class="ln"></span></div>
+  </div>
+
+  <!-- ══════════ C ══════════ -->
+  <div class="variant">
+    <div class="v-cap"><span class="v-badge">案C</span><span class="v-name">ハイブリッド</span><span class="v-desc">次の1件を大きく、2件目は1行。魅せと軽さの両立。</span></div>
+    <div class="hero-edge">
+      <div class="he-title">第7回 Matchpoint Open</div>
+      <div class="he-band"><span class="d"></span>観戦ビュー — 大会の全体像を上から順に通覧できます</div>
+      <span class="placement-tag">Hero ↑</span>
+    </div>
+    <div class="nm-block attached">
+      <div class="nm-head">
+        <p class="nm-kicker"><span class="clk">◷</span>Next · 次の試合</p>
+        <a class="nm-all" href="#">全日程 <svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg></a>
+      </div>
+      <div class="hyb-feat">
+        <div class="hyb-time"><div class="day">今夜 · JST</div><div class="hm">20:00</div><div class="md">07/15</div></div>
+        <div class="hyb-mid">
+          <div class="chips"><span class="phase grp" style="background:#FF6A2B">A組</span><span class="bo">BO3</span><span class="soon"><span class="d"></span>まもなく</span></div>
+          <div class="card-match"><span class="tdot" style="background:#FF6A2B"></span><span class="tnm">Team Alpha</span><span class="vs">vs</span><span class="tnm">Team Bravo</span><span class="tdot" style="background:#22D3EE"></span></div>
+        </div>
+        <div class="act"><a class="watch" href="#">▶ 配信を見る <span class="by">by のり</span></a></div>
+      </div>
+      <div class="hyb-line">
+        <span class="lbl">その後</span>
+        <span class="dt">07/16 21:00</span>
+        <span class="chips"><span class="phase ko">準決勝</span><span class="bo">BO5</span></span>
+        <span class="card-match"><span class="tdot" style="background:#45C08A"></span><span class="tnm">Team Charlie</span><span class="vs">vs</span><span class="tnm tbd">未定</span></span>
+        <span class="spacer"></span>
+        <span class="nostream">配信予定なし</span>
+      </div>
+    </div>
+    <div class="after-note"><span class="ln"></span>この下に「参加チーム」以降のセクションが続く<span class="ln"></span></div>
+  </div>
+</div>
+
+
+</body></html>

@@ -67,6 +67,22 @@ export const updateScheduleSchema = z.object({
   scheduledAtLocal: z.string().max(40).optional().default(""),
 });
 
+/**
+ * 配信URLは http/https のみ許可する（javascript: 等の危険スキームを弾く）。
+ * 配信URLは観戦ページ（匿名閲覧可）で <a href> として描画されるため、スキーム制限が
+ * ないと `javascript:...` を保存されストアドXSSになる。React の自動エスケープは href の
+ * スキームを消さないので、入力層で最終防衛する（空文字＝未設定は許可）。
+ */
+function isSafeHttpUrl(value: string): boolean {
+  if (value === "") return true; // 空＝未設定は許可（クリア用）
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false; // URL として解釈できない文字列も弾く
+  }
+}
+
 /** 配信情報の更新（主催者のみ）。URL・配信者名はともに任意。 */
 export const updateStreamSchema = z.object({
   matchId: z.string().uuid("不正な試合IDです"),
@@ -74,6 +90,7 @@ export const updateStreamSchema = z.object({
     .string()
     .trim()
     .max(500, "配信URLが長すぎます")
+    .refine(isSafeHttpUrl, "配信URLは http:// または https:// で始まる必要があります")
     .optional()
     .default(""),
   streamerName: z

@@ -46,6 +46,41 @@ function fmtJstShort(iso: string | null): string {
   return `${get("month")}/${get("day")} ${get("hour")}:${get("minute")}`;
 }
 
+/** JST の年月日・時刻を部品で取り出す（「次の試合」の日時分解表示に使う）。 */
+function jstParts(iso: string): { md: string; hm: string; ymd: string } {
+  const p = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date(iso));
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? "";
+  return {
+    md: `${g("month")}/${g("day")}`,
+    hm: `${g("hour")}:${g("minute")}`,
+    ymd: `${g("year")}-${g("month")}-${g("day")}`,
+  };
+}
+
+/**
+ * 「今夜 / 明日 / まもなく」などの相対ラベル。now と同じ JST 日付なら「今夜」、
+ * 翌日なら「明日」、開始2時間以内なら「まもなく」を優先。それ以外は null（バッジ非表示）。
+ * 純粋な表示補助（進行に影響しない）。
+ */
+function relativeDayLabel(iso: string, now: Date): string | null {
+  const diffMs = new Date(iso).getTime() - now.getTime();
+  if (diffMs >= 0 && diffMs <= 2 * 60 * 60 * 1000) return "まもなく";
+  const target = jstParts(iso).ymd;
+  const todayYmd = jstParts(now.toISOString()).ymd;
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowYmd = jstParts(tomorrow.toISOString()).ymd;
+  if (target === todayYmd) return "今夜";
+  if (target === tomorrowYmd) return "明日";
+  return null;
+}
+
 /** UTC(ISO) を JST 表示に整形する（概要用）。null は "未定"。 */
 function fmtJst(iso: string | null): string {
   if (!iso) return "未定";
@@ -228,6 +263,9 @@ export default async function EventWatchPage({
     team_a_id: string | null;
     team_b_id: string | null;
     streamer_name?: string | null;
+    scheduled_at?: string | null;
+    stream_url?: string | null;
+    best_of?: number;
   };
   const groupMatches = (groupMatchesRaw ?? []) as MatchRow[];
   const matchById = new Map<string, MatchRow>();
@@ -337,6 +375,8 @@ export default async function EventWatchPage({
     bracket_position: number | null;
     best_of: number;
     streamer_name?: string | null;
+    scheduled_at?: string | null;
+    stream_url?: string | null;
   };
   const tournamentMatches = (tournamentRaw ?? []) as TMatchRow[];
   const totalTournamentRounds =
@@ -443,6 +483,77 @@ export default async function EventWatchPage({
   const doneCount = finishedMatches.length;
   const totalCount = groupMatches.length;
 
+  // ── 次の試合（ヒーロー直下・最大2件） ────────────────────────────
+  // 観戦者が「次はいつ・どのカードを・どこで見られるか」を最上部で拾えるようにする。
+  // 予選＋決勝Tを合流し、未消化（結果なし）かつ日時ありを日時昇順で先頭2件。
+  // 0件なら丸ごと非表示（既存の空セクション非表示と同じ作法）。
+  // scheduled_at は Repository が取得済み（型に追加済み）。日時整形は fmtJstShort を流用。
+  type NextMatch = {
+    id: string;
+    at: string;
+    teamAName: string;
+    teamBName: string;
+    teamAColor: string;
+    teamBColor: string;
+    label: string; // 予選＝ブロック名 / 決勝T＝ラウンド名
+    isTournament: boolean;
+    blockColor: string | null; // 予選のフェーズチップ背景色（決勝Tは null）
+    bestOf: number | null;
+    streamUrl: string | null;
+    streamerName: string | null;
+  };
+  const teamColorFallback = "var(--mp-border-strong)";
+  const nameOf = (id: string | null) =>
+    id ? teamNameById.get(id) ?? "未定" : "未定";
+  const colorOf = (id: string | null) =>
+    id ? teamColorById.get(id) ?? teamColorFallback : teamColorFallback;
+
+  const upcomingGroup: NextMatch[] = groupMatches
+    .filter((m) => m.scheduled_at && !resultByMatch.has(m.id))
+    .map((m) => ({
+      id: m.id,
+      at: m.scheduled_at as string,
+      teamAName: nameOf(m.team_a_id),
+      teamBName: nameOf(m.team_b_id),
+      teamAColor: colorOf(m.team_a_id),
+      teamBColor: colorOf(m.team_b_id),
+      label: m.group_id ? blockNameById.get(m.group_id) ?? groupLabel : groupLabel,
+      isTournament: false,
+      blockColor: m.group_id ? blockColorById.get(m.group_id) ?? null : null,
+      bestOf: m.best_of ?? null,
+      streamUrl: m.stream_url ?? null,
+      streamerName: m.streamer_name ?? null,
+    }));
+
+  const upcomingTournament: NextMatch[] = tournamentMatches
+    .filter(
+      (m) =>
+        m.scheduled_at &&
+        !resultByMatch.has(m.id) &&
+        // BYE（片側 null の不戦勝）は「観戦する試合」ではないので除外。
+        !(m.team_a_id === null || m.team_b_id === null),
+    )
+    .map((m) => ({
+      id: m.id,
+      at: m.scheduled_at as string,
+      teamAName: nameOf(m.team_a_id),
+      teamBName: nameOf(m.team_b_id),
+      teamAColor: colorOf(m.team_a_id),
+      teamBColor: colorOf(m.team_b_id),
+      label: roundLabel(m.round ?? 1, totalTournamentRounds),
+      isTournament: true,
+      blockColor: null,
+      bestOf: m.best_of,
+      streamUrl: m.stream_url ?? null,
+      streamerName: m.streamer_name ?? null,
+    }));
+
+  const nextMatches = [...upcomingGroup, ...upcomingTournament]
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .slice(0, 2);
+  const showNext = nextMatches.length > 0;
+  const now = new Date();
+
   return (
     <div className="theme-matchpoint min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1240px] px-6 py-8">
@@ -541,6 +652,145 @@ export default async function EventWatchPage({
             </div>
           </div>
         </div>
+
+        {/*
+          次の試合（ヒーロー直下・最大2件・案Cハイブリッド）。
+          未消化かつ日時ありの予選/決勝T試合を近い順に。0件なら丸ごと非表示。
+          先頭（次の1件）は大きく魅せ、2件目は1行で軽く添える（縦を伸ばしすぎない）。
+          ヒーローとは分離した独立カード（他セクションと同じ mt-11・全周ボーダー・角丸2xl）。
+        */}
+        {showNext && (
+          <div className="mt-11 overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--mp-e2)]">
+            {/* 見出し行：kicker＋全日程リンク。 */}
+            <div className="flex items-center gap-3 px-[18px] pb-3 pt-[13px]">
+              <p className="inline-flex items-center gap-2.5 font-mono text-[10.5px] uppercase tracking-[0.24em] text-[color:var(--mp-accent)]">
+                <span
+                  aria-hidden
+                  className="h-0.5 w-4 bg-[color:var(--mp-accent)]"
+                />
+                Next · 次の試合
+              </p>
+              <Link
+                href={matchesHref}
+                className="ml-auto inline-flex items-center gap-1.5 font-sans text-[11.5px] font-semibold text-[color:var(--mp-accent)] transition hover:opacity-80"
+              >
+                全日程 <span aria-hidden>→</span>
+              </Link>
+            </div>
+
+            {/* 次の1件（featured・大きい）。 */}
+            {nextMatches[0] &&
+              (() => {
+                const m = nextMatches[0];
+                const parts = jstParts(m.at);
+                const rel = relativeDayLabel(m.at, now);
+                return (
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-3.5 border-y border-border px-[18px] py-4">
+                    {/* 日時ブロック（相対ラベル＋時刻大＋日付）。 */}
+                    <div className="shrink-0 border-r border-border pr-5">
+                      <div className="mb-0.5 font-mono text-[10px] uppercase tracking-wider text-[color:var(--mp-live)]">
+                        {rel ? `${rel} · JST` : "JST"}
+                      </div>
+                      <div className="font-mono text-[26px] font-bold leading-none tabular-nums">
+                        {parts.hm}
+                      </div>
+                      <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                        {parts.md}
+                      </div>
+                    </div>
+                    {/* 中央：チップ＋対戦カード。 */}
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2.5 flex items-center gap-2">
+                        <PhaseChip
+                          label={m.label}
+                          isTournament={m.isTournament}
+                          blockColor={m.blockColor ?? undefined}
+                        />
+                        {m.bestOf != null && <BoChip bestOf={m.bestOf} />}
+                        {rel && <SoonChip label={rel} />}
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <TeamDot color={m.teamAColor} />
+                        <span className="font-sans text-base font-extrabold">
+                          {m.teamAName}
+                        </span>
+                        <span className="font-mono text-[11px] text-muted-foreground">
+                          vs
+                        </span>
+                        <span
+                          className={
+                            m.teamBName === "未定"
+                              ? "font-sans text-base font-semibold text-muted-foreground"
+                              : "font-sans text-base font-extrabold"
+                          }
+                        >
+                          {m.teamBName}
+                        </span>
+                        <TeamDot color={m.teamBColor} />
+                      </div>
+                    </div>
+                    {/* 配信導線。 */}
+                    <div className="shrink-0">
+                      <WatchLink
+                        streamUrl={m.streamUrl}
+                        streamerName={m.streamerName}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+            {/* 2件目（line・1行で軽く）。 */}
+            {nextMatches[1] &&
+              (() => {
+                const m = nextMatches[1];
+                const parts = jstParts(m.at);
+                return (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-[18px] py-[11px]">
+                    <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                      その後
+                    </span>
+                    <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
+                      {parts.md} {parts.hm}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <PhaseChip
+                        label={m.label}
+                        isTournament={m.isTournament}
+                        blockColor={m.blockColor ?? undefined}
+                      />
+                      {m.bestOf != null && <BoChip bestOf={m.bestOf} />}
+                    </span>
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <TeamDot color={m.teamAColor} />
+                      <span className="font-sans text-sm font-bold">
+                        {m.teamAName}
+                      </span>
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        vs
+                      </span>
+                      <span
+                        className={
+                          m.teamBName === "未定"
+                            ? "font-sans text-sm font-semibold text-muted-foreground"
+                            : "font-sans text-sm font-bold"
+                        }
+                      >
+                        {m.teamBName}
+                      </span>
+                    </span>
+                    <span className="ml-auto shrink-0">
+                      <WatchLink
+                        streamUrl={m.streamUrl}
+                        streamerName={m.streamerName}
+                        compact
+                      />
+                    </span>
+                  </div>
+                );
+              })()}
+          </div>
+        )}
 
         {/* 参加チーム */}
         {showTeams && (
@@ -865,6 +1115,108 @@ export default async function EventWatchPage({
         )}
       </div>
     </div>
+  );
+}
+
+/** チーム識別色のドット（「次の試合」の対戦カード用）。 */
+function TeamDot({ color }: { color: string }) {
+  return (
+    <span
+      aria-hidden
+      className="h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+/**
+ * フェーズ/ラウンドのチップ。予選＝ブロック色背景に濃色文字、決勝T＝surface-3 背景。
+ * ブロック色は動的なので背景はインライン style（--mp-* を含まないので tree-shake 非対象）。
+ */
+function PhaseChip({
+  label,
+  isTournament,
+  blockColor,
+}: {
+  label: string;
+  isTournament: boolean;
+  blockColor?: string;
+}) {
+  if (isTournament) {
+    return (
+      <span className="shrink-0 rounded-full border border-[color:var(--mp-border-strong)] bg-[color:var(--mp-surface-3)] px-2 py-0.5 font-mono text-[9.5px] font-semibold text-foreground">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 rounded-full px-2 py-0.5 font-mono text-[9.5px] font-semibold text-[color:var(--mp-bg)]"
+      style={blockColor ? { backgroundColor: blockColor } : undefined}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** BO 表記チップ（ブランド色）。 */
+function BoChip({ bestOf }: { bestOf: number }) {
+  return (
+    <span className="shrink-0 rounded-full border border-[color:var(--mp-brand)]/30 bg-[color:var(--mp-brand)]/10 px-[7px] py-px font-mono text-[9px] font-semibold text-[color:var(--mp-brand)]">
+      BO{bestOf}
+    </span>
+  );
+}
+
+/** 「今夜/明日/まもなく」の LIVE 近接バッジ（点滅ドット付き）。 */
+function SoonChip({ label }: { label: string }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[color:var(--mp-live)]/30 bg-[color:var(--mp-live)]/10 px-2 py-0.5 font-mono text-[9px] font-semibold tracking-wide text-[color:var(--mp-live)]">
+      <span
+        aria-hidden
+        className="h-[5px] w-[5px] animate-pulse rounded-full bg-[color:var(--mp-live)] shadow-[0_0_7px_var(--mp-live)]"
+      />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * 配信への導線。stream_url があれば外部リンク（新規タブ）、無ければ「配信予定なし」を薄く表示。
+ * 外部リンクは rel=noopener で開く（タブナビ乗っ取り防止）。
+ */
+function WatchLink({
+  streamUrl,
+  streamerName,
+  compact,
+}: {
+  streamUrl: string | null;
+  streamerName: string | null;
+  compact?: boolean;
+}) {
+  if (!streamUrl) {
+    return (
+      <span className="whitespace-nowrap font-mono text-[10px] tracking-wide text-muted-foreground">
+        配信予定なし
+      </span>
+    );
+  }
+  return (
+    <a
+      href={streamUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[color:var(--mp-accent)]/30 bg-[color:var(--mp-accent)]/[0.08] font-sans font-semibold text-[color:var(--mp-accent)] transition hover:border-[color:var(--mp-accent)]/50 hover:bg-[color:var(--mp-accent)]/[0.15] ${
+        compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-2 text-[11.5px]"
+      }`}
+    >
+      ▶ 配信を見る
+      {streamerName && (
+        <span className="font-mono text-[10.5px] font-medium text-muted-foreground">
+          by {streamerName}
+        </span>
+      )}
+    </a>
   );
 }
 
