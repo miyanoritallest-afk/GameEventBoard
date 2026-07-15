@@ -1,19 +1,19 @@
 # GameEventBoard（Matchpoint）
 
-**Overwatch 2 のコミュニティ大会**を、主催・参加・観戦のすべての立場から支えるイベント管理プラットフォーム。
+**Overwatch のコミュニティ大会**を、主催・参加・観戦のすべての立場から支えるイベント管理プラットフォーム。
 スコア均衡したチーム分けから、予選ブロック・総当たり・順位表・決勝トーナメントの進行、Discord 連携通知、
 そして非ログインでも追える観戦ビューまでを 1 つのアプリで完結させる。
 
 > 個人開発（フルスタック）。設計・実装・DB 設計・セキュリティまで一貫して担当。
 > 設計ドキュメントは [`docs/`](./docs) に集約（要件定義書 / DB設計書 / ER図 / アーキテクチャ設計書 / 実装ガイドライン）。
 
-<!-- SCREENSHOT:hero 観戦ビュー全体。撮影後にこのコメントを ![観戦ビュー](docs/screenshots/watch.png) に置き換える -->
+![観戦ビュー](docs/screenshots/watch.png)
 
 ---
 
 ## 解決する課題
 
-FPS（主に Overwatch 2）のコミュニティ大会は、運営が Discord とスプレッドシートを手作業で行き来して回している。
+FPS（主に Overwatch）のコミュニティ大会は、運営が Discord とスプレッドシートを手作業で行き来して回している。
 参加者のランク申告からの**戦力均衡したチーム分け**、対戦カードの生成、結果集計と順位表、日程の周知——
 このどれもが煩雑で属人的になりやすい。GameEventBoard はこの一連の運営フローをアプリ 1 つに集約し、
 さらに**観戦者が大会の今を追える**ことで盛り上げまで支援する。
@@ -29,19 +29,25 @@ FPS（主に Overwatch 2）のコミュニティ大会は、運営が Discord �
 メンバーをチーム間でドラッグすると、チーム平均スコアが即座に再計算され、**スコア上限の超過が視覚的に警告**される。
 交代シミュレーション（保存せず試算）で、均衡の取れた組み合わせを試行錯誤できる。
 
-<!-- DEMO:teams-dnd 撮影後 ![チーム編成のD&D](docs/screenshots/teams-dnd.gif) に置き換える -->
+![チーム編成のドラッグ&ドロップ](docs/screenshots/teams-dnd.gif)
 
 ### 総当たり表：結果入力 → 順位が自動で動く
 
 対戦表にスコアを入力すると、多段タイブレークで**順位表が即座に更新**される。手作業の集計が要らない。
 
-<!-- DEMO:matches-result 撮影後 ![結果入力と順位更新](docs/screenshots/matches-result.gif) に置き換える -->
+![総当たり表の結果入力と順位更新](docs/screenshots/matches-result.gif)
+
+### 決勝トーナメント：勝敗入力で勝者が自動進出
+
+ブラケットに結果を入れると、勝者が次のラウンドへ自動で進む。修正が下流に伝播し、表彰台まで確定する。
+
+![決勝トーナメントの結果入力](docs/screenshots/tournament-result.gif)
 
 ### 観戦ビュー：結果がリアルタイムに反映
 
 主催者が結果を入力した瞬間、観戦者の画面が**リロードなしでライブ更新**される（Supabase Realtime）。
 
-<!-- DEMO:watch-realtime 撮影後 ![観戦ビューのライブ更新](docs/screenshots/watch-realtime.gif) に置き換える -->
+![観戦ビューのライブ更新](docs/screenshots/watch-realtime.gif)
 
 > 撮影対象・手順は [`docs/screenshots/README.md`](docs/screenshots/README.md) を参照。
 
@@ -76,9 +82,17 @@ FPS（主に Overwatch 2）のコミュニティ大会は、運営が Discord �
 
 ## 画面ギャラリー
 
-<!-- SCREENSHOT:tournament 決勝トーナメントのブラケット。撮影後 ![決勝トーナメント](docs/screenshots/tournament.png) に置き換える -->
-<!-- SCREENSHOT:event-form イベント作成フォーム（順位・BO・スコアリング設定）。撮影後 ![イベント作成](docs/screenshots/event-form.png) に置き換える -->
-<!-- SCREENSHOT:event-detail イベント詳細。撮影後 ![イベント詳細](docs/screenshots/event-detail.png) に置き換える -->
+**決勝トーナメント**（シード・BYE・3位決定戦・表彰台）
+
+![決勝トーナメント](docs/screenshots/tournament.png)
+
+**イベント作成フォーム**（開催形式・BO・順位設定・スコアリングを細かく設定）
+
+![イベント作成フォーム](docs/screenshots/event-form.png)
+
+**イベント詳細**
+
+![イベント詳細](docs/screenshots/event-detail.png)
 
 ---
 
