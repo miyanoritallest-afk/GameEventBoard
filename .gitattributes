@@ -1,0 +1,7 @@
+# 画像・動画はバイナリとして扱う（改行変換・差分表示を無効化）。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp4 binary

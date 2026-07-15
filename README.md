@@ -7,10 +7,7 @@
 > 個人開発（フルスタック）。設計・実装・DB 設計・セキュリティまで一貫して担当。
 > 設計ドキュメントは [`docs/`](./docs) に集約（要件定義書 / DB設計書 / ER図 / アーキテクチャ設計書 / 実装ガイドライン）。
 
-<!-- スクリーンショットはここに追加予定：
-![観戦ビュー](docs/screenshots/watch.png)
-![チーム編成](docs/screenshots/teams.png)
--->
+<!-- SCREENSHOT:hero 観戦ビュー全体。撮影後にこのコメントを ![観戦ビュー](docs/screenshots/watch.png) に置き換える -->
 
 ---
 
@@ -20,6 +17,33 @@ FPS（主に Overwatch 2）のコミュニティ大会は、運営が Discord �
 参加者のランク申告からの**戦力均衡したチーム分け**、対戦カードの生成、結果集計と順位表、日程の周知——
 このどれもが煩雑で属人的になりやすい。GameEventBoard はこの一連の運営フローをアプリ 1 つに集約し、
 さらに**観戦者が大会の今を追える**ことで盛り上げまで支援する。
+
+---
+
+## デモ
+
+このアプリの価値は**動的な操作**にある。手作業で属人的だった運営フローを、その場で完結できる。
+
+### チーム編成：ドラッグ&ドロップで戦力均衡
+
+メンバーをチーム間でドラッグすると、チーム平均スコアが即座に再計算され、**スコア上限の超過が視覚的に警告**される。
+交代シミュレーション（保存せず試算）で、均衡の取れた組み合わせを試行錯誤できる。
+
+<!-- DEMO:teams-dnd 撮影後 ![チーム編成のD&D](docs/screenshots/teams-dnd.gif) に置き換える -->
+
+### 総当たり表：結果入力 → 順位が自動で動く
+
+対戦表にスコアを入力すると、多段タイブレークで**順位表が即座に更新**される。手作業の集計が要らない。
+
+<!-- DEMO:matches-result 撮影後 ![結果入力と順位更新](docs/screenshots/matches-result.gif) に置き換える -->
+
+### 観戦ビュー：結果がリアルタイムに反映
+
+主催者が結果を入力した瞬間、観戦者の画面が**リロードなしでライブ更新**される（Supabase Realtime）。
+
+<!-- DEMO:watch-realtime 撮影後 ![観戦ビューのライブ更新](docs/screenshots/watch-realtime.gif) に置き換える -->
+
+> 撮影対象・手順は [`docs/screenshots/README.md`](docs/screenshots/README.md) を参照。
 
 ---
 
@@ -47,6 +71,14 @@ FPS（主に Overwatch 2）のコミュニティ大会は、運営が Discord �
 - **アプリ内通知**：ヘッダーの 🔔 と一覧ページ。Realtime で未読が即反映。
 - **Discord 連携**：イベント公開の全体告知（Webhook）と、個人宛リマインド（Bot DM）。Cron による試合直前・当日通知。
 - **シリーズ**：継続開催（例: 週次リーグ）をシリーズとしてまとめ、共同運営（owner／admin）を招待制で管理。
+
+---
+
+## 画面ギャラリー
+
+<!-- SCREENSHOT:tournament 決勝トーナメントのブラケット。撮影後 ![決勝トーナメント](docs/screenshots/tournament.png) に置き換える -->
+<!-- SCREENSHOT:event-form イベント作成フォーム（順位・BO・スコアリング設定）。撮影後 ![イベント作成](docs/screenshots/event-form.png) に置き換える -->
+<!-- SCREENSHOT:event-detail イベント詳細。撮影後 ![イベント詳細](docs/screenshots/event-detail.png) に置き換える -->
 
 ---
 
