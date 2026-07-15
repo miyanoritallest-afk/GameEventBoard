@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { findEventById } from "@/lib/repositories/events";
+import { findEventByIdOrSlug } from "@/lib/repositories/events";
 import {
   listGroupsWithTeams,
   listUnassignedApprovedTeams,
@@ -37,7 +37,7 @@ export default async function EventGroupsPage({
   } = await supabase.auth.getUser();
   const viewerId = user?.id ?? null;
 
-  const event = await findEventById(id);
+  const event = await findEventByIdOrSlug(id);
   if (!event) notFound();
   // 閲覧は「公開済みなら誰でも（観戦者含む）・下書きは主催者のみ」。編集は readOnly で制御。
   if (!canViewEvent(event.status, event.organizer_id, viewerId)) {

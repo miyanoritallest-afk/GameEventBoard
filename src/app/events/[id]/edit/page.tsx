@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { findEventById } from "@/lib/repositories/events";
+import { findEventByIdOrSlug } from "@/lib/repositories/events";
 import { listGames } from "@/lib/repositories/games";
 import { findDiscordName } from "@/lib/repositories/users";
 import type { EventFormDefaults } from "../../event-form";
@@ -43,7 +43,7 @@ export default async function EditEventPage({
   }
 
   // 編集は uuid 前提（管理導線からのみ遷移）。本人以外・存在しないなら 404。
-  const event = await findEventById(id);
+  const event = await findEventByIdOrSlug(id);
   if (!event || event.organizer_id !== user.id) {
     notFound();
   }

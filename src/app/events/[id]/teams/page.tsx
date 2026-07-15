@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { findEventById } from "@/lib/repositories/events";
+import { findEventByIdOrSlug } from "@/lib/repositories/events";
 import { findRegistration } from "@/lib/repositories/registrations";
 import {
   listTeamsWithMembers,
@@ -41,7 +41,7 @@ export default async function EventTeamsPage({
 
   // 閲覧は「公開済みなら誰でも（観戦者含む）・下書きは主催者のみ」（フェーズB）。
   // 主催者は編集可、応募者は試算のみ、観戦者は閲覧のみ（read-only）。
-  const event = await findEventById(id);
+  const event = await findEventByIdOrSlug(id);
   if (!event) notFound();
   if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
