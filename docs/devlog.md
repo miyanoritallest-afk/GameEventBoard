@@ -7,6 +7,23 @@
 
 ---
 
+## 2026-07-15 — サブページの slug 非対応バグ修正（500 エラー）
+
+イベント配下の7サブページ（teams / matches / groups / tournament / registrations / schedule / edit）が **slug でアクセスすると 500 エラー**（`invalid input syntax for type uuid`）になるバグを修正。デモ用URL（slug ベース）で撮影しようとして発覚。
+
+### 原因
+これらのページは `params.id` を `findEventById`（uuid で引く）にそのまま渡していた。詳細ページの共有 URL は slug（`event-xxxxxx`）なので、そこから「チーム編成を見る」等でサブページへ遷移すると slug が uuid カラムに渡り Postgres が 22P02 で 500。slug 対応済みは watch / apply / 詳細のみだった。
+
+### 修正
+- Repository に **`findEventByIdOrSlug`** を追加（`isValidEventSlug` で分岐し slug なら `findEventBySlug`・そうでなければ `findEventById`）。watch/apply に散っていた分岐を共通入口に集約。
+- `findEventBySlug` の select を `findEventById` と揃えた（`games(team_size)` を追加。teams ページが team_size を使うため、揃えないと slug 経由で欠ける）。
+- 7ページの `findEventById(id)` を `findEventByIdOrSlug(id)` に置換。
+- **schedule ページのみ追加対応**: fetch 後に素の `id` を DB クエリ（`listEventScrims` 等）や `ScheduleList` の eventId に渡していたため、すべて `event.id`（常に uuid）に修正。他6ページは元から `event.id` を使っていたので fetch 行の置換のみ。
+
+### 確認
+- `npm run check`（lint 0・typecheck・387 tests）。
+- **実機**: 500 だった6ページ（teams/matches/groups/tournament/registrations/schedule）が slug で 200 に。edit は 307（未ログインのログインリダイレクト＝正常）。
+
 ## 2026-07-15 — security definer 関数の認可バイパス修正（ロジック層の監査で発見）
 
 デザイン刷新より前に書かれた（＝Claude review 導入前の）ロジック層を、セキュリティ観点で監査した。actions/RLS/definer/schema を横断で読み、認証・認可・マスアサインメント・IDOR・入力検証を確認。全体は堅牢だったが、**0034 の series 共同運営セキュリティ修正から取り残された同型の穴を2件**発見し修正した（0037）。

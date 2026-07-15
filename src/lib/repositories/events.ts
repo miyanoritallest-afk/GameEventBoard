@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
+import { isValidEventSlug } from "@/lib/services/event-slug";
 
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
 type EventUpdate = Database["public"]["Tables"]["events"]["Update"];
@@ -129,15 +130,28 @@ export async function findEventBySlug(slug: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("events")
-    // 主催者表示名のフォールバック用に organizer の discord_name も引く（1:1）。
+    // findEventById と同じ列を引く（team_size 含む）。id/slug どちらで引いても
+    // 同じ形の Row を返し、findEventByIdOrSlug で相互に差し替え可能にするため。
     .select(
-      "*, games(name), organizer:users!events_organizer_id_fkey(discord_name)",
+      "*, games(name, team_size), organizer:users!events_organizer_id_fkey(discord_name)",
     )
     .eq("slug", slug)
     .maybeSingle();
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * id（uuid）または slug（"event-xxxxxx"）のどちらでもイベントを取得する。
+ * 各ページの params は id/slug どちらも渡りうる（詳細ページは slug で共有される）ため、
+ * slug 形式なら slug で、そうでなければ uuid とみなして id で引く。
+ * slug を uuid カラムに渡すと Postgres が 22P02 で 500 になるのを防ぐ共通入口。
+ */
+export async function findEventByIdOrSlug(idOrSlug: string) {
+  return isValidEventSlug(idOrSlug)
+    ? findEventBySlug(idOrSlug)
+    : findEventById(idOrSlug);
 }
 
 /**

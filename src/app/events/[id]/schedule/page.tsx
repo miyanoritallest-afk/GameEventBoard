@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { findEventById } from "@/lib/repositories/events";
+import { findEventByIdOrSlug } from "@/lib/repositories/events";
 import {
   listEventScrims,
   listEventMatchesForSchedule,
@@ -21,7 +21,7 @@ export default async function SchedulePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const event = await findEventById(id);
+  const event = await findEventByIdOrSlug(id);
   if (!event) notFound();
 
   const supabase = await createClient();
@@ -31,11 +31,12 @@ export default async function SchedulePage({
   const viewerId = user?.id ?? null;
 
   // scrims は RLS で認証必須（未ログインは空になる）。matches は公開。
+  // 以降の DB クエリは必ず event.id（uuid）を使う（params の id は slug の場合があるため）。
   const [scrims, matches, viewerTeamId] = await Promise.all([
-    viewerId ? listEventScrims(id) : Promise.resolve([]),
-    listEventMatchesForSchedule(id),
+    viewerId ? listEventScrims(event.id) : Promise.resolve([]),
+    listEventMatchesForSchedule(event.id),
     viewerId
-      ? findViewerTeamId({ eventId: id, userId: viewerId })
+      ? findViewerTeamId({ eventId: event.id, userId: viewerId })
       : Promise.resolve(null),
   ]);
 
@@ -95,7 +96,7 @@ export default async function SchedulePage({
         </header>
 
         <ScheduleList
-          eventId={id}
+          eventId={event.id}
           items={items}
           canManage={viewerTeamId !== null}
         />

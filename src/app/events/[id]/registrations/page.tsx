@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { findEventById } from "@/lib/repositories/events";
+import { findEventByIdOrSlug } from "@/lib/repositories/events";
 import { listRegistrationsByEvent } from "@/lib/repositories/registrations";
 import { canViewEvent } from "@/lib/services/event-status";
 import {
@@ -37,7 +37,7 @@ export default async function EventRegistrationsPage({
 
   // 閲覧は「公開済みなら誰でも（観戦者含む）・下書きは主催者のみ」（フェーズB）。
   // 操作系（承認・スコア）は主催者のみ（RegistrationRow が isOrganizer で出し分け）。
-  const event = await findEventById(id);
+  const event = await findEventByIdOrSlug(id);
   if (!event) notFound();
   if (!canViewEvent(event.status, event.organizer_id, viewerId)) {
     notFound();
