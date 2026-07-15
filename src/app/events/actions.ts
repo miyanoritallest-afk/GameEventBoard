@@ -432,9 +432,10 @@ export type EditEventState = {
  * 1. ログイン確認（認証バイパス対策）。
  * 2. 対象取得＋所有者確認（IDOR。存在しない/他人は同一の権限なし応答）。
  * 3. Zod 検証（許可カラムのみ＝マスアサインメント対策）。
- * 4. 楽観ロック付き更新（version 競合は戻り値）。slug は不変（Repository が触らない）。
+ * 4. 定員の下限制約（公開後は現在の承認済みチーム数を下回れない＝既存応募者を締め出さない）。
+ * 5. 楽観ロック付き更新（version 競合は戻り値）。slug は不変（Repository が触らない）。
  *
- * 公開後も編集可。定員の下限制約・日程変更通知は前提機能（応募/通知）実装時に追加する。
+ * 公開後も編集可。開催日時が変わった場合は event フォロワーへ日程更新通知を飛ばす。
  */
 export async function updateEvent(
   eventId: string,
@@ -460,7 +461,26 @@ export async function updateEvent(
   const parsed = parseEventFormData(formData);
   if (!parsed.ok) return parsed.state;
 
-  // 4. 楽観ロック付き更新。slug は Repository 側で触らない（URL固定）。
+  // 4. 定員の下限制約（公開後のみ）。
+  //    目的＝「既に成立している応募者を締め出さない」。current_count は承認済みチーム数
+  //    （成立時に +1・approved チーム削除で -1）＝capacity と直接比較される権威値。
+  //    下書き中は current_count が実質 0 で守る対象が無いため制約しない（日程更新通知と同じく
+  //    status!=draft でのみ効かせる）。想定内の失敗なので例外にせず戻り値でフィールドエラーを返す。
+  const newCapacity = parsed.values.capacity ?? null;
+  if (
+    event.status !== "draft" &&
+    newCapacity !== null &&
+    newCapacity < event.current_count
+  ) {
+    return {
+      error: "入力内容を確認してください。",
+      fieldErrors: {
+        capacity: `定員は現在の承認済みチーム数（${event.current_count}）以上にしてください。`,
+      },
+    };
+  }
+
+  // 5. 楽観ロック付き更新。slug は Repository 側で触らない（URL固定）。
   //    series_id は編集フォームでは扱わない（紐付けはシリーズ化/新回作成 経由）。
   //    ここで渡すと編集のたびに null 上書きされてしまうため、値から除外する。
   const { series_id: _ignoredSeriesId, ...editableValues } = parsed.values;
