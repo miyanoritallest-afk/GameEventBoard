@@ -7,6 +7,30 @@
 
 ---
 
+## 2026-07-15 — 観戦ビューの Realtime ライブ更新（匿名観戦者にも配信）
+
+観戦ビュー（/events/[id]/watch）を、主催者の結果入力・日時/配信変更の瞬間に**リロードなしで自動更新**するようにした（拡張候補②のライブ更新部分）。これで②は完了。
+
+### やったこと
+- `matches` / `match_results` を `supabase_realtime` publication へ追加（0036・手動適用）。RLS 追加は不要（両テーブルの anon SELECT は 0023 で公開イベント向けに開放済み）。
+- 観戦ページ用の購読 Client Component `watch-realtime.tsx` を追加。変更検知で `router.refresh()`（表示は常に DB 真値＝差分の手組みはしない。通知の Realtime と同じ流儀）。
+  - `matches`: `event_id=eq.<id>` で絞って購読（「次の試合」の日時・配信に追従）。
+  - `match_results`: event_id カラムが無く postgres_changes の filter は単一カラム等値のみのため、フィルタなし購読＋クライアントで「このイベントの match_id 集合」に含まれる変更だけ refresh（無駄 refresh の間引き）。DELETE（結果取消）も match_id が PK＝replica identity に含まれるので `payload.old` から拾える。
+  - 認証: subscribe 前に setAuth。ログイン時はセッション、**匿名時は anon キーの JWT** を渡す（[[realtime-rls-setauth]]）。
+- 副産物のバグ修正: StandingsPanel の順位表 `<tr key={r.rank}>` は**同着で rank が重複するとキー衝突**するため `key={r.teamName}`（ブロック内で一意）へ。既存バグだが、ライブ更新で結果が入り同着が出た瞬間に React の重複キー警告として顕在化したので回収。
+
+### 決めたこと（なぜ）
+- **WebSocket は「変わった」シグナルとしてだけ使い、描画は既存 Server Component に任せる**（router.refresh）。差分を手組みして画面を書き換えるより、DB 真値を取り直す方がズレない。既存の描画ロジックは一切変えずに済む。
+- **匿名購読を採用**（観戦ビューの主役は非ログイン観戦者）。anon キーの JWT を setAuth で渡す。RLS が公開イベントのみ配信するので、下書き・非公開は匿名に漏れない。
+- **重要な確認: 匿名でも Realtime が届く**ことを実機で確証した（下記）。これが着手前の最大の不確実性だった。
+
+### 確認
+- `npm run check`（lint 0 error／typecheck OK／test 387 passed）。`npm run build` 成功。`/code-review high` → correctness 0件（DELETE payload の match_id 欠落懸念は、match_id が PK のため replica identity に必ず含まれ非該当と確認）。
+- **実機（Playwright・匿名観戦者）**: cookie/storage を消して匿名状態にし観戦ビューを開いたまま、service_role で別経路から (1) 予選結果を INSERT → リロードなしで「予選消化 0/6→1/6」＋試合結果セクション出現、(2) matches.scheduled_at を変更 → リロードなしで「次の試合」の時刻が 07/14 12:04→07/20 22:00 に更新、を確認。**両テーブル・匿名で届く**ことを確証。書き込みは backup→検証→**完全復元**（結果0件・日時あり2件＝元通り）。
+
+### 次にやること
+- 拡張候補は①②③④すべて完了。一区切り。次は実機で全体を触っての気づき拾い等、ユーザー判断待ち。
+
 ## 2026-07-15 — 観戦ビューに「次の試合」ブロックを追加（案Cハイブリッド）
 
 観戦ビュー（/events/[id]/watch）に、直近の未消化試合を最大2件だけコンパクトに見せる「次の試合」ブロックを追加した。観戦者が「次はいつ・どのカードを・どこで見られるか」を上部で拾えるようにする（拡張候補②の静的表示部分）。

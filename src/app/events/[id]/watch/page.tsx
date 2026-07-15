@@ -20,6 +20,7 @@ import {
 import { isValidEventSlug } from "@/lib/services/event-slug";
 import { teamColor } from "../_components/team-colors";
 import { roundLabel } from "../_components/round-label";
+import { WatchRealtime } from "./watch-realtime";
 
 export const dynamic = "force-dynamic";
 
@@ -554,8 +555,16 @@ export default async function EventWatchPage({
   const showNext = nextMatches.length > 0;
   const now = new Date();
 
+  // Realtime 購読用: このイベントの全試合 id（match_results 変更の間引きに使う）。
+  const allMatchIds = [
+    ...groupMatches.map((m) => m.id),
+    ...tournamentMatches.map((m) => m.id),
+  ];
+
   return (
     <div className="theme-matchpoint min-h-screen bg-background text-foreground">
+      {/* 結果入力・日時/配信変更を検知して観戦ビューをライブ更新（表示は常に DB 真値）。 */}
+      <WatchRealtime eventId={event.id} matchIds={allMatchIds} />
       <div className="mx-auto max-w-[1240px] px-6 py-8">
         {/* パンくず（イベント一覧 → イベント名 → 観戦ビュー）。 */}
         <nav className="mb-4 text-sm text-muted-foreground">
@@ -1368,7 +1377,8 @@ function StandingsPanel({
                   ? "text-[color:var(--mp-danger)]"
                   : "text-[color:var(--mp-fg-subtle)]";
             return (
-              <tr key={r.rank} className="group">
+              // key は rank ではなくチーム名（同着で rank が重複するとキー衝突するため）。
+              <tr key={r.teamName} className="group">
                 <td colSpan={5} className="p-0">
                   <div
                     className={`border-b border-border ${
