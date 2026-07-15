@@ -24,7 +24,7 @@ DBMS: PostgreSQL（Supabase）
 | ユーザー | `users` | プロフィール（Discord情報・Battle Tag） |
 | ユーザー | `user_season_ranks` | シーズン×ロールのランク履歴（最大9） |
 | ユーザー | `user_peak_achievement` | 高ランク到達経験（人単位ボーナス用） |
-| マスタ | `games` | ゲームタイトル（OW2等） |
+| マスタ | `games` | ゲームタイトル（OW等） |
 | マスタ | `rank_definitions` | ランク↔スコア対応表（タイトル別） |
 | マスタ | `tags` | カテゴリ・タグ（初心者限定等。開発者が事前定義） |
 | シリーズ | `event_series` | 継続する企画（OSL等）。開催回(events)の親 |
@@ -122,8 +122,8 @@ Supabase Auth の `auth.users` と1対1で対応（`id` = auth uid）。
 | 列 | 型 | 制約 | 説明 |
 |----|----|------|------|
 | id | uuid | PK | |
-| name | text | UNIQUE NOT NULL | 例: "Overwatch 2" |
-| roles | role[] | NOT NULL | 対応ロール（OW2は tank/dps/support） |
+| name | text | UNIQUE NOT NULL | 例: "OVERWATCH" |
+| roles | role[] | NOT NULL | 対応ロール（OWは tank/dps/support） |
 | team_size | int | NOT NULL | 例: 5 |
 | created_at | timestamptz | DEFAULT now() | |
 
@@ -139,7 +139,7 @@ Supabase Auth の `auth.users` と1対1で対応（`id` = auth uid）。
 | sort_order | int | NOT NULL | 表示・選択順 |
 
 制約: UNIQUE(game_id, label)
-> OW2は40段階。スコアはnumericで小数も許容（将来の重み調整用）。
+> OWは40段階。スコアはnumericで小数も許容（将来の重み調整用）。
 
 ### 3.6 tags（タグ・マスタ／開発者が事前定義）
 | 列 | 型 | 制約 | 説明 |
