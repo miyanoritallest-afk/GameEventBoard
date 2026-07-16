@@ -220,7 +220,7 @@ export default async function HomePage() {
                 aria-hidden
                 className="h-1.5 w-1.5 rounded-full bg-[color:var(--mp-accent)]"
               />
-              OVERWATCH 2 コミュニティ大会プラットフォーム
+              OVERWATCH コミュニティ大会プラットフォーム
             </span>
             <h1 className="mt-6 text-4xl font-bold leading-tight tracking-tight sm:text-6xl">
               ゲーム仲間と、
