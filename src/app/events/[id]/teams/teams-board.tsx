@@ -36,7 +36,7 @@ import {
   setTeamCaptain,
 } from "./actions";
 
-/** OW2 のロール順（ロール行の並び）。 */
+/** OW のロール順（ロール行の並び）。 */
 const ROLE_ORDER = ["tank", "dps", "support"] as const;
 type RoleKey = (typeof ROLE_ORDER)[number];
 
@@ -76,9 +76,9 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 /**
- * OW2 の3ロールのアイコンと識別色（CSS 変数）。希望ロール・担当ロール・フィルタで共通利用。
+ * OW の3ロールのアイコンと識別色（CSS 変数）。希望ロール・担当ロール・フィルタで共通利用。
  * 色は globals.css の .theme-matchpoint（--mp-tank/dps/support）。
- * アイコンは OW2 公式ロールマーク準拠のシンプルなラインSVG（タンク=盾・DPS=照準・サポート=十字）。
+ * アイコンは OW 公式ロールマーク準拠のシンプルなラインSVG（タンク=盾・DPS=照準・サポート=十字）。
  * Claude Design の生成物に合わせ、ゲーム内アイコンから一目でロールを連想できるようにする。
  */
 const ROLE_COLOR: Record<string, string> = {
@@ -87,7 +87,7 @@ const ROLE_COLOR: Record<string, string> = {
   support: "var(--mp-support)",
 };
 
-/** OW2 ロールマーク準拠のパス（stroke で描く。fill は none）。 */
+/** OW ロールマーク準拠のパス（stroke で描く。fill は none）。 */
 function RoleGlyph({ role, px }: { role: string; px: number }) {
   const common = {
     viewBox: "0 0 24 24",
