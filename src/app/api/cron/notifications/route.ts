@@ -8,6 +8,7 @@ import {
 /**
  * ⑦ 定期通知の Cron エンドポイント（Route Handler）。
  * Vercel Cron（vercel.json の schedule）が数分間隔で GET する。実行内容:
+ *   （keepalive）Supabase Free の 7 日一時停止を防ぐため必ず DB に 1 回触れる
  *   #7 試合開始2時間前リマインド（出場メンバーへアプリ内通知）
  *   #8 スクリム開始2時間前リマインド（チームメンバーへアプリ内通知）
  *   #9 「本日◯時から各試合」の全体告知（告知チャンネルへ Webhook・1日1回）
@@ -35,6 +36,19 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const now = new Date();
 
+  // Supabase Free プランは 7 日間 DB アクティビティが無いとプロジェクトを自動一時停止する。
+  // このエンドポイントは毎日走るため、通知の有無に関わらず必ず DB に 1 回触れておくことで
+  // キープアライブになる（ポートフォリオを常時閲覧可能に保つ）。通知処理が将来落ちても
+  // これだけは先に走らせたいので allSettled より前に置く。マスタ `rank_definitions` の
+  // 件数だけを取得（head:true で行データは転送しない最軽量クエリ）。失敗しても通知は続行。
+  const keepAlive = await admin
+    .from("rank_definitions")
+    .select("*", { count: "exact", head: true })
+    .then(
+      ({ error }) => (error ? { ok: false, error: error.message } : { ok: true }),
+      (reason) => ({ ok: false, error: String(reason) }),
+    );
+
   // #7 / #8 / #9 は独立。1つが落ちても他は動かす（allSettled）。
   const [reminders, scrimReminders, announce] = await Promise.allSettled([
     runMatchReminders(admin, now),
@@ -44,6 +58,7 @@ export async function GET(request: Request) {
 
   return Response.json({
     ranAt: now.toISOString(),
+    keepAlive,
     matchReminders:
       reminders.status === "fulfilled"
         ? reminders.value
