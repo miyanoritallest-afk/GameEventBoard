@@ -1,4 +1,6 @@
-# GameEventBoard（Matchpoint）
+# Match Point（GameEventBoard）
+
+🔗 **Live Demo**: https://game-event-board.vercel.app
 
 **Overwatch のコミュニティ大会**を、主催・参加・観戦のすべての立場から支えるイベント管理プラットフォーム。
 スコア均衡したチーム分けから、予選ブロック・総当たり・順位表・決勝トーナメントの進行、Discord 連携通知、
