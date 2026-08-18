@@ -1,12 +1,12 @@
 /**
  * OVERWATCH のランク↔スコア定義（純粋ロジック）。
  *
- * DB の rank_definitions（seed.sql）と同一ルールで 40 段階を生成する。
+ * DB の rank_definitions（seed.sql）と同一ルールで 45 段階を生成する。
  * - 用途: 応募フォームのランク選択肢、スコア算出時の label→score 変換（後続 PR-B/D）。
  * - seed.sql とこのファイルは「同じ規則」を持つ。値がずれないよう本テストで固定する。
  *
- * 体系: 8帯（ブロンズ〜チャンピオン）× ディビジョン 5〜1 = 40。
- * スコアは線形 1〜40（ブロンズ5=1 … チャンピオン1=40）。
+ * 体系: 9帯（ブロンズ〜チャンピオン）× ディビジョン 5〜1 = 45。
+ * スコアは線形 1〜45（ブロンズ5=1 … チャンピオン1=45）。
  * ディビジョンは 5 が最下位・1 が最上位（OW 仕様）。
  * 未認定は本マスタに含めない（数値のあるランクのみ）。アプリ層で別途扱う。
  */
@@ -17,6 +17,7 @@ export const OVERWATCH_TIERS = [
   "シルバー",
   "ゴールド",
   "プラチナ",
+  "エメラルド",
   "ダイヤ",
   "マスター",
   "グランドマスター",
@@ -32,6 +33,7 @@ export const TIER_ABBREV: Record<string, string> = {
   シルバー: "S",
   ゴールド: "G",
   プラチナ: "P",
+  エメラルド: "E",
   ダイヤ: "D",
   マスター: "M",
   グランドマスター: "GM",
@@ -42,19 +44,19 @@ export type RankDefinition = {
   tier: string;
   division: number;
   label: string; // 例: "ブロンズ5"
-  score: number; // 1〜40
-  sortOrder: number; // 1〜40（score と同値）
+  score: number; // 1〜45
+  sortOrder: number; // 1〜45（score と同値）
 };
 
 /**
- * OVERWATCH の rank_definitions 40 件を生成する（seed と同一ルール）。
+ * OVERWATCH の rank_definitions 45 件を生成する（seed と同一ルール）。
  * 低い順（score 昇順）で返す。
  */
 export function buildOverwatchRankDefinitions(): RankDefinition[] {
   const defs: RankDefinition[] = [];
   OVERWATCH_TIERS.forEach((tier, ord) => {
     for (const division of DIVISIONS) {
-      // ord*5 + (5-division) + 1 → ブロンズ5=1 … チャンピオン1=40
+      // ord*5 + (5-division) + 1 → ブロンズ5=1 … チャンピオン1=45
       const score = ord * 5 + (5 - division) + 1;
       defs.push({
         tier,
@@ -90,7 +92,7 @@ export function scoreToRankLabel(score: number | null): string {
 /**
  * スコア値からランク略称（例 "D3"）へ変換する（チームスコア上限の設定ガイド用）。
  * 帯を `TIER_ABBREV` で略称化し、ディビジョン番号を付ける（"ダイヤ3" → "D3"）。
- * null は未認定。最も近い段階を採用する（上限入力は 1〜40 の整数なので通常は一致）。
+ * null は未認定。最も近い段階を採用する（上限入力は 1〜45 の整数なので通常は一致）。
  */
 export function scoreToRankAbbrev(score: number | null): string {
   if (score === null) return "未認定";

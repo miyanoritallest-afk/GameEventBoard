@@ -336,7 +336,7 @@ export function EventForm({
                   name="teamScoreCap"
                   type="number"
                   min={1}
-                  max={40}
+                  max={45}
                   value={scoreCap}
                   onChange={(e) =>
                     setScoreCap(
@@ -346,7 +346,7 @@ export function EventForm({
                 />
                 <p className="mt-[7px] text-[11.5px] leading-relaxed text-[color:var(--mp-fg-muted)]">
                   {scoreCap === ""
-                    ? "1〜40 で入力（チームの出場メンバー平均スコアの上限）。"
+                    ? "1〜45 で入力（チームの出場メンバー平均スコアの上限）。"
                     : `ランク換算の目安: ${scoreCap} (${scoreToRankAbbrev(
                         scoreCap,
                       )})`}
