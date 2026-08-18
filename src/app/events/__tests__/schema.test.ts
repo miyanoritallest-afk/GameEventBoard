@@ -159,12 +159,12 @@ describe("createDraftEventSchema — チームスコア上限（B-1）", () => {
     if (result.success) expect(result.data.teamScoreCap).toBe(23);
   });
 
-  it("境界値 1 と 40 は通る", () => {
+  it("境界値 1 と 45 は通る", () => {
     expect(
       createDraftEventSchema.safeParse(baseInput({ teamScoreCap: "1" })).success,
     ).toBe(true);
     expect(
-      createDraftEventSchema.safeParse(baseInput({ teamScoreCap: "40" }))
+      createDraftEventSchema.safeParse(baseInput({ teamScoreCap: "45" }))
         .success,
     ).toBe(true);
   });
@@ -176,9 +176,9 @@ describe("createDraftEventSchema — チームスコア上限（B-1）", () => {
     expect(result.success).toBe(false);
   });
 
-  it("41 は失敗する（上限超え）", () => {
+  it("46 は失敗する（上限超え）", () => {
     const result = createDraftEventSchema.safeParse(
-      baseInput({ teamScoreCap: "41" }),
+      baseInput({ teamScoreCap: "46" }),
     );
     expect(result.success).toBe(false);
   });

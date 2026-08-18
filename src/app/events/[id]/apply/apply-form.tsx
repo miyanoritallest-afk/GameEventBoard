@@ -51,7 +51,7 @@ function rankOptionGroups() {
     .sort((a, b) => b.maxScore - a.maxScore);
 }
 
-/** 1セルのランク選択（40段階＋未認定）。 */
+/** 1セルのランク選択（45段階＋未認定）。 */
 function RankCell({ name }: { name: string }) {
   const groups = rankOptionGroups();
   return (
