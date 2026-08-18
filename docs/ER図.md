@@ -100,7 +100,7 @@ erDiagram
         uuid id PK
         uuid game_id FK
         text label "例:ブロンズ5"
-        numeric score "例:1..40"
+        numeric score "例:1..45"
         int sort_order
     }
 

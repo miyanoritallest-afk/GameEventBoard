@@ -135,11 +135,15 @@ Supabase Auth の `auth.users` と1対1で対応（`id` = auth uid）。
 | tier | text | NOT NULL | 例: "ブロンズ", "チャンピオン" |
 | division | int | | 例: 5〜1。タイトルにより無しもあり |
 | label | text | NOT NULL | 例: "ブロンズ5" |
-| score | numeric | NOT NULL | 例: 1, 2, …, 40 |
+| score | numeric | NOT NULL | 例: 1, 2, …, 45 |
 | sort_order | int | NOT NULL | 表示・選択順 |
 
 制約: UNIQUE(game_id, label)
-> OWは40段階。スコアはnumericで小数も許容（将来の重み調整用）。
+> OWは9帯 × ディビジョン5〜1 = **45段階**（ブロンズ5=1 … チャンピオン1=45）。スコアはnumericで小数も許容（将来の重み調整用）。
+>
+> **エメラルド追加（2026-08 / マイグレーション 0038）**: OW にエメラルドがプラチナとダイヤの間へ新設され、40段階→45段階になった。既存 DB は 0038 で「ダイヤ以上の score/sort_order を一律 +5 → エメラルド 21〜25 を挿入」と再採番する（`seed.sql` は `on conflict do nothing` のため既存行を更新しない）。
+>
+> **注意**: `registrations.individual_score` / `final_score` / `events.team_score_cap` はマスタへの参照ではなく**数値のスナップショット**で保存されている。そのため再採番しても既存の応募スコアは追従せず、同じ数値が一段低い帯として表示される。この非追従は意図的（過去の振り分け記録を変えないという 3.9 の設計方針による）。
 
 ### 3.6 tags（タグ・マスタ／開発者が事前定義）
 | 列 | 型 | 制約 | 説明 |
